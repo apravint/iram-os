@@ -47,15 +47,50 @@ shift || true
 
 case "$cmd" in
     theme|themes)
-        if [ -n "$1" ]; then
-            if [ -x "$HOME/.local/bin/iram-theme-switch" ]; then
-                exec "$HOME/.local/bin/iram-theme-switch" "$@"
-            elif [ -x "$HOME/iram-os/bin/iram-theme-switch" ]; then
-                exec "$HOME/iram-os/bin/iram-theme-switch" "$@"
-            fi
-        else
-            exec iram-theme-switch
-        fi
+        sub="${1:-}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            list)
+                /usr/local/bin/omarchy-theme-list
+                ;;
+            current)
+                cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "Default"
+                ;;
+            set)
+                target="${1:-}"
+                if [ -n "$target" ]; then
+                    /usr/local/bin/omarchy-theme-set "$target"
+                    ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                else
+                    exec iram-theme-switch
+                fi
+                ;;
+            bg|background)
+                sub_bg="${1:-next}"
+                shift 2>/dev/null || true
+                case "$sub_bg" in
+                    next)
+                        /usr/local/bin/omarchy-theme-bg-next
+                        ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                        ;;
+                    *)
+                        /usr/local/bin/omarchy-theme-bg-set "$sub_bg" 2>/dev/null || /usr/local/bin/omarchy-theme-bg-next
+                        ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                        ;;
+                esac
+                ;;
+            gui)
+                exec iram-theme-switch
+                ;;
+            "")
+                exec iram-theme-switch
+                ;;
+            *)
+                # If invoked as: iram theme "Cyberpunk Neon"
+                /usr/local/bin/omarchy-theme-set "$sub"
+                ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                ;;
+        esac
         ;;
     craft)
         app="${1:-launcher}"

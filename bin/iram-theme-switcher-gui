@@ -8,6 +8,7 @@ Supports Curated Modern Suite and Legacy themes with instant preview cards.
 import os
 import subprocess
 import sys
+import shutil
 import gi
 
 gi.require_version('Gtk', '3.0')
@@ -469,11 +470,16 @@ class ThemeSwitcherApp(Gtk.Window):
         self.sub_label.set_text(f"Active theme: {theme_name.replace('-', ' ').title()}")
         self.info_label.set_text(f"✅ Applied {theme_name.replace('-', ' ').title()} successfully!")
 
-        subprocess.run([
-            'iram-osd',
-            '-i', 'preferences-desktop-theme',
-            '-m', f"Theme: {theme_name.replace('-', ' ').title()}"
-        ], check=False)
+        osd_bin = shutil.which('iram-osd') or shutil.which('omarchy-osd')
+        if osd_bin:
+            try:
+                subprocess.run([
+                    osd_bin,
+                    '-i', 'preferences-desktop-theme',
+                    '-m', f"Theme: {theme_name.replace('-', ' ').title()}"
+                ], check=False)
+            except Exception:
+                pass
 
     def on_key_press(self, widget, event):
         if event.keyval == Gdk.KEY_Escape:

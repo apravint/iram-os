@@ -17,5 +17,17 @@ if [[ "${1:-}" == "--dmenu" || "${1:-}" == "--wofi" || "${1:-}" == "--text" ]]; 
     exit 0
 fi
 
+# If theme name passed directly: iram-theme-switch "Tokyo Night" or iram-theme-switch set "Tokyo Night"
+if [[ -n "${1:-}" && "${1:-}" != "--dmenu" && "${1:-}" != "--wofi" && "${1:-}" != "--text" && "${1:-}" != "--gui" ]]; then
+    target="$1"
+    [[ "$target" == "set" ]] && target="${2:-}"
+    if [[ -n "$target" ]]; then
+        /usr/local/bin/omarchy-theme-set "$target"
+        "$HOME/.local/bin/iram-theme-sync-all" 2>/dev/null || true
+        notify-send -a "Iram" "Theme Changed" "Applied theme: $target" 2>/dev/null || true
+        exit 0
+    fi
+fi
+
 # Launch the visual card-grid preview GUI
 exec "$HOME/.local/bin/iram-theme-switcher-gui" "$@"
