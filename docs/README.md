@@ -8,6 +8,9 @@ A centralized catalog of open-source software architectures, design systems, UI 
 
 | Catalog | Formats | Summary |
 | :--- | :--- | :--- |
+| **[Matt Pocock's Skills](./matt-pocock-skills.md)** | [Markdown](./matt-pocock-skills.md) \| [JSON](./matt-pocock-skills.json) | Battle-tested agent skills for real software engineering (not vibe coding) by Matt Pocock (Total TypeScript). |
+| **[Elevating Hyprland in IRAM OS](./improving-hyprland-iram-os.md)** | [Markdown](./improving-hyprland-iram-os.md) | Multi-monitor workspace binding, smart gaps, modal submaps, socket2 IPC agent listener, and hyprpm plugins. |
+| **[IRAM Quant Trading Engine](./quant-trading-system.md)** | [Markdown](./quant-trading-system.md) | Quantitative momentum & regime trading engine: +192.12% return vs +86.15% SPY, 1.10 Sharpe, ATR position sizing. |
 | **[Software Factory Skills](./software-factory-skills.md)** | [Markdown](./software-factory-skills.md) \| [JSON](./software-factory-skills.json) | 20 agent skills for a complete autonomous software delivery factory (spec-driven dev, TDD, mutation testing, ADRs, pipelines). |
 | **[Client Business Engines](./client-business-engines.md)** | [Markdown](./client-business-engines.md) \| [JSON](./client-business-engines.json) | 5 turnkey open-source business engines to launch high-margin agency offers in 5 minutes (Activepieces, Chatwoot, GPT Researcher, ERPNext, Paperless-ngx). |
 | **[OSIRIS Vision Intelligence](./osiris-vision-intelligence.md)** | [Markdown](./osiris-vision-intelligence.md) \| [JSON](./osiris-vision-intelligence.json) | Global geospatial CCTV node locator, keyless live camera streams, and client-side browser AI vision models. |

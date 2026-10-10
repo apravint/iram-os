@@ -1,0 +1,21 @@
+{
+  "title": "Matt Pocock's Skills for Real Engineers",
+  "source": "https://github.com/mattpocock/skills",
+  "philosophy": "Skills for Real Engineers — not vibe coding. Small, composable skills that maintain developer control and engineering rigor.",
+  "categories": {
+    "engineering": [
+      "ask-matt", "code-review", "codebase-design", "diagnosing-bugs",
+      "domain-modeling", "grill-with-docs", "implement-spec", "implement",
+      "improve-codebase-architecture", "pr", "prototype", "research",
+      "retro", "setup-matt-pocock-skills", "tdd", "to-spec", "to-tickets",
+      "triage", "wayfinder", "wizard"
+    ],
+    "productivity": [
+      "grill-me", "grilling", "handoff", "teach", "to-questionnaire",
+      "wait-what", "writing-for-agents"
+    ],
+    "safety_and_misc": [
+      "git-guardrails-claude-code", "setup-pre-commit", "chief-of-staff", "loop-me"
+    ]
+  }
+}
