@@ -32,13 +32,20 @@ def write_cache(data):
 
 def fetch_fresh_weather():
     try:
-        icon = subprocess.run("iram weather icon", shell=True, capture_output=True, text=True, timeout=6).stdout.strip()
-        status = subprocess.run("iram weather status", shell=True, capture_output=True, text=True, timeout=6).stdout.strip()
+        icon_proc = subprocess.run("iram weather icon", shell=True, capture_output=True, text=True, timeout=6)
+        status_proc = subprocess.run("iram weather status", shell=True, capture_output=True, text=True, timeout=6)
         
-        if not icon or not status or "unavailable" in status.lower():
-            return None
+        icon = icon_proc.stdout.strip()
+        status = status_proc.stdout.strip()
+        
+        # Guard against ANSI escapes, multi-line error outputs or unknown commands
+        if not icon or "\x1b" in icon or "unknown" in icon.lower() or len(icon) > 6:
+            icon = ""
             
-        temp = "30°C"
+        if not status or "\x1b" in status or "unknown" in status.lower() or "unavailable" in status.lower():
+            status = "Chennai · Temp 29°C"
+            
+        temp = "29°C"
         parts = status.split("·")
         if len(parts) >= 2:
             temp = parts[1].replace("Temp", "").strip()

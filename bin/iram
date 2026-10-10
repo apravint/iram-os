@@ -24,6 +24,7 @@ show_help() {
     echo -e "  ${CYAN}capture${NC}               Open screenshot & screen recording menu"
     echo -e "  ${CYAN}ocr${NC}                   Extract text from screen region to clipboard"
     echo -e "  ${CYAN}clipboard${NC}             Open clipboard history"
+    echo -e "  ${CYAN}weather${NC} [icon|status]   Display current weather status & icon"
     echo -e "  ${CYAN}apps${NC}                  Open application launcher"
     echo -e "  ${CYAN}power${NC}                 Open system power menu\n"
     echo -e "${BOLD}CREATIVE SUITE (STORYTOLD CRAFT):${NC}"
@@ -93,6 +94,24 @@ case "$cmd" in
         ;;
     models)
         exec iram-models
+        ;;
+    weather)
+        sub="${1:-}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            icon)
+                /usr/local/bin/omarchy-weather-icon 2>/dev/null || echo ""
+                ;;
+            status)
+                /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
+                ;;
+            notify|notification)
+                exec ~/.local/bin/iram-notification-weather
+                ;;
+            *)
+                /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
+                ;;
+        esac
         ;;
     info|status)
         echo -e "${BOLD}${CYAN}=== IRAM OS STATUS ===${NC}"
