@@ -56,11 +56,9 @@ workspace = 10, monitor:desc:Sony SONY TV  *00 0x01010101
 When you only have a single window open on a workspace, outer margins waste screen real estate. Enable dynamic smart gaps so single windows go edge-to-edge automatically, while multiple windows get clean 2px/4px borders:
 
 ```ini
-# Smart Gaps & Borders (Hyprland v0.42+)
-workspace = w[tv1], gapsout:0, gapsin:0
-workspace = f[1], gapsout:0, gapsin:0
-windowrulev2 = bordersize 0, floating:0, onworkspace:w[tv1]
-windowrulev2 = rounding 0, floating:0, onworkspace:w[tv1]
+# Smart Gaps & Borders (Hyprland v0.50+)
+workspace = w[tv1], gapsout:0, gapsin:0, border:false
+workspace = f[1], gapsout:0, gapsin:0, border:false
 ```
 
 ---
