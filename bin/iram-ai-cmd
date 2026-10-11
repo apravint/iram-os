@@ -262,6 +262,21 @@ def main():
         sys.exit(1)
         
     first_arg = sys.argv[1].lower()
+    if first_arg in ["-h", "--help", "help"]:
+        print(f"{BOLD}IRAM AI Shell Copilot (iram-ai-cmd / ai / ??){RESET}")
+        print(f"Translates plain English requests into Linux commands using Gemini or Ollama.\n")
+        print(f"{BOLD}Usage:{RESET}")
+        print(f"  iram-ai-cmd <request>          Generate command (e.g., iram-ai-cmd find files > 500MB)")
+        print(f"  ai fix [optional error info]   Auto-diagnoses & fixes last failed command")
+        print(f"  ai commit                      Auto-generates conventional git commit from diff")
+        print(f"  iram-ai-cmd -h, --help         Show this help message")
+        print(f"  iram-ai-cmd -v, --version      Show version info")
+        sys.exit(0)
+
+    if first_arg in ["-v", "--version", "version"]:
+        print("iram-ai-cmd v1.2.0 (IRAM Agentic Desktop)")
+        sys.exit(0)
+
     if first_arg == "fix":
         extra = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
         handle_fix(extra)
