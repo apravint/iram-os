@@ -18,17 +18,19 @@ for i in {1..20}; do
     sleep 0.5
 done
 
-# Ensure NVIDIA GF119 Pin 0x05 (HDMI 1 / Samsung) has OUT enabled and connected to Converter 0x09
+# Ensure NVIDIA GF119 Pin 0x04 (DVI/Samsung) and Pin 0x05 (HDMI/Sony TV) have OUT enabled
 NVIDIA_HW=$(ls -d /sys/bus/pci/devices/0000:01:00.1/sound/card*/hwC*D0 2>/dev/null | head -n 1)
 if [[ -n "$NVIDIA_HW" ]] && command -v hda-verb >/dev/null 2>&1; then
     DEV_PATH="/dev/snd/$(basename "$NVIDIA_HW")"
     if [[ -e "$DEV_PATH" ]]; then
+        hda-verb "$DEV_PATH" 0x04 SET_PIN_WIDGET_CONTROL 0x40 >/dev/null 2>&1 || true
+        hda-verb "$DEV_PATH" 0x04 SET_CONNECT_SEL 0x00 >/dev/null 2>&1 || true
         hda-verb "$DEV_PATH" 0x05 SET_PIN_WIDGET_CONTROL 0x40 >/dev/null 2>&1 || true
         hda-verb "$DEV_PATH" 0x05 SET_CONNECT_SEL 0x01 >/dev/null 2>&1 || true
     fi
 fi
 
-TARGET_SINK="alsa_output.pci-0000_01_00.1.playback.7.0"
+TARGET_SINK="combined_displays"
 
 # If a Bluetooth speaker/headset is already connected, preserve it!
 if pactl list sinks short 2>/dev/null | grep -q "bluez_output"; then
@@ -37,6 +39,8 @@ elif pactl list sinks short 2>/dev/null | grep -q "$TARGET_SINK"; then
     pactl set-default-sink "$TARGET_SINK" 2>/dev/null || true
     pactl set-sink-mute "$TARGET_SINK" 0 2>/dev/null || true
     pactl set-sink-volume "$TARGET_SINK" 100% 2>/dev/null || true
+elif pactl list sinks short 2>/dev/null | grep -q "01_00\\.1\\.playback\\.3\\.0"; then
+    pactl set-default-sink "alsa_output.pci-0000_01_00.1.playback.3.0" 2>/dev/null || true
 fi
 
 # Reconnect any currently running streams (e.g. Chrome/Spotify) to the default sink
