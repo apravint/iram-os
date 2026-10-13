@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Non-Destructive Migrations Engine (Inspired by Omarchy)
+# Safely updates configurations, dependencies, and dotfiles without clobbering user tweaks
+# ==============================================================================
+set -euo pipefail
+
+IRAM_ROOT="${IRAM_ROOT:-$HOME/iram-os}"
+MIGRATIONS_DIR="$IRAM_ROOT/migrations"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram/migrations"
+APPLIED_FILE="$STATE_DIR/applied"
+LOG_FILE="$STATE_DIR/migrations.log"
+
+mkdir -p "$STATE_DIR" "$MIGRATIONS_DIR"
+touch "$APPLIED_FILE"
+
+BOLD="\033[1m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+CYAN="\033[0;36m"
+RED="\033[0;31m"
+NC="\033[0m"
+
+show_help() {
+    cat << EOF
+${BOLD}IRAM OS Migrations Manager${NC}
+
+Usage:
+  iram migrate [command]
+
+Commands:
+  run             Run all pending migrations (default)
+  status          List all migrations and their application status
+  create <desc>   Create a new timestamped migration script
+  help            Show this help message
+
+EOF
+}
+
+is_applied() {
+    local m_name="$1"
+    grep -qxF "$m_name" "$APPLIED_FILE" 2>/dev/null
+}
+
+cmd_status() {
+    echo -e "${BOLD}${CYAN}=== IRAM OS MIGRATIONS STATUS ===${NC}"
+    local count=0
+    local pending=0
+
+    for script in $(find "$MIGRATIONS_DIR" -maxdepth 1 -name "*.sh" | sort); do
+        count=$((count + 1))
+        local m_name=$(basename "$script")
+        if is_applied "$m_name"; then
+            echo -e "  ${GREEN}[APPLIED]${NC} $m_name"
+        else
+            echo -e "  ${YELLOW}[PENDING]${NC} ${BOLD}$m_name${NC}"
+            pending=$((pending + 1))
+        fi
+    done
+
+    if [ "$count" -eq 0 ]; then
+        echo "  No migrations found in $MIGRATIONS_DIR."
+    else
+        echo ""
+        echo -e "Total: $count | Applied: $((count - pending)) | Pending: $pending"
+    fi
+}
+
+cmd_run() {
+    echo -e "${BOLD}${CYAN}Checking for pending IRAM OS migrations...${NC}"
+    local ran=0
+
+    for script in $(find "$MIGRATIONS_DIR" -maxdepth 1 -name "*.sh" | sort); do
+        local m_name=$(basename "$script")
+        if ! is_applied "$m_name"; then
+            echo -e "  ⚙️  Applying migration: ${BOLD}$m_name${NC}..."
+            echo -e "\n=== Migration: $m_name ($(date -Iseconds)) ===" >> "$LOG_FILE"
+            
+            if bash "$script" >> "$LOG_FILE" 2>&1; then
+                echo "$m_name" >> "$APPLIED_FILE"
+                echo -e "  ${GREEN}✓ Completed:${NC} $m_name"
+                ran=$((ran + 1))
+            else
+                echo -e "  ${RED}✗ FAILED:${NC} $m_name"
+                echo -e "  See details in: ${BOLD}$LOG_FILE${NC}"
+                exit 1
+            fi
+        fi
+    done
+
+    if [ "$ran" -eq 0 ]; then
+        echo -e "${GREEN}✓ All IRAM OS migrations are already up to date.${NC}"
+    else
+        echo -e "${GREEN}✓ Successfully applied $ran migration(s).${NC}"
+    fi
+}
+
+cmd_create() {
+    local desc="${1:-}"
+    if [ -z "$desc" ]; then
+        echo -e "${RED}Error:${NC} Description is required. Example: iram migrate create add_new_browser_policy"
+        exit 1
+    fi
+
+    local slug=$(echo "$desc" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '_' | sed 's/^_//;s/_$//')
+    local ts=$(date +%s)
+    local filename="${ts}_${slug}.sh"
+    local full_path="$MIGRATIONS_DIR/$filename"
+
+    cat << 'EOF' > "$full_path"
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Migration Script
+# Must be idempotent: safe to run multiple times without causing damage
+# ==============================================================================
+set -euo pipefail
+
+echo "Executing migration..."
+
+EOF
+    chmod +x "$full_path"
+    echo -e "${GREEN}✓ Created new migration:${NC} ${BOLD}$full_path${NC}"
+}
+
+ACTION="${1:-run}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    run)
+        cmd_run
+        ;;
+    status)
+        cmd_status
+        ;;
+    create)
+        cmd_create "$@"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac

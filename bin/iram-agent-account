@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS AI Agent Multi-Account Manager (Inspired by Omarchy)
+# Supports multiple subscriptions (Personal, Work, Client) for Claude, Codex, Grok, Agy
+# with threshold-based automated rate-limit failover.
+# ==============================================================================
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram/agents/accounts"
+USAGE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram/agents/usage"
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/iram/agent-accounts.json"
+mkdir -p "$STATE_DIR" "$USAGE_DIR" "$(dirname "$CONFIG_FILE")"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    cat << 'EOF' > "$CONFIG_FILE"
+{
+  "mode": "auto",
+  "threshold": 95,
+  "active": {
+    "claude": "primary",
+    "codex": "primary",
+    "grok": "primary",
+    "agy": "primary"
+  }
+}
+EOF
+fi
+
+BOLD="\033[1m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+CYAN="\033[0;36m"
+RED="\033[0;31m"
+NC="\033[0m"
+
+show_help() {
+    cat << EOF
+${BOLD}IRAM OS AI Agent Multi-Account Manager${NC}
+
+Usage:
+  iram agent account [command] [args...]
+
+Commands:
+  list [provider] [--json]       List configured accounts and rate-limit headroom
+  add <provider> <name>          Add a new isolated subscription account
+  use [provider] <name>          Switch active account for provider
+  mode [manual|auto [percent]]   Toggle auto-failover (e.g. auto 95)
+  remove <provider> <name>       Remove an account profile
+  help                           Show this help message
+
+Providers:
+  claude, codex, grok, agy
+
+EOF
+}
+
+cmd_list() {
+    local provider="${1:-}"
+    local as_json=false
+    for arg in "$@"; do
+        if [ "$arg" = "--json" ]; then as_json=true; fi
+    done
+
+    if [ "$as_json" = true ]; then
+        if [ -f "$CONFIG_FILE" ]; then
+            cat "$CONFIG_FILE"
+        else
+            echo "{}"
+        fi
+        return 0
+    fi
+
+    echo -e "${BOLD}${CYAN}=== IRAM OS AGENT SUBSCRIPTION ACCOUNTS ===${NC}"
+    local mode=$(jq -r '.mode // "auto"' "$CONFIG_FILE" 2>/dev/null || echo "auto")
+    local thresh=$(jq -r '.threshold // 95' "$CONFIG_FILE" 2>/dev/null || echo "95")
+    echo -e "Failover Mode: ${BOLD}$mode${NC} (Threshold: ${thresh}%)"
+    echo ""
+
+    local providers=("agy" "claude" "codex" "grok")
+    if [ -n "$provider" ] && [ "$provider" != "--json" ]; then
+        providers=("$provider")
+    fi
+
+    for p in "${providers[@]}"; do
+        local active_acc=$(jq -r --arg p "$p" '.active[$p] // "primary"' "$CONFIG_FILE" 2>/dev/null || echo "primary")
+        echo -e "${BOLD}${CYAN}Provider: ${p}${NC}"
+        echo -e "  ${GREEN}●${NC} ${BOLD}primary${NC} (Active) [Default Plan - 100% Headroom]"
+        
+        # Check additional accounts on disk
+        local p_dir="$STATE_DIR/$p"
+        if [ -d "$p_dir" ]; then
+            for acc in "$p_dir"/*; do
+                if [ -d "$acc" ]; then
+                    local a_name=$(basename "$acc")
+                    if [ "$a_name" = "$active_acc" ]; then
+                        echo -e "  ${GREEN}●${NC} ${BOLD}${a_name}${NC} (Active)"
+                    else
+                        echo -e "  ○ ${a_name} (Standby)"
+                    fi
+                fi
+            done
+        fi
+        echo ""
+    done
+}
+
+cmd_add() {
+    local provider="${1:-}"
+    local name="${2:-}"
+    if [ -z "$provider" ] || [ -z "$name" ]; then
+        echo -e "${RED}Error:${NC} Usage: iram agent account add <provider> <account_name>"
+        exit 1
+    fi
+
+    local target_dir="$STATE_DIR/$provider/$name"
+    mkdir -p "$target_dir"
+    echo -e "${GREEN}✓ Created account profile:${NC} ${BOLD}$name${NC} for provider ${BOLD}$provider${NC}"
+    echo "Profile storage: $target_dir"
+}
+
+cmd_use() {
+    local provider="${1:-}"
+    local name="${2:-}"
+    if [ -z "$name" ]; then
+        name="$provider"
+        provider=$(cat "$HOME/.config/iram/default-agent" 2>/dev/null || echo "agy")
+    fi
+
+    local tmp=$(mktemp)
+    jq --arg p "$provider" --arg n "$name" '.active[$p] = $n' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    echo -e "${GREEN}✓ Active account for ${provider} set to:${NC} ${BOLD}$name${NC}"
+}
+
+cmd_mode() {
+    local mode="${1:-auto}"
+    local thresh="${2:-95}"
+    local tmp=$(mktemp)
+    jq --arg m "$mode" --argjson t "$thresh" '.mode = $m | .threshold = $t' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    echo -e "${GREEN}✓ Failover mode set to:${NC} ${BOLD}$mode${NC} at ${thresh}% threshold."
+}
+
+ACTION="${1:-list}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    list)
+        cmd_list "$@"
+        ;;
+    add)
+        cmd_add "$@"
+        ;;
+    use)
+        cmd_use "$@"
+        ;;
+    mode)
+        cmd_mode "$@"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac

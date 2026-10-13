@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Native WebApp Manager (Inspired by Omarchy)
+# Turns modern web services (HEY, Zoom, ChatGPT, Grok, Claude, Basecamp) into
+# first-class desktop windows with custom classes, isolated profiles, and launch-or-focus.
+# ==============================================================================
+set -euo pipefail
+
+APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+PROFILES_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/iram/webapps"
+mkdir -p "$APP_DIR" "$PROFILES_DIR"
+
+BOLD="\033[1m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+CYAN="\033[0;36m"
+RED="\033[0;31m"
+NC="\033[0m"
+
+show_help() {
+    cat << EOF
+${BOLD}IRAM OS WebApp Manager${NC}
+
+Usage:
+  iram webapp [command] [args...]
+
+Commands:
+  install <name> <url> [icon]    Create native PWA desktop app with launch-or-focus
+  list                           List all installed webapps
+  remove <name>                  Uninstall webapp and clear desktop entry
+  help                           Show this help message
+
+Examples:
+  iram webapp install "ChatGPT" "https://chatgpt.com"
+  iram webapp install "Grok" "https://grok.com"
+  iram webapp install "Basecamp" "https://launchpad.37signals.com"
+
+EOF
+}
+
+cmd_list() {
+    echo -e "${BOLD}${CYAN}=== INSTALLED IRAM OS WEBAPPS ===${NC}"
+    local count=0
+    for f in "$APP_DIR"/iram-webapp-*.desktop; do
+        if [ -f "$f" ]; then
+            local name=$(grep "^Name=" "$f" | cut -d= -f2)
+            local url=$(grep "^Comment=" "$f" | cut -d= -f2 || echo "")
+            echo -e "  ${GREEN}●${NC} ${BOLD}$name${NC} ($url)"
+            count=$((count + 1))
+        fi
+    done
+    if [ "$count" -eq 0 ]; then
+        echo "  No custom webapps installed yet."
+    fi
+}
+
+cmd_install() {
+    local name="${1:-}"
+    local url="${2:-}"
+    local icon="${3:-browser}"
+
+    if [ -z "$name" ] || [ -z "$url" ]; then
+        echo -e "${RED}Error:${NC} Name and URL are required."
+        echo "Example: iram webapp install ChatGPT https://chatgpt.com"
+        exit 1
+    fi
+
+    local slug=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')
+    local desktop_file="$APP_DIR/iram-webapp-${slug}.desktop"
+    local wm_class="WebApp-${slug}"
+    local profile_path="$PROFILES_DIR/$slug"
+    mkdir -p "$profile_path"
+
+    # Detect preferred browser
+    local browser="google-chrome"
+    if command -v brave-browser >/dev/null 2>&1; then
+        browser="brave-browser"
+    elif command -v chromium >/dev/null 2>&1; then
+        browser="chromium"
+    fi
+
+    cat << EOF > "$desktop_file"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=$name
+Comment=$url
+Exec=iram-launch-or-focus "$wm_class" $browser --app="$url" --class="$wm_class" --user-data-dir="$profile_path"
+Icon=$icon
+Terminal=false
+StartupWMClass=$wm_class
+Categories=Network;WebBrowser;
+EOF
+
+    chmod +x "$desktop_file"
+    update-desktop-database "$APP_DIR" 2>/dev/null || true
+    echo -e "${GREEN}✓ Successfully installed webapp:${NC} ${BOLD}$name${NC}"
+    echo "  Desktop entry: $desktop_file"
+    echo "  Window Class:  $wm_class (Launch-or-focus enabled)"
+}
+
+cmd_remove() {
+    local name="${1:-}"
+    if [ -z "$name" ]; then
+        echo -e "${RED}Error:${NC} Name is required."
+        exit 1
+    fi
+
+    local slug=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')
+    local desktop_file="$APP_DIR/iram-webapp-${slug}.desktop"
+
+    if [ -f "$desktop_file" ]; then
+        rm -f "$desktop_file"
+        update-desktop-database "$APP_DIR" 2>/dev/null || true
+        echo -e "${GREEN}✓ Removed webapp desktop launcher:${NC} $name"
+    else
+        echo -e "${YELLOW}Notice:${NC} Webapp '$name' not found."
+    fi
+}
+
+ACTION="${1:-list}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    list)
+        cmd_list
+        ;;
+    install)
+        cmd_install "$@"
+        ;;
+    remove)
+        cmd_remove "$@"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac

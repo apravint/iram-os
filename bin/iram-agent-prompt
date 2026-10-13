@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Agent Task Prompt Dispatcher (Inspired by Omarchy)
+# Launches default AI coding agent in autonomous execution mode straight into a task.
+# Prevents home directory pollution by safely routing $HOME launches into ~/Work.
+# ==============================================================================
+set -euo pipefail
+
+PROMPT="${*:-}"
+if [ -z "$PROMPT" ]; then
+    echo "Usage: iram agent prompt \"<instruction>\"" >&2
+    exit 1
+fi
+
+DEFAULT_AGENT=$(cat "$HOME/.config/iram/default-agent" 2>/dev/null || echo "agy")
+
+# Ensure safety: If launched from $HOME, switch into ~/Work
+CURRENT_DIR="$(pwd)"
+if [ "$CURRENT_DIR" = "$HOME" ]; then
+    mkdir -p "$HOME/Work"
+    cd "$HOME/Work"
+    echo "Notice: Switched workspace to ~/Work to protect home directory."
+fi
+
+echo "🤖 Dispatching autonomous task to agent '$DEFAULT_AGENT'..."
+
+case "$DEFAULT_AGENT" in
+    agy|antigravity)
+        exec agy "$PROMPT"
+        ;;
+    claude)
+        # Pass non-interactive/permission flags if available
+        exec claude -p "$PROMPT"
+        ;;
+    codex)
+        exec codex exec "$PROMPT"
+        ;;
+    openclaw)
+        exec openclaw agent --prompt "$PROMPT"
+        ;;
+    opencode)
+        exec opencode "$PROMPT"
+        ;;
+    *)
+        if command -v "$DEFAULT_AGENT" >/dev/null 2>&1; then
+            exec "$DEFAULT_AGENT" "$PROMPT"
+        else
+            exec agy "$PROMPT"
+        fi
+        ;;
+esac

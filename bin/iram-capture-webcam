@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Picture-in-Picture Webcam Overlay (Inspired by Omarchy)
+# Toggles a floating, borderless webcam feed on top of all windows
+# for live screencasts, coding tutorials, and presentations.
+# ==============================================================================
+set -euo pipefail
+
+# 1. Toggle off if already running
+if pgrep -f "mpv.*IRAM Webcam PiP" >/dev/null 2>&1; then
+    pkill -f "mpv.*IRAM Webcam PiP" 2>/dev/null || true
+    echo "Webcam PiP overlay closed."
+    exit 0
+fi
+
+# 2. Check for video devices
+DEV="/dev/video0"
+if [ ! -e "$DEV" ]; then
+    echo "Notice: No webcam device detected at $DEV." >&2
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u low -a "IRAM Studio" "No Camera Found" "Could not locate a video capture device."
+    fi
+    exit 1
+fi
+
+# 3. Launch borderless PiP preview
+exec mpv "av://v4l2:$DEV" \
+    --profile=low-latency \
+    --untimed \
+    --title="IRAM Webcam PiP" \
+    --geometry=480x270-30-30 \
+    --ontop \
+    --no-border \
+    --no-osc \
+    --really-quiet

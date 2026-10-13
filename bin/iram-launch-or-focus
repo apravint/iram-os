@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Launch-or-Focus Manager (Inspired by Omarchy)
+# Intelligently switches to an existing application window across workspaces
+# instead of spawning redundant duplicate windows or browser tabs.
+# ==============================================================================
+set -euo pipefail
+
+MATCH_PATTERN="${1:-}"
+shift 2>/dev/null || true
+LAUNCH_CMD="${*:-}"
+
+if [ -z "$MATCH_PATTERN" ] || [ -z "$LAUNCH_CMD" ]; then
+    echo "Usage: iram-launch-or-focus <window_class_or_title_regex> <command_to_launch...>" >&2
+    exit 1
+fi
+
+# 1. Inspect Hyprland active clients via hyprctl JSON output
+if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    TARGET_ADDR=$(hyprctl clients -j 2>/dev/null | jq -r --arg pat "$MATCH_PATTERN" '
+        .[] | select((.class | test($pat; "i")) or (.title | test($pat; "i"))) | .address' | head -n 1)
+
+    if [ -n "$TARGET_ADDR" ] && [ "$TARGET_ADDR" != "null" ]; then
+        hyprctl dispatch focuswindow "address:$TARGET_ADDR" >/dev/null 2>&1
+        exit 0
+    fi
+fi
+
+# 2. Window not found -> execute launch command in background
+nohup $LAUNCH_CMD >/dev/null 2>&1 &

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Screen Text Extractor & Local OCR (Inspired by Omarchy)
+# Interactively selects a screen region, performs high-speed local OCR,
+# and copies extracted text directly to the system clipboard.
+# ==============================================================================
+set -euo pipefail
+
+TMP_IMG=$(mktemp --suffix=.png)
+trap 'rm -f "$TMP_IMG"' EXIT
+
+if ! command -v slurp >/dev/null 2>&1 || ! command -v grim >/dev/null 2>&1; then
+    echo "Error: grim and slurp are required for screen capture." >&2
+    exit 1
+fi
+
+GEO=$(slurp 2>/dev/null || true)
+if [ -z "$GEO" ]; then
+    exit 0
+fi
+
+grim -g "$GEO" "$TMP_IMG"
+
+LANGS="eng"
+if tesseract --list-langs 2>/dev/null | grep -q "tam"; then
+    LANGS="eng+tam"
+fi
+
+TEXT=$(tesseract "$TMP_IMG" stdout -l "$LANGS" --oem 1 --psm 6 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true)
+
+if [ -n "$TEXT" ]; then
+    if command -v wl-copy >/dev/null 2>&1; then
+        echo -n "$TEXT" | wl-copy
+    fi
+    PREVIEW=$(echo "$TEXT" | head -n 3 | tr '\n' ' ')
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a "IRAM OCR" "📝 Text Extracted to Clipboard" "$PREVIEW" -t 4000
+    fi
+    echo "$TEXT"
+else
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u low -a "IRAM OCR" "No Text Found" "Could not detect readable text in selected region." -t 3000
+    fi
+fi

@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Lifecycle Hooks Dispatcher (Inspired by Omarchy)
+# Decouples system events (theme-set, battery-low, post-boot, post-update, font-set)
+# into modular, independent hook directories.
+# ==============================================================================
+set -euo pipefail
+
+EVENT="${1:-}"
+shift 2>/dev/null || true
+
+BOLD="\033[1m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+CYAN="\033[0;36m"
+RED="\033[0;31m"
+NC="\033[0m"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram"
+LOG_FILE="$STATE_DIR/lifecycle-hooks.log"
+mkdir -p "$STATE_DIR"
+
+show_help() {
+    cat << EOF
+${BOLD}IRAM OS Lifecycle Dispatcher${NC}
+
+Usage:
+  iram lifecycle dispatch <event> [args...]
+  iram lifecycle list
+  iram lifecycle test <event>
+
+Events:
+  theme-set        Triggered when system theme changes (passes theme name)
+  battery-low      Triggered when battery drops below threshold (e.g. 15%)
+  post-boot        Triggered after desktop environment starts
+  post-update      Triggered after system or package updates
+  font-set         Triggered when system fonts or sizes change
+
+Hook Directories:
+  User:   ~/.config/iram/hooks/<event>.d/
+  System: ~/iram-os/config/iram/hooks/<event>.d/
+
+EOF
+}
+
+get_hook_dirs() {
+    local evt="$1"
+    echo "$HOME/iram-os/config/iram/hooks/${evt}.d"
+    echo "$HOME/.config/iram/hooks/${evt}.d"
+}
+
+cmd_list() {
+    echo -e "${BOLD}${CYAN}=== IRAM OS REGISTERED LIFECYCLE HOOKS ===${NC}"
+    local events=("theme-set" "battery-low" "post-boot" "post-update" "font-set")
+    
+    for evt in "${events[@]}"; do
+        echo -e "\n${BOLD}${CYAN}Event: ${evt}${NC}"
+        local found=0
+        for dir in $(get_hook_dirs "$evt"); do
+            if [ -d "$dir" ]; then
+                for hook in "$dir"/*; do
+                    if [ -x "$hook" ] && [ -f "$hook" ]; then
+                        echo -e "  ${GREEN}✓${NC} $(basename "$hook") ${NC}(${dir})${NC}"
+                        found=1
+                    fi
+                done
+            fi
+        done
+        if [ "$found" -eq 0 ]; then
+            echo "  (No active executable hooks)"
+        fi
+    done
+}
+
+cmd_dispatch() {
+    local evt="$1"
+    if [ -z "$evt" ]; then
+        echo -e "${RED}Error:${NC} Missing event name."
+        show_help
+        exit 1
+    fi
+
+    export IRAM_EVENT="$evt"
+    local executed=0
+
+    for dir in $(get_hook_dirs "$evt"); do
+        if [ -d "$dir" ]; then
+            for hook in "$dir"/*; do
+                if [ -x "$hook" ] && [ -f "$hook" ]; then
+                    local hook_name=$(basename "$hook")
+                    echo -e "[$(date -Iseconds)] Dispatching $evt -> $hook_name" >> "$LOG_FILE"
+                    
+                    if "$hook" "$@" >> "$LOG_FILE" 2>&1; then
+                        executed=$((executed + 1))
+                    else
+                        echo -e "${YELLOW}Warning: Hook $hook_name for event $evt failed.${NC}" >> "$LOG_FILE"
+                    fi
+                fi
+            done
+        fi
+    done
+    return 0
+}
+
+case "$EVENT" in
+    dispatch)
+        cmd_dispatch "$@"
+        ;;
+    list|--list)
+        cmd_list
+        ;;
+    test)
+        echo -e "${BOLD}${CYAN}Testing lifecycle event: $1${NC}"
+        cmd_dispatch "$@"
+        echo -e "${GREEN}✓ Done testing event.${NC}"
+        ;;
+    help|--help|-h|"")
+        show_help
+        ;;
+    *)
+        # If invoked directly as: iram-lifecycle-dispatch theme-set "Tokyo Storm"
+        cmd_dispatch "$EVENT" "$@"
+        ;;
+esac

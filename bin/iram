@@ -35,16 +35,18 @@ show_help() {
     echo -e "  iram commands [--json] [--all]\n"
     
     echo -e "${BOLD}CORE COMMAND GROUPS:${NC}"
-    echo -e "  ${CYAN}agent${NC} [prompt]            Launch IRAM autonomous coding agent (or prompt directly)"
+    echo -e "  ${CYAN}agent${NC} [prompt|account|usage] Autonomous coding agent, direct prompting & multi-account failover"
     echo -e "  ${CYAN}sidecar${NC}                   Toggle AI sidecar HUD floating assistant"
     echo -e "  ${CYAN}openclaw${NC} [cmd]            OpenClaw multi-channel gateway & agent daemon"
     echo -e "  ${CYAN}video${NC} [prompt] [opts]     Universal Film & Video Studio (Shorts, Film, Cinema)"
     echo -e "  ${CYAN}craft${NC} [app]               Storytold Creative Suite (photo, vector, film, sound, cad...)"
     echo -e "  ${CYAN}theme${NC} [list|set|next]     Live zero-restart theme switcher (18 curated palettes)"
-    echo -e "  ${CYAN}audio${NC} [toggle|init]       PipeWire / WirePlumber studio audio routing & toggle"
+    echo -e "  ${CYAN}audio${NC} [tuning|toggle|init] PipeWire studio audio routing & calibrated hardware DSP tuning"
+    echo -e "  ${CYAN}migrate${NC} [run|status|create] Non-destructive timestamped system migrations engine"
+    echo -e "  ${CYAN}lifecycle${NC} [dispatch|list] System hooks dispatcher (theme-set, battery-low, post-update)"
+    echo -e "  ${CYAN}webapp${NC} [install|list|rm]  Isolated desktop PWA generation with Launch-or-Focus"
+    echo -e "  ${CYAN}capture${NC} [qr|text|webcam]  Desktop intelligence: local QR decode, OCR & webcam PiP"
     echo -e "  ${CYAN}display${NC}                  Multi-monitor arrangement & refresh rate GUI"
-    echo -e "  ${CYAN}capture${NC}                  Screenshot & screen recording interactive menu"
-    echo -e "  ${CYAN}ocr${NC}                      Instant screen region OCR text extraction to clipboard"
     echo -e "  ${CYAN}clipboard${NC}                Clipboard history and fuzzy search"
     echo -e "  ${CYAN}default${NC} agent [name]     Select default AI coding agent (agy, openclaw, claude...)"
     echo -e "  ${CYAN}memory${NC}                   Embedded Qdrant vector retrieval & conversation memory"
@@ -123,7 +125,28 @@ case "$cmd" in
 
     # --- AI AGENT SUBSYSTEM ---
     agent)
-        exec "$LOCAL_BIN/iram-agent" "$@"
+        sub="${1:-}"
+        case "$sub" in
+            prompt)
+                shift
+                exec "$LOCAL_BIN/iram-agent-prompt" "$@"
+                ;;
+            account|accounts)
+                shift
+                exec "$LOCAL_BIN/iram-agent-account" "$@"
+                ;;
+            usage)
+                shift
+                exec "$LOCAL_BIN/iram-agent-usage" "$@"
+                ;;
+            crash)
+                shift
+                exec "$LOCAL_BIN/iram-crash-diagnose" "$@"
+                ;;
+            *)
+                exec "$LOCAL_BIN/iram-agent" "$@"
+                ;;
+        esac
         ;;
     sidecar)
         exec "$LOCAL_BIN/iram-agent-sidecar" "$@"
@@ -270,10 +293,14 @@ case "$cmd" in
         ;;
 
     # --- AUDIO ROUTING & HARDWARE ---
+    # --- AUDIO ROUTING & HARDWARE ---
     audio)
         sub="${1:-toggle}"
         shift 2>/dev/null || true
         case "$sub" in
+            tuning)
+                exec "$LOCAL_BIN/iram-audio-tuning" "$@"
+                ;;
             toggle)
                 exec "$LOCAL_BIN/iram-audio-toggle"
                 ;;
@@ -287,11 +314,44 @@ case "$cmd" in
         ;;
 
     # --- WORKSPACE & DESKTOP TOOLS ---
+    migrate|migrations)
+        exec "$LOCAL_BIN/iram-migrate" "$@"
+        ;;
+    lifecycle|hooks)
+        exec "$LOCAL_BIN/iram-lifecycle-dispatch" "$@"
+        ;;
+    webapp|webapps)
+        exec "$LOCAL_BIN/iram-webapp" "$@"
+        ;;
     display|displays)
         exec "$LOCAL_BIN/iram-displays-gui"
         ;;
     capture)
-        exec "$LOCAL_BIN/iram-capture-menu"
+        sub="${1:-menu}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            qr)
+                exec "$LOCAL_BIN/iram-capture-qr" "$@"
+                ;;
+            text)
+                exec "$LOCAL_BIN/iram-capture-text" "$@"
+                ;;
+            webcam)
+                exec "$LOCAL_BIN/iram-capture-webcam" "$@"
+                ;;
+            screenshot)
+                exec "$LOCAL_BIN/iram-screenshot" "$@"
+                ;;
+            screenrecord)
+                exec "$LOCAL_BIN/iram-screenrecord" "$@"
+                ;;
+            menu|"")
+                exec "$LOCAL_BIN/iram-capture-menu"
+                ;;
+            *)
+                exec "$LOCAL_BIN/iram-capture-menu"
+                ;;
+        esac
         ;;
     screenshot)
         exec "$LOCAL_BIN/iram-screenshot" "$@"
@@ -300,7 +360,7 @@ case "$cmd" in
         exec "$LOCAL_BIN/iram-screenrecord" "$@"
         ;;
     ocr)
-        exec "$LOCAL_BIN/iram-ocr"
+        exec "$LOCAL_BIN/iram-capture-text" "$@"
         ;;
     clipboard)
         exec "$LOCAL_BIN/iram-clipboard-menu"
