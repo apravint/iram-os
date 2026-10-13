@@ -1,0 +1,86 @@
+{
+  "title": "The World's Best Open-Source AI Video Creator Projects (2026)",
+  "description": "Comprehensive taxonomy and architecture blueprint of the top 12 open-source AI video creation, automated filmmaking, and programmatic rendering engines.",
+  "workflow_stages": [
+    "1. Story & Scriptwriting (LLM Multi-Agent Screenplay)",
+    "2. Audio & Voice (Neural TTS + Millisecond Alignment + Procedural SFX)",
+    "3. Visuals & Animation (Vector Rigs + Procedural Sets + B-Roll + Diffusion)",
+    "4. Kinetic Subtitles (Word-by-Word Bouncy Pop + Dual-Font Typography)",
+    "5. Compositing & Cinema Grade (24 FPS, 2.39:1 Scope, 35mm Grain, Ducking)"
+  ],
+  "categories": {
+    "agentic_production_systems": [
+      {
+        "name": "OpenMontage",
+        "repo": "https://github.com/calesthio/OpenMontage",
+        "description": "Agentic video production system featuring 12 production pipelines, 700+ agent skill files, and 100+ creative tools."
+      },
+      {
+        "name": "OpenFilm",
+        "repo": "https://github.com/openfilm/openfilm",
+        "description": "Agent-based video tool that writes films as programmatic web canvases and provides a local browser timeline editor."
+      },
+      {
+        "name": "Toonflow",
+        "repo": "https://github.com/HBAI-Ltd/Toonflow-app",
+        "description": "Creative filmmaking platform featuring an infinite canvas, multi-agent storyboarding, and local node workflows."
+      }
+    ],
+    "automated_short_form_engines": [
+      {
+        "name": "MoneyPrinterTurbo",
+        "repo": "https://github.com/harry0703/MoneyPrinterTurbo",
+        "description": "Full-pipeline automated short video generator: scriptwriting, stock B-roll fetching, TTS voiceover, and synchronized subtitles."
+      },
+      {
+        "name": "ShortGPT",
+        "repo": "https://github.com/RayVentura/ShortGPT",
+        "description": "Content automation framework offering asset management, multi-language captioning, and video stitching engines."
+      },
+      {
+        "name": "VideoLingo",
+        "repo": "https://github.com/Huanshere/VideoLingo",
+        "description": "Netflix-quality subtitle alignment engine with WhisperX millisecond word-level timing and kinetic typography."
+      }
+    ],
+    "programmatic_motion_frameworks": [
+      {
+        "name": "Remotion",
+        "repo": "https://github.com/remotion-dev/remotion",
+        "description": "Programmatic video creation in React: frame-accurate rendering, CSS spring physics, and dynamic audio visualizers."
+      },
+      {
+        "name": "Manim",
+        "repo": "https://github.com/ManimCommunity/manim",
+        "description": "Mathematical and programmatic animation engine for precise vector morphing, graphs, and code syntax highlights."
+      },
+      {
+        "name": "MoviePy",
+        "repo": "https://github.com/Zulko/moviepy",
+        "description": "Python video editing backbone for cutting, compositing, title generation, and custom filter transforms."
+      }
+    ],
+    "foundation_generative_video": [
+      {
+        "name": "CogVideoX",
+        "repo": "https://github.com/zai-org/CogVideo",
+        "description": "Open-weight multimodal diffusion transformer generating high-fidelity photorealistic video motion and dynamic scenes."
+      },
+      {
+        "name": "LTX-Video",
+        "repo": "https://github.com/Lightricks/LTX-Video",
+        "description": "Dual-stream diffusion transformer optimized for real-time physical simulation, camera dollies, and lighting fidelity."
+      }
+    ]
+  },
+  "best_practices_for_ultimate_video_creator": [
+    "Word-level dynamic karaoke highlighting (Alex Hormozi / CapCut style) with glowing contrast",
+    "Continuous animated retention progress bar for 9:16 vertical shorts",
+    "Dual-font non-Latin script typography fallback ensuring zero tofu boxes across multilingual renders",
+    "Procedural Hollywood sound design (Hans Zimmer Inception BRAAMs, 808 sub-bass impacts, swept whooshes, telemetry)",
+    "State-based vector character rigs with speech-synchronized mouth flapping and idle listening poses",
+    "Multi-act screenplay generation with alternating character dialogue and emotional cues",
+    "True cinema post-processing: 24.000 FPS film cadence, 2.39:1 scope bars, 35mm film grain, and Teal & Orange grade",
+    "Direct ingestion of structured JSON blueprints to generate deep-dive educational video series"
+  ]
+}

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# IRAM OS Unified Command Center
+# IRAM OS Unified Command Center & Dynamic Agentic Router
+# Inspired by Omarchy (by DHH) & Engineered for IRAM OS (Ubuntu 26.04 + Hyprland)
 # ==============================================================================
 set -e
+
+IRAM_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+IRAM_BIN_DIR="$IRAM_DIR/bin"
+LOCAL_BIN="$HOME/.local/bin"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,45 +18,209 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Default configuration directory
+CONFIG_DIR="$HOME/.config/iram"
+mkdir -p "$CONFIG_DIR"
+
+show_banner() {
+    echo -e "${BOLD}${CYAN}IRAM OS Command Center${NC} ${GREEN}(v2.0-omarchy-enhanced)${NC}"
+    echo -e "Autonomous Agentic Desktop • Hyprland • Waybar • Storytold Craft Suite\n"
+}
+
 show_help() {
-    echo -e "${BOLD}${CYAN}IRAM OS Command Center${NC} ${GREEN}(v1.5-quattro)${NC}"
-    echo -e "Unified control CLI for system, themes, AI agents & Craft Suite\n"
+    show_banner
     echo -e "${BOLD}USAGE:${NC}"
-    echo -e "  iram <command> [arguments...]\n"
-    echo -e "${BOLD}SYSTEM & WORKSPACE:${NC}"
-    echo -e "  ${CYAN}theme${NC} [name]          List or switch desktop themes"
-    echo -e "  ${CYAN}display${NC} | ${CYAN}displays${NC}    Open display & monitor settings GUI"
-    echo -e "  ${CYAN}capture${NC}               Open screenshot & screen recording menu"
-    echo -e "  ${CYAN}ocr${NC}                   Extract text from screen region to clipboard"
-    echo -e "  ${CYAN}clipboard${NC}             Open clipboard history"
-    echo -e "  ${CYAN}weather${NC} [icon|status]   Display current weather status & icon"
-    echo -e "  ${CYAN}apps${NC}                  Open application launcher"
-    echo -e "  ${CYAN}power${NC}                 Open system power menu\n"
-    echo -e "${BOLD}CREATIVE SUITE (STORYTOLD CRAFT):${NC}"
-    echo -e "  ${CYAN}craft${NC} [app]           Open ArtCraft Launcher or specific app:"
-    echo -e "                        photo, vector, film, sound, light, cad,"
-    echo -e "                        word, grid, deck, pdf, design, effect\n"
-    echo -e "${BOLD}AI & AGENTIC OS:${NC}"
-    echo -e "  ${CYAN}agent${NC} [prompt]        Launch IRAM Agentic OS assistant"
-    echo -e "  ${CYAN}sidecar${NC}               Toggle AI Sidecar chat"
-    echo -e "  ${CYAN}copilot${NC}               Launch Shell Copilot terminal"
-    echo -e "  ${CYAN}models${NC}                Manage local AI models & weights\n"
-    echo -e "${BOLD}DIAGNOSTICS & INFO:${NC}"
-    echo -e "  ${CYAN}info${NC}                  Display system info and active theme"
-    echo -e "  ${CYAN}clean${NC}                 Clean package caches and temporary files"
-    echo -e "  ${CYAN}help${NC}                  Show this help overview"
+    echo -e "  iram <command> [arguments...]"
+    echo -e "  iram <group> <subcommand> [arguments...]"
+    echo -e "  iram commands [--json] [--all]\n"
+    
+    echo -e "${BOLD}CORE COMMAND GROUPS:${NC}"
+    echo -e "  ${CYAN}agent${NC} [prompt]            Launch IRAM autonomous coding agent (or prompt directly)"
+    echo -e "  ${CYAN}sidecar${NC}                   Toggle AI sidecar HUD floating assistant"
+    echo -e "  ${CYAN}openclaw${NC} [cmd]            OpenClaw multi-channel gateway & agent daemon"
+    echo -e "  ${CYAN}video${NC} [prompt] [opts]     Universal Film & Video Studio (Shorts, Film, Cinema)"
+    echo -e "  ${CYAN}craft${NC} [app]               Storytold Creative Suite (photo, vector, film, sound, cad...)"
+    echo -e "  ${CYAN}theme${NC} [list|set|next]     Live zero-restart theme switcher (18 curated palettes)"
+    echo -e "  ${CYAN}audio${NC} [toggle|init]       PipeWire / WirePlumber studio audio routing & toggle"
+    echo -e "  ${CYAN}display${NC}                  Multi-monitor arrangement & refresh rate GUI"
+    echo -e "  ${CYAN}capture${NC}                  Screenshot & screen recording interactive menu"
+    echo -e "  ${CYAN}ocr${NC}                      Instant screen region OCR text extraction to clipboard"
+    echo -e "  ${CYAN}clipboard${NC}                Clipboard history and fuzzy search"
+    echo -e "  ${CYAN}default${NC} agent [name]     Select default AI coding agent (agy, openclaw, claude...)"
+    echo -e "  ${CYAN}memory${NC}                   Embedded Qdrant vector retrieval & conversation memory"
+    echo -e "  ${CYAN}workflow${NC}                 Stateful cyclic coding workflow graph (Plan->Code->Verify)"
+    echo -e "  ${CYAN}weather${NC} [status|icon]     Live desktop weather telemetry"
+    echo -e "  ${CYAN}info${NC}                     System health, kernel, compositor, and theme overview"
+    echo -e "  ${CYAN}update${NC}                   Self-updating system, migration runner & package update"
+    echo -e "  ${CYAN}clean${NC}                    Clean temporary cache, thumbnails & flatpak runtimes\n"
+
+    echo -e "${BOLD}AI AGENT QUICK SHORTCUTS:${NC}"
+    echo -e "  ${YELLOW}a${NC}      -> Default coding agent     ${YELLOW}agy${NC}   -> Google Antigravity CLI"
+    echo -e "  ${YELLOW}craft${NC}  -> Storytold ArtCraft Hub   ${YELLOW}video${NC} -> IRAM Film Studio Engine"
+}
+
+# Machine-readable command introspection for AI Agents
+export_json_commands() {
+    local json="["
+    local first=true
+
+    for cmd_path in "$IRAM_BIN_DIR"/iram-* "$LOCAL_BIN"/iram-*; do
+        [ -f "$cmd_path" ] || continue
+        local bname="$(basename "$cmd_path")"
+        local action="${bname#iram-}"
+        local summary="IRAM OS system utility"
+
+        # Extract declared summary from script headers if present
+        local header_summary=$(grep -m 1 -E '^# *(iram|omarchy):summary=' "$cmd_path" 2>/dev/null | cut -d= -f2- || true)
+        if [ -n "$header_summary" ]; then
+            summary="$header_summary"
+        fi
+
+        if [ "$first" = true ]; then
+            first=false
+        else
+            json+=","
+        fi
+        json+="{\"command\":\"iram $action\",\"binary\":\"$bname\",\"summary\":\"$summary\",\"path\":\"$cmd_path\"}"
+    done
+    json+="]"
+    echo "$json"
+}
+
+list_commands() {
+    show_banner
+    echo -e "${BOLD}AVAILABLE IRAM OS COMMANDS:${NC}\n"
+    printf "  %-24s %s\n" "COMMAND" "DESCRIPTION"
+    printf "  %-24s %s\n" "-------" "-----------"
+    for cmd_path in "$IRAM_BIN_DIR"/iram-* "$LOCAL_BIN"/iram-*; do
+        [ -f "$cmd_path" ] || continue
+        local bname="$(basename "$cmd_path")"
+        local action="${bname#iram-}"
+        local summary=""
+        local header_summary=$(grep -m 1 -E '^# *(iram|omarchy):summary=' "$cmd_path" 2>/dev/null | cut -d= -f2- || true)
+        if [ -n "$header_summary" ]; then
+            summary="$header_summary"
+        else
+            summary="IRAM OS $action utility"
+        fi
+        printf "  ${CYAN}%-24s${NC} %s\n" "iram $action" "$summary"
+    done | sort -u
+    echo ""
 }
 
 cmd="${1:-help}"
-shift || true
+shift 2>/dev/null || true
 
 case "$cmd" in
+    # --- COMMAND INTROSPECTION (FOR AGENTS & SHELL) ---
+    commands)
+        if [ "${1:-}" = "--json" ]; then
+            export_json_commands
+        else
+            list_commands
+        fi
+        ;;
+
+    # --- AI AGENT SUBSYSTEM ---
+    agent)
+        exec "$LOCAL_BIN/iram-agent" "$@"
+        ;;
+    sidecar)
+        exec "$LOCAL_BIN/iram-agent-sidecar" "$@"
+        ;;
+    openclaw)
+        exec "$LOCAL_BIN/openclaw" "$@"
+        ;;
+    copilot)
+        exec "$LOCAL_BIN/iram-ai-cmd" "$@"
+        ;;
+    models)
+        exec "$LOCAL_BIN/iram-models" "$@"
+        ;;
+    memory|qdrant)
+        exec "$LOCAL_BIN/iram-memory" "$@"
+        ;;
+    workflow)
+        exec "$LOCAL_BIN/iram-workflow" "$@"
+        ;;
+    mcp)
+        exec "$LOCAL_BIN/iram-mcp-server" "$@"
+        ;;
+    crawl)
+        exec "$LOCAL_BIN/iram-crawl" "$@"
+        ;;
+    docling)
+        exec "$LOCAL_BIN/iram-docling" "$@"
+        ;;
+    trace)
+        exec "$LOCAL_BIN/iram-trace" "$@"
+        ;;
+
+    # --- DEFAULT SELECTION ---
+    default)
+        sub="${1:-}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            agent)
+                agent_name="${1:-}"
+                if [ -n "$agent_name" ]; then
+                    echo "$agent_name" > "$CONFIG_DIR/default-agent"
+                    echo -e "${GREEN}✓ Default coding agent set to:${NC} ${BOLD}$agent_name${NC}"
+                else
+                    current=$(cat "$CONFIG_DIR/default-agent" 2>/dev/null || echo "agy")
+                    echo -e "Active default agent: ${BOLD}${CYAN}$current${NC}"
+                    echo -e "Available options: ${YELLOW}agy, openclaw, claude, codex, opencode, copilot${NC}"
+                fi
+                ;;
+            browser)
+                browser_name="${1:-}"
+                if [ -n "$browser_name" ]; then
+                    echo "$browser_name" > "$CONFIG_DIR/default-browser"
+                    echo -e "${GREEN}✓ Default browser set to:${NC} ${BOLD}$browser_name${NC}"
+                else
+                    current=$(cat "$CONFIG_DIR/default-browser" 2>/dev/null || echo "brave")
+                    echo -e "Active default browser: ${BOLD}${CYAN}$current${NC}"
+                fi
+                ;;
+            *)
+                echo -e "Usage: iram default agent <name> | iram default browser <name>"
+                ;;
+        esac
+        ;;
+
+    # --- VIDEO ENGINE SUBSYSTEM ---
+    video)
+        if command -v iram-video >/dev/null 2>&1; then
+            exec iram-video "$@"
+        elif [ -f "$HOME/iram-video/bin/iram-video" ]; then
+            exec "$HOME/iram-video/bin/iram-video" "$@"
+        else
+            echo -e "${RED}iram-video engine not found.${NC} Install it or check ~/iram-video."
+            exit 1
+        fi
+        ;;
+
+    # --- STORYTOLD CRAFT SUITE ---
+    craft)
+        app="${1:-launcher}"
+        if [ "$app" = "launcher" ] || [ "$app" = "hub" ]; then
+            exec "$LOCAL_BIN/artcraft-launcher"
+        else
+            exec "$LOCAL_BIN/craft-app-runner" "$app"
+        fi
+        ;;
+
+    # --- ZERO-RESTART THEME ENGINE ---
     theme|themes)
         sub="${1:-}"
         shift 2>/dev/null || true
         case "$sub" in
             list)
-                /usr/local/bin/omarchy-theme-list
+                if [ -x "/usr/local/bin/omarchy-theme-list" ]; then
+                    /usr/local/bin/omarchy-theme-list
+                else
+                    ls -1 "$HOME/iram-os/themes" 2>/dev/null || echo "No themes found"
+                fi
                 ;;
             current)
                 cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "Default"
@@ -59,10 +228,14 @@ case "$cmd" in
             set)
                 target="${1:-}"
                 if [ -n "$target" ]; then
-                    /usr/local/bin/omarchy-theme-set "$target"
-                    ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                    if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
+                        /usr/local/bin/omarchy-theme-set "$target"
+                    fi
+                    "$LOCAL_BIN/iram-theme-switch" "$target" 2>/dev/null || true
+                    "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
+                    echo -e "${GREEN}✓ Theme switched to:${NC} ${BOLD}$target${NC}"
                 else
-                    exec iram-theme-switch
+                    exec "$LOCAL_BIN/iram-theme-switch"
                 fi
                 ;;
             bg|background)
@@ -70,68 +243,79 @@ case "$cmd" in
                 shift 2>/dev/null || true
                 case "$sub_bg" in
                     next)
-                        /usr/local/bin/omarchy-theme-bg-next
-                        ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                        if [ -x "/usr/local/bin/omarchy-theme-bg-next" ]; then
+                            /usr/local/bin/omarchy-theme-bg-next
+                        fi
+                        "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
                         ;;
                     *)
-                        /usr/local/bin/omarchy-theme-bg-set "$sub_bg" 2>/dev/null || /usr/local/bin/omarchy-theme-bg-next
-                        ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                        "$LOCAL_BIN/iram-theme-bg-set" "$sub_bg" 2>/dev/null || true
+                        "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
                         ;;
                 esac
                 ;;
-            gui)
-                exec iram-theme-switch
-                ;;
-            "")
-                exec iram-theme-switch
+            gui|"")
+                exec "$LOCAL_BIN/iram-theme-switch"
                 ;;
             *)
-                # If invoked as: iram theme "Cyberpunk Neon"
-                /usr/local/bin/omarchy-theme-set "$sub"
-                ~/.local/bin/iram-theme-sync-all 2>/dev/null || true
+                # If invoked directly as: iram theme "Tokyo Storm"
+                if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
+                    /usr/local/bin/omarchy-theme-set "$sub"
+                fi
+                "$LOCAL_BIN/iram-theme-switch" "$sub" 2>/dev/null || true
+                "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
+                echo -e "${GREEN}✓ Theme applied:${NC} ${BOLD}$sub${NC}"
                 ;;
         esac
         ;;
-    craft)
-        app="${1:-launcher}"
-        if [ "$app" = "launcher" ] || [ "$app" = "hub" ]; then
-            exec artcraft-launcher
-        else
-            exec craft-app-runner "$app"
-        fi
+
+    # --- AUDIO ROUTING & HARDWARE ---
+    audio)
+        sub="${1:-toggle}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            toggle)
+                exec "$LOCAL_BIN/iram-audio-toggle"
+                ;;
+            init)
+                exec "$LOCAL_BIN/iram-audio-init"
+                ;;
+            *)
+                exec "$LOCAL_BIN/iram-audio-toggle"
+                ;;
+        esac
         ;;
-    ocr)
-        exec iram-ocr
-        ;;
+
+    # --- WORKSPACE & DESKTOP TOOLS ---
     display|displays)
-        exec iram-displays-gui
+        exec "$LOCAL_BIN/iram-displays-gui"
         ;;
     capture)
-        exec iram-capture-menu
+        exec "$LOCAL_BIN/iram-capture-menu"
+        ;;
+    screenshot)
+        exec "$LOCAL_BIN/iram-screenshot" "$@"
+        ;;
+    screenrecord)
+        exec "$LOCAL_BIN/iram-screenrecord" "$@"
+        ;;
+    ocr)
+        exec "$LOCAL_BIN/iram-ocr"
         ;;
     clipboard)
-        exec iram-clipboard-menu
+        exec "$LOCAL_BIN/iram-clipboard-menu"
         ;;
     power)
-        exec iram-power-menu
+        exec "$LOCAL_BIN/iram-power-menu"
         ;;
     apps|launcher)
-        exec iram-app-launcher
+        exec "$LOCAL_BIN/iram-app-launcher"
         ;;
-    agent)
-        exec iram-agent "$@"
-        ;;
-    sidecar)
-        exec iram-agent-sidecar
-        ;;
-    copilot)
-        exec iram-ai-cmd "$@"
-        ;;
-    models)
-        exec iram-models
+    bar)
+        exec "$LOCAL_BIN/iram-restart-bar"
         ;;
     weather)
-        sub="${1:-}"
+        sub="${1:-status}"
         shift 2>/dev/null || true
         case "$sub" in
             icon)
@@ -141,36 +325,60 @@ case "$cmd" in
                 /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
                 ;;
             notify|notification)
-                exec ~/.local/bin/iram-notification-weather
+                exec "$LOCAL_BIN/iram-notification-weather"
                 ;;
             *)
                 /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
                 ;;
         esac
         ;;
+
+    # --- SYSTEM MAINTENANCE & DIAGNOSTICS ---
     info|status)
-        echo -e "${BOLD}${CYAN}=== IRAM OS STATUS ===${NC}"
-        echo -e "  ${BOLD}OS:${NC} $(lsb_release -ds 2>/dev/null || cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"')"
-        echo -e "  ${BOLD}Kernel:${NC} $(uname -r)"
-        echo -e "  ${BOLD}Compositor:${NC} Hyprland $(hyprctl version 2>/dev/null | grep -i tag | head -n 1 || echo '')"
-        echo -e "  ${BOLD}Active Theme:${NC} $(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo 'Default')"
-        echo -e "  ${BOLD}Rust / Cargo:${NC} $(rustc --version 2>/dev/null || echo 'Not installed')"
-        echo -e "  ${BOLD}Craft Suite:${NC} Ready (~/.local/bin/artcraft-launcher)"
-        echo -e "  ${BOLD}Agent Status:${NC} $(pgrep -f 'openclaw|omarchy-agent' >/dev/null && echo -e '${GREEN}Active${NC}' || echo 'Idle')"
+        echo -e "${BOLD}${CYAN}=== IRAM OS STATUS HUD ===${NC}"
+        echo -e "  ${BOLD}Distribution:${NC}  $(lsb_release -ds 2>/dev/null || cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"')"
+        echo -e "  ${BOLD}Linux Kernel:${NC}  $(uname -r)"
+        echo -e "  ${BOLD}Compositor:${NC}    Hyprland $(hyprctl version 2>/dev/null | grep -i tag | head -n 1 || echo '')"
+        echo -e "  ${BOLD}Active Theme:${NC}  $(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo 'Tokyo Storm')"
+        echo -e "  ${BOLD}Default Agent:${NC} $(cat "$CONFIG_DIR/default-agent" 2>/dev/null || echo 'agy (Google Antigravity)')"
+        echo -e "  ${BOLD}Storytold Craft:${NC} ${GREEN}Ready${NC} ($LOCAL_BIN/artcraft-launcher)"
+        echo -e "  ${BOLD}Video Studio:${NC}   ${GREEN}Ready${NC} (iram-video 1080p/4K Cinema & Shorts)"
+        if pgrep -f 'openclaw' >/dev/null; then
+            echo -e "  ${BOLD}OpenClaw Core:${NC}  ${GREEN}Online${NC}"
+        else
+            echo -e "  ${BOLD}OpenClaw Core:${NC}  ${YELLOW}Standby${NC}"
+        fi
         ;;
     clean)
         echo "Cleaning Flatpak unused runtimes..."
         flatpak uninstall --unused -y 2>/dev/null || true
         echo "Cleaning thumbnails and temporary caches..."
         rm -rf ~/.cache/thumbnails/* 2>/dev/null || true
-        echo -e "${GREEN}Cleanup complete!${NC}"
+        echo -e "${GREEN}✓ System cleanup complete!${NC}"
+        ;;
+    update)
+        exec "$LOCAL_BIN/iram-update" "$@"
         ;;
     help|--help|-h)
         show_help
         ;;
+
+    # --- DYNAMIC DISPATCH FALLBACK ---
     *)
+        # 1. Try exact iram-<cmd> executable
+        if [ -x "$LOCAL_BIN/iram-$cmd" ]; then
+            exec "$LOCAL_BIN/iram-$cmd" "$@"
+        elif [ -x "$IRAM_BIN_DIR/iram-$cmd" ]; then
+            exec "$IRAM_BIN_DIR/iram-$cmd" "$@"
+        # 2. Try craft-<cmd> executable
+        elif [ -x "$LOCAL_BIN/craft-$cmd" ]; then
+            exec "$LOCAL_BIN/craft-$cmd" "$@"
+        elif [ -x "$IRAM_BIN_DIR/craft-$cmd" ]; then
+            exec "$IRAM_BIN_DIR/craft-$cmd" "$@"
+        fi
+
         echo -e "${RED}Unknown command:${NC} $cmd"
-        echo "Run 'iram help' to see available commands."
+        echo -e "Run '${BOLD}iram help${NC}' or '${BOLD}iram commands${NC}' to view all capabilities."
         exit 1
         ;;
 esac
