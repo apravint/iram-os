@@ -8,9 +8,14 @@ if [ -d "/usr/share/iram/.git" ]; then
   sudo git -C /usr/share/iram pull --ff-only 2>/dev/null || true
 fi
 
-echo -e "\033[1;34m==> Updating IRAM OS Repository...\033[0m"
+echo -e "\033[1;34m==> Updating IRAM OS Repository ($HOME/iram-os)...\033[0m"
 if [ -d "$HOME/iram-os/.git" ]; then
   git -C "$HOME/iram-os" pull --ff-only 2>/dev/null || true
+fi
+
+echo -e "\033[1;34m==> Updating System Core (/usr/share/iram)...\033[0m"
+if [ -d "/usr/share/iram" ] && [ -d "$HOME/iram-os" ]; then
+  sudo cp -a "$HOME/iram-os/bin" "$HOME/iram-os/config" "$HOME/iram-os/themes" "$HOME/iram-os/system" "$HOME/iram-os/migrations" /usr/share/iram/ 2>/dev/null || true
 fi
 
 echo -e "\033[1;34m==> Updating system packages with APT...\033[0m"
@@ -20,8 +25,17 @@ else
   apt-get update && apt-get upgrade -y
 fi
 
+echo -e "\033[1;34m==> Running post-update lifecycle hooks & migrations...\033[0m"
+if command -v iram-lifecycle-dispatch >/dev/null 2>&1; then
+  iram-lifecycle-dispatch post-update || true
+elif [ -x "$HOME/.local/bin/iram-migrate" ]; then
+  "$HOME/.local/bin/iram-migrate" run || true
+fi
+
 echo -e "\033[1;34m==> Synchronizing desktop themes...\033[0m"
 "$HOME/.local/bin/iram-theme-sync-all" || true
 
-iram-notification-send -g 󰚰 "Iram Update Complete" "System packages and Iram configurations are up to date." 2>/dev/null || true
-echo -e "\033[1;32m🎉 Iram and system packages updated successfully!\033[0m"
+if command -v notify-send >/dev/null 2>&1; then
+  notify-send -a "IRAM Update" "🎉 Update Complete" "System packages and IRAM configurations are up to date." 2>/dev/null || true
+fi
+echo -e "\033[1;32m🎉 IRAM OS and system packages updated successfully!\033[0m"

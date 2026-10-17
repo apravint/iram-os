@@ -216,12 +216,8 @@ apt-get install -y \
 curl -fsSL https://ollama.com/install.sh | sh || true
 pip3 install --break-system-packages openclaw edge-tts ddgs || pip3 install openclaw edge-tts ddgs || true
 
-# Install official Iram core themes & suite into /usr/share/iram
-if [ ! -d "/usr/share/iram" ]; then
-    git clone --depth 1 --branch quattro https://github.com/omacom/omarchy.git /usr/share/iram || true
-    rm -rf /usr/share/iram/.git
-fi
-git config --system --add safe.directory /usr/share/iram || true
+# Setup IRAM OS system core directory
+mkdir -p /usr/share/iram
 
 # Setup default live user: 'iram' with passwordless sudo
 mkdir -p /etc/sudoers.d
@@ -258,22 +254,28 @@ CHROOT_EOF
 # ------------------------------------------------------------------------------
 log_step "Injecting Iram scripts, systemd units, and skeleton user configs..."
 
-# Copy Iram system-wide binaries & profile
-mkdir -p "${ROOTFS_DIR}/usr/local/bin" "${ROOTFS_DIR}/usr/share/wayland-sessions" "${ROOTFS_DIR}/etc/profile.d"
-cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/usr/local/bin/"
-find "${ROOTFS_DIR}/usr/local/bin/" -type f -exec chmod +x {} + 2>/dev/null || true
+# Copy IRAM OS sovereign system files into /usr/share/iram
+mkdir -p "${ROOTFS_DIR}/usr/share/iram"
+cp -a --remove-destination "${REPO_ROOT}/bin" "${REPO_ROOT}/config" "${REPO_ROOT}/themes" "${REPO_ROOT}/system" "${REPO_ROOT}/migrations" "${ROOTFS_DIR}/usr/share/iram/"
+if [ -d "${REPO_ROOT}/assets" ]; then cp -a --remove-destination "${REPO_ROOT}/assets" "${ROOTFS_DIR}/usr/share/iram/"; fi
+if [ -d "${REPO_ROOT}/applications" ]; then cp -a --remove-destination "${REPO_ROOT}/applications" "${ROOTFS_DIR}/usr/share/iram/"; fi
 
-# Safely symlink any additional upstream iram binaries that were not overridden
+# Copy IRAM system-wide binaries & profile
+mkdir -p "${ROOTFS_DIR}/usr/local/bin" "${ROOTFS_DIR}/usr/bin" "${ROOTFS_DIR}/usr/share/wayland-sessions" "${ROOTFS_DIR}/etc/profile.d"
+cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/usr/local/bin/"
+find "${ROOTFS_DIR}/usr/local/bin/" -type f -exec chmod 0755 {} + 2>/dev/null || true
+
+# Symlink all iram binaries into /usr/bin
 chroot "${ROOTFS_DIR}" /bin/bash << 'POST_CHROOT_EOF'
-if [ -d "/usr/share/iram/bin" ]; then
-    for bin_file in /usr/share/iram/bin/*; do
-        if [ -f "$bin_file" ]; then
-            base_name="$(basename "$bin_file")"
-            if [ ! -e "/usr/local/bin/${base_name}" ]; then
-                ln -sf "$bin_file" "/usr/local/bin/${base_name}" 2>/dev/null || true
-            fi
-        fi
-    done
+for bin_file in /usr/local/bin/iram* /usr/local/bin/craft*; do
+    if [ -f "$bin_file" ] || [ -L "$bin_file" ]; then
+        base_name="$(basename "$bin_file")"
+        ln -sf "$bin_file" "/usr/bin/${base_name}" 2>/dev/null || true
+    fi
+done
+if [ -f "/usr/local/bin/iram-agent-prompt" ]; then
+    ln -sf "/usr/local/bin/iram-agent-prompt" "/usr/bin/a" 2>/dev/null || true
+    ln -sf "/usr/local/bin/iram-agent-prompt" "/usr/local/bin/a" 2>/dev/null || true
 fi
 POST_CHROOT_EOF
 

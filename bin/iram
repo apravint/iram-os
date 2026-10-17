@@ -5,7 +5,11 @@
 # ==============================================================================
 set -e
 
-IRAM_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_SRC="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+IRAM_DIR="$(cd -- "$(dirname -- "$SCRIPT_SRC")/.." && pwd)"
+if [ ! -d "$IRAM_DIR/build" ] && [ -d "$HOME/iram-os/build" ]; then
+    IRAM_DIR="$HOME/iram-os"
+fi
 IRAM_BIN_DIR="$IRAM_DIR/bin"
 LOCAL_BIN="$HOME/.local/bin"
 
@@ -54,6 +58,7 @@ show_help() {
     echo -e "  ${CYAN}weather${NC} [status|icon]     Live desktop weather telemetry"
     echo -e "  ${CYAN}info${NC}                     System health, kernel, compositor, and theme overview"
     echo -e "  ${CYAN}update${NC}                   Self-updating system, migration runner & package update"
+    echo -e "  ${CYAN}package${NC} [deb|iso]        Build sovereign Debian package or live bootable ISO"
     echo -e "  ${CYAN}clean${NC}                    Clean temporary cache, thumbnails & flatpak runtimes\n"
 
     echo -e "${BOLD}AI AGENT QUICK SHORTCUTS:${NC}"
@@ -418,6 +423,21 @@ case "$cmd" in
         ;;
     update)
         exec "$LOCAL_BIN/iram-update" "$@"
+        ;;
+    pkg|package)
+        sub="${1:-deb}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            deb)
+                exec "$IRAM_BIN_DIR/../build/package-deb.sh" "$@"
+                ;;
+            iso)
+                exec sudo "$IRAM_BIN_DIR/../build/build-iso.sh" "$@"
+                ;;
+            *)
+                echo "Usage: iram package [deb|iso]"
+                ;;
+        esac
         ;;
     help|--help|-h)
         show_help

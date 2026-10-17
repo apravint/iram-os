@@ -2,3 +2,6 @@
 *.log
 .DS_Store
 __pycache__/
+out/
+*.deb
+*.iso

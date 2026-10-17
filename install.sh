@@ -86,24 +86,43 @@ if command -v npm >/dev/null 2>&1; then
     npm install -g repomix 2>/dev/null || true
 fi
 
-echo -e "\n${YELLOW}[2/6] Installing Iram core repository & theme suite...${NC}"
-if [ ! -d "/usr/share/iram" ]; then
-    echo "Cloning official Iram repository..."
-    sudo git clone --branch quattro https://github.com/omacom/omarchy.git /usr/share/iram
+echo -e "\n${YELLOW}[2/6] Installing IRAM OS core system files & theme suite...${NC}"
+sudo mkdir -p /usr/share/iram
+
+# If REPO_DIR has IRAM OS files, deploy directly; otherwise clone official repository
+if [ -d "$REPO_DIR/bin" ] && [ -d "$REPO_DIR/config" ]; then
+    echo "Deploying IRAM OS core from local repository ($REPO_DIR)..."
+    sudo cp -a "$REPO_DIR/bin" "$REPO_DIR/config" "$REPO_DIR/themes" "$REPO_DIR/system" "$REPO_DIR/migrations" /usr/share/iram/
+    if [ -d "$REPO_DIR/assets" ]; then sudo cp -a "$REPO_DIR/assets" /usr/share/iram/; fi
+    if [ -d "$REPO_DIR/applications" ]; then sudo cp -a "$REPO_DIR/applications" /usr/share/iram/; fi
 else
-    echo "Updating existing Iram repository..."
-    sudo git -C /usr/share/iram pull --ff-only || true
+    echo "Cloning official IRAM OS repository..."
+    if [ ! -d "/usr/share/iram/.git" ]; then
+        sudo git clone --depth 1 https://github.com/apravint/iram-os.git /usr/share/iram
+    else
+        sudo git -C /usr/share/iram pull --ff-only || true
+    fi
 fi
 
-# Ensure git safe.directory
-sudo git config --system --add safe.directory /usr/share/iram || true
+# Ensure safe.directory
+sudo git config --system --add safe.directory /usr/share/iram 2>/dev/null || true
 
-# Symlink iram binaries
-echo "Linking Iram CLI binaries..."
-sudo ln -sf /usr/share/iram/bin/* /usr/local/bin/
-sudo ln -sf /usr/share/iram/bin/* /usr/bin/
+# Symlink all IRAM CLI binaries to system PATH
+echo "Linking IRAM CLI binaries to /usr/local/bin and /usr/bin..."
 sudo cp -a "$REPO_DIR/bin/"* /usr/local/bin/
 sudo chmod +x /usr/local/bin/*
+for b in /usr/local/bin/iram* /usr/local/bin/craft*; do
+    if [ -f "$b" ]; then
+        bname="$(basename "$b")"
+        sudo ln -sf "/usr/local/bin/$bname" "/usr/bin/$bname" 2>/dev/null || true
+    fi
+done
+
+# Universal agent launcher 'a'
+if [ -f "$REPO_DIR/bin/iram-agent-prompt" ]; then
+    sudo ln -sf /usr/local/bin/iram-agent-prompt /usr/local/bin/a 2>/dev/null || true
+    sudo ln -sf /usr/local/bin/iram-agent-prompt /usr/bin/a 2>/dev/null || true
+fi
 
 if [ -f "$REPO_DIR/system/sudoers.d/iram-theme-browser" ]; then
     sudo cp "$REPO_DIR/system/sudoers.d/iram-theme-browser" /etc/sudoers.d/iram-theme-browser
@@ -151,31 +170,21 @@ update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 ln -sf /usr/bin/batcat "$HOME/.local/bin/bat" 2>/dev/null || true
 ln -sf /usr/bin/fdfind "$HOME/.local/bin/fd" 2>/dev/null || true
 
-# Setup theme-set hook
-cat << 'EOF' > "$HOME/.config/iram/hooks/theme-set"
-#!/usr/bin/env bash
-set -euo pipefail
-THEME_NAME="${1:-$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "Unknown")}"
-if [[ -x "$HOME/.local/bin/iram-theme-sync-all" ]]; then
-    "$HOME/.local/bin/iram-theme-sync-all" || true
+# Setup modular lifecycle hooks
+mkdir -p "$HOME/.config/iram/hooks"
+if [ -d "$REPO_DIR/config/iram/hooks" ]; then
+    cp -a "$REPO_DIR/config/iram/hooks/"* "$HOME/.config/iram/hooks/" 2>/dev/null || true
+    chmod +x "$HOME/.config/iram/hooks"/*/*.sh 2>/dev/null || true
 fi
-if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a "Iram" "Theme Changed" "Active Theme: $THEME_NAME" -t 3000 2>/dev/null || true
-fi
-EOF
-chmod +x "$HOME/.config/iram/hooks/theme-set"
 
 # Configure Iram Shell Environment in ~/.bashrc
 if ! grep -q "IRAM_PATH" "$HOME/.bashrc" 2>/dev/null; then
     cat << 'EOF' >> "$HOME/.bashrc"
 
-# Iram Environment & Shell Tools
+# IRAM OS Environment & Shell Tools
 export IRAM_PATH=/usr/share/iram
 export EDITOR=nvim
 export VISUAL=nvim
-if [[ -f "$IRAM_PATH/default/bash/rc" ]]; then
-    source "$IRAM_PATH/default/bash/rc"
-fi
 if [[ -f /usr/share/doc/fzf/examples/key-bindings.bash ]]; then
     source /usr/share/doc/fzf/examples/key-bindings.bash
 fi
@@ -183,7 +192,14 @@ if [[ -f /usr/share/doc/fzf/examples/completion.bash ]]; then
     source /usr/share/doc/fzf/examples/completion.bash
 fi
 
-# Iram AI Shell Copilot & Intelligence Tools
+# IRAM OS Shell Shortcuts & Agent Dispatchers
+alias a='~/.local/bin/a'
+alias agy='agy'
+alias iram='iram'
+alias video='iram-video'
+alias craft='artcraft-launcher'
+alias theme='iram-theme-switch'
+alias sidecar='iram-agent-sidecar'
 alias '??'='iram-ai-cmd'
 alias 'ai-cmd'='iram-ai-cmd'
 alias 'ai-digest'='iram-ai-digest'
@@ -192,9 +208,16 @@ alias 'repo-traffic'='iram-repo-traffic'
 EOF
 fi
 
-echo -e "\n${YELLOW}[5/6] Initializing default Iram theme & Self-Healing Timer...${NC}"
+echo -e "\n${YELLOW}[5/6] Initializing default Iram theme, migrations & services...${NC}"
 export IRAM_PATH=/usr/share/iram
-iram theme set "Cyberpunk Neon" || iram theme set "Tokyo Night" || true
+
+# Run non-destructive migrations
+if [ -x "$HOME/.local/bin/iram-migrate" ]; then
+    echo "Running IRAM OS migrations..."
+    "$HOME/.local/bin/iram-migrate" run || true
+fi
+
+iram theme set "Cyberpunk Neon" || iram theme set "Tokyo Storm" || true
 "$HOME/.local/bin/iram-theme-sync-all" || true
 systemctl --user enable --now iram-agentd.service 2>/dev/null || true
 systemctl --user enable --now iram-healthd.timer 2>/dev/null || true
