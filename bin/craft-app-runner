@@ -1,35 +1,121 @@
 #!/usr/bin/env bash
+# ==============================================================================
 # IRAM OS - Storytold Craft Suite Application Runner
+# ==============================================================================
+export WGPU_BACKEND="${WGPU_BACKEND:-gl}"
+
 APP_NAME="$(basename "$0" | sed 's/^craft-//')"
 
-# If an explicit argument was passed as first arg matching known apps
 if [ "$1" = "photocraft" ] || [ "$1" = "vectorcraft" ] || [ "$1" = "filmcraft" ] || \
    [ "$1" = "soundcraft" ] || [ "$1" = "lightcraft" ] || [ "$1" = "cadcraft" ] || \
    [ "$1" = "wordcraft" ] || [ "$1" = "gridcraft" ] || [ "$1" = "deckcraft" ] || \
-   [ "$1" = "pdfcraft" ] || [ "$1" = "designcraft" ] || [ "$1" = "effectcraft" ]; then
+   [ "$1" = "pdfcraft" ] || [ "$1" = "designcraft" ] || [ "$1" = "effectcraft" ] || \
+   [ "$1" = "figcraft" ]; then
     APP_NAME="$1"
     shift
 fi
 
-# 1. Check if a dedicated compiled native binary exists
-for candidate in "/usr/local/bin/$APP_NAME" "$HOME/.local/bin/$APP_NAME-bin" "$HOME/.local/share/craft-suite/$APP_NAME"; do
-    if [ -x "$candidate" ]; then
+# 1. Search candidate paths including ~/Applications (standard AppImage dir)
+CANDIDATES=(
+    "$HOME/Applications/${APP_NAME}"*.AppImage
+    "$HOME/.local/share/craft-suite/${APP_NAME}"*.AppImage
+    "$HOME/.local/share/craft-suite/$APP_NAME"
+    "$HOME/.local/bin/${APP_NAME}-bin"
+    "/usr/local/bin/$APP_NAME"
+)
+
+for candidate in "${CANDIDATES[@]}"; do
+    if [ -x "$candidate" ] && [ -f "$candidate" ]; then
         exec "$candidate" "$@"
     fi
 done
 
-# 2. Check if ArtCraft Launcher AppImage exists
+# 2. Check installed.json registry
+INSTALLED_JSON="$HOME/.local/share/artcraft-launcher/installed.json"
+if [ -f "$INSTALLED_JSON" ]; then
+    REGISTERED_PATH=$(jq -r ".apps.\"$APP_NAME\".path // empty" "$INSTALLED_JSON" 2>/dev/null || true)
+    if [ -n "$REGISTERED_PATH" ] && [ -x "$REGISTERED_PATH" ]; then
+        exec "$REGISTERED_PATH" "$@"
+    fi
+fi
+
+# 3. Known Official Release AppImage URLs
+declare -A URLS=(
+    ["photocraft"]="https://github.com/storytold/photocraft/releases/download/v0.6.0/photocraft-0.6.0-linux-x86_64.AppImage"
+    ["vectorcraft"]="https://github.com/storytold/vectorcraft/releases/download/v0.8.0/vectorcraft-0.8.0-linux-x86_64.AppImage"
+    ["filmcraft"]="https://github.com/storytold/filmcraft/releases/download/v0.5.0/filmcraft-0.5.0-linux-x86_64.AppImage"
+    ["soundcraft"]="https://github.com/storytold/soundcraft/releases/download/v0.4.0/soundcraft-0.4.0-linux-x86_64.AppImage"
+    ["lightcraft"]="https://github.com/storytold/lightcraft/releases/download/v0.5.0/lightcraft-0.5.0-linux-x86_64.AppImage"
+    ["cadcraft"]="https://github.com/storytold/cadcraft/releases/download/v0.4.0/cadcraft-0.4.0-linux-x86_64.AppImage"
+    ["wordcraft"]="https://github.com/storytold/wordcraft/releases/download/v0.4.0/wordcraft-0.4.0-linux-x86_64.AppImage"
+    ["gridcraft"]="https://github.com/storytold/gridcraft/releases/download/v0.4.0/gridcraft-0.4.0-linux-x86_64.AppImage"
+    ["deckcraft"]="https://github.com/storytold/deckcraft/releases/download/v0.4.0/deckcraft-0.4.0-linux-x86_64.AppImage"
+    ["pdfcraft"]="https://github.com/storytold/pdfcraft/releases/download/v0.5.0/pdfcraft-0.5.0-linux-x86_64.AppImage"
+    ["designcraft"]="https://github.com/storytold/designcraft/releases/download/v0.5.0/designcraft-0.5.0-linux-x86_64.AppImage"
+    ["effectcraft"]="https://github.com/storytold/effectcraft/releases/download/v0.7.0/effectcraft-0.7.0-linux-x86_64.AppImage"
+    ["figcraft"]="https://github.com/storytold/figcraft/releases/download/v0.6.0/figcraft-0.6.0-linux-x86_64.AppImage"
+)
+
+APP_URL="${URLS[$APP_NAME]}"
+
+# 4. If an official release AppImage exists, download and bootstrap it into ~/Applications
+if [ -n "$APP_URL" ]; then
+    TARGET_DIR="$HOME/Applications"
+    mkdir -p "$TARGET_DIR"
+    FILENAME=$(basename "$APP_URL")
+    TARGET_FILE="$TARGET_DIR/$FILENAME"
+    
+    if [ ! -s "$TARGET_FILE" ]; then
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send "Storytold $APP_NAME" "Downloading $APP_NAME standalone AppImage..." --icon="ai.storyteller.$APP_NAME" 2>/dev/null || true
+        fi
+        
+        TEMP_FILE="$TARGET_FILE.tmp.$$"
+        if curl -fsSL "$APP_URL" -o "$TEMP_FILE" 2>/dev/null || wget -q "$APP_URL" -O "$TEMP_FILE" 2>/dev/null; then
+            mv "$TEMP_FILE" "$TARGET_FILE"
+            chmod +x "$TARGET_FILE"
+            
+            # Register in installed.json if artcraft-launcher directory exists
+            if [ -d "$HOME/.local/share/artcraft-launcher" ]; then
+                python3 -c "
+import json, os, time
+p = '$INSTALLED_JSON'
+data = {'apps': {}}
+if os.path.exists(p):
+    try: data = json.load(open(p))
+    except: pass
+data.setdefault('apps', {})['$APP_NAME'] = {
+    'version': 'latest',
+    'kind': 'AppImage',
+    'path': '$TARGET_FILE',
+    'installed_at': int(time.time()),
+    'needs_root': False
+}
+with open(p, 'w') as f: json.dump(data, f, indent=2)
+" 2>/dev/null || true
+            fi
+        else
+            rm -f "$TEMP_FILE"
+        fi
+    fi
+
+    if [ -x "$TARGET_FILE" ]; then
+        exec "$TARGET_FILE" "$@"
+    fi
+fi
+
+# 5. Fallback: Launch ArtCraft Launcher hub
 LAUNCHER="$HOME/.local/bin/artcraft-launcher"
 if [ ! -x "$LAUNCHER" ]; then
     LAUNCHER="$HOME/.local/share/craft-suite/artcraft-launcher.AppImage"
 fi
 
 if [ -x "$LAUNCHER" ]; then
-    notify-send "Storytold $APP_NAME" "Opening $APP_NAME via ArtCraft Launcher..." --icon="ai.storyteller.$APP_NAME" 2>/dev/null || true
+    notify-send "Storytold $APP_NAME" "Opening via ArtCraft Launcher..." --icon="ai.storyteller.$APP_NAME" 2>/dev/null || true
     exec "$LAUNCHER" "$@"
 fi
 
-# 3. Fallback to ArtCraft Web / Studio
+# 6. Fallback to Cloud Studio
 notify-send "Storytold $APP_NAME" "Opening ArtCraft Cloud Studio..." --icon="ai.storyteller.$APP_NAME" 2>/dev/null || true
 if command -v xdg-open >/dev/null 2>&1; then
     exec xdg-open "https://getartcraft.com"

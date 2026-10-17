@@ -2,11 +2,13 @@
 # ==============================================================================
 # ArtCraft Launcher - Storytold Craft App Suite Hub Bootstrapper
 # ==============================================================================
+export WGPU_BACKEND="${WGPU_BACKEND:-gl}"
+
 APPIMAGE_DIR="$HOME/.local/share/craft-suite"
 APPIMAGE_PATH="$APPIMAGE_DIR/artcraft-launcher.AppImage"
-URL="https://github.com/storytold/craft-launcher/releases/download/v0.1.2/artcraft-launcher-0.1.2-linux-x86_64.AppImage"
+URL="https://github.com/storytold/craft-launcher/releases/download/v0.1.3/artcraft-launcher-0.1.3-linux-x86_64.AppImage"
 
-if [ ! -x "$APPIMAGE_PATH" ]; then
+if [ ! -s "$APPIMAGE_PATH" ] || [ ! -x "$APPIMAGE_PATH" ]; then
     mkdir -p "$APPIMAGE_DIR"
     if command -v notify-send >/dev/null 2>&1; then
         notify-send "ArtCraft Launcher" "Downloading Storytold ArtCraft Launcher..." --icon="ai.storyteller.artcraft-launcher" 2>/dev/null || true

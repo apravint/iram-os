@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Automated System Snapshot & Recovery Tool
+# Creates a Timeshift restore point before updates or on demand.
+# ==============================================================================
+set -euo pipefail
+
+COMMENT="${1:-IRAM OS Manual Snapshot $(date +'%Y-%m-%d %H:%M')}"
+
+echo -e "\033[1;34m==> Creating IRAM OS System Restore Point...\033[0m"
+echo -e "    Comment: ${COMMENT}"
+
+if command -v timeshift >/dev/null 2>&1; then
+    sudo timeshift --create --comments "${COMMENT}" --tags D
+    echo -e "\033[1;32m✓ System snapshot successfully created.\033[0m"
+    echo -e "  To restore if anything ever breaks: sudo timeshift --restore"
+else
+    echo -e "\033[1;31mError: timeshift is not installed.\033[0m"
+    exit 1
+fi

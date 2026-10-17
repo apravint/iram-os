@@ -78,7 +78,7 @@ case "$route" in
         iram theme bg next
         ;;
       *"Keybindings"*)
-        /usr/share/iram/bin/iram-menu-keybindings
+        ~/.local/bin/iram-menu-keybindings
         ;;
       *"Reminder"*)
         ~/.local/bin/iram-reminder-menu
