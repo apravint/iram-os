@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS / Kubuntu 26.04 LTS -> 26.10 (Stonking Stingray) Automated Upgrade
+# Guided, safe interactive distribution release upgrader
+# ==============================================================================
+set -euo pipefail
+
+BOLD="\033[1m"
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+CYAN="\033[0;36m"
+RED="\033[0;31m"
+MAGENTA="\033[1;35m"
+NC="\033[0m"
+
+clear
+echo -e "${CYAN}====================================================================${NC}"
+echo -e "${BOLD}${GREEN}   IRAM OS / Kubuntu 26.04 LTS ➔ 26.10 Upgrade Assistant${NC}"
+echo -e "   Target Release: ${BOLD}Kubuntu 26.10 (Stonking Stingray)${NC}"
+echo -e "${CYAN}====================================================================${NC}\n"
+
+# 1. Prompt for Sudo Credentials once
+echo -e "${BOLD}[Step 1/6] Verifying administrator privileges...${NC}"
+if ! sudo -v; then
+    echo -e "${RED}Authentication failed. Please re-run with correct sudo password.${NC}"
+    exit 1
+fi
+
+# Keep sudo timestamp alive in background until script exits
+while kill -0 "$$" 2>/dev/null; do
+    sudo -n true
+    sleep 30
+done 2>/dev/null &
+SUDO_KEEPALIVE_PID=$!
+trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
+
+# 2. Pre-flight Cleanup (Kill stale screen daemons, clear locks & logs)
+echo -e "\n${BOLD}[Step 2/6] Cleaning up stale upgrade sessions, locks, and logs...${NC}"
+sudo pkill -9 -f ubuntu-release-upgrade-screen-window 2>/dev/null || true
+sudo pkill -9 -f "/tmp/ubuntu-release-upgrader" 2>/dev/null || true
+sudo screen -wipe 2>/dev/null || true
+
+# Reclaim disk space from runaway screen logs & stale temp dirs
+sudo rm -f /var/log/dist-upgrade/screenlog.* 2>/dev/null || true
+sudo rm -rf /tmp/ubuntu-release-upgrader-* 2>/dev/null || true
+sudo rm -f /etc/apt/sources.list.d/*.distUpgrade
+
+# Clear any lingering APT locks
+sudo fuser -k -9 /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
+sudo dpkg --configure -a
+
+echo -e "${GREEN}✓ Stale sessions and locks cleared.${NC}"
+
+# 3. Configure Network Resilience and Keepalive
+echo -e "\n${BOLD}[Step 3/6] Activating Wi-Fi keepalive and configuring APT download resilience...${NC}"
+
+# Ensure IRAM dual-Wi-Fi keepalive is active to prevent connection drops
+if systemctl --user is-enabled iram-dual-wifi-keepalive.service >/dev/null 2>&1; then
+    systemctl --user start iram-dual-wifi-keepalive.service 2>/dev/null || true
+    echo -e "   Dual Wi-Fi keepalive daemon is active."
+fi
+
+# Pipeline-Depth "0" disables HTTP pipelining which causes socket dropouts on flaky mirrors
+cat << 'EOF' | sudo tee /etc/apt/apt.conf.d/99upgrade-resilience > /dev/null
+Acquire::ForceIPv4 "true";
+Acquire::Retries "25";
+Acquire::http::Timeout "60";
+Acquire::http::Pipeline-Depth "0";
+Acquire::Languages "none";
+EOF
+
+# Ensure base sources point to resolute baseline before upgrading
+sudo sed -i 's/stonking/resolute/g' /etc/apt/sources.list.d/ubuntu.sources
+
+# Disable LTS-only Ubuntu Pro / ESM configurations
+sudo pro disable --assume-yes esm-apps esm-infra livepatch 2>/dev/null || true
+
+for f in /etc/apt/sources.list.d/ubuntu-esm-*.sources; do
+    if [ -f "$f" ]; then
+        echo -e "   Disabling $f"
+        sudo mv "$f" "${f}.disabled"
+    fi
+done
+
+if [ -f /etc/update-manager/release-upgrades.d/ubuntu-advantage-upgrades.cfg ]; then
+    echo -e "   Disabling ESM pockets in release-upgrades.d/ubuntu-advantage-upgrades.cfg"
+    sudo mv /etc/update-manager/release-upgrades.d/ubuntu-advantage-upgrades.cfg /etc/update-manager/release-upgrades.d/ubuntu-advantage-upgrades.cfg.disabled
+fi
+
+# Configure Release Channel to 'normal'
+sudo sed -i 's/^Prompt=.*/Prompt=normal/' /etc/update-manager/release-upgrades
+echo -e "${GREEN}✓ Network resilience, keepalive, and repository channels configured.${NC}"
+
+# 4. Refresh Package Lists and Base System
+echo -e "\n${BOLD}[Step 4/6] Refreshing package lists and verifying base system consistency...${NC}"
+sudo apt update
+sudo apt --fix-broken install -y
+sudo apt full-upgrade -y
+echo -e "${GREEN}✓ Base system is fully updated and consistent.${NC}"
+
+# 5. Instructions and Launch
+echo -e "\n${BOLD}[Step 5/6] Preparing interactive release upgrader...${NC}"
+echo -e "${CYAN}--------------------------------------------------------------------${NC}"
+echo -e "${BOLD}${MAGENTA}⚠️  CRITICAL PROMPTS CHEAT SHEET:${NC}"
+echo -e "${CYAN}--------------------------------------------------------------------${NC}"
+echo -e "1. ${YELLOW}'Foreign Packages Installed -> Continue [yN]'${NC}:"
+echo -e "   👉 ${BOLD}${GREEN}TYPE 'y' AND PRESS ENTER${NC} (Do NOT just hit Enter, or it cancels!)"
+echo -e ""
+echo -e "2. ${YELLOW}'Do you want to start the upgrade? -> Continue [yN] Details [d]'${NC}:"
+echo -e "   👉 ${BOLD}${GREEN}TYPE 'y' AND PRESS ENTER${NC}"
+echo -e ""
+echo -e "3. ${YELLOW}'Download Phase' (~2 GB remaining, 1.9 GB already cached):${NC}"
+echo -e "   👉 APT will resume downloading. If you see intermittent retry lines,"
+echo -e "      ${BOLD}do not press Ctrl+C${NC}. APT automatically retries failed chunks."
+echo -e ""
+echo -e "4. ${YELLOW}'Configuration file /etc/... -> keep local version?'${NC}:"
+echo -e "   👉 ${BOLD}${GREEN}CHOOSE 'N'${NC} (Keep your local IRAM OS configuration files)"
+echo -e "${CYAN}--------------------------------------------------------------------${NC}\n"
+
+echo -e "${CYAN}Launching do-release-upgrade in direct terminal mode (no background screen detaching)...${NC}\n"
+
+# Export RELEASE_UPGRADER_NO_SCREEN=1 to prevent detached screen deadlocks
+export RELEASE_UPGRADER_NO_SCREEN=1
+sudo -E RELEASE_UPGRADER_NO_SCREEN=1 do-release-upgrade -d
+
+# 6. Post-Upgrade Completion
+echo -e "\n${BOLD}[Step 6/6] Upgrade process completed successfully!${NC}"
+echo -e "${GREEN}====================================================================${NC}"
+echo -e "${BOLD}🎉 Kubuntu 26.10 is now installed! Please reboot your computer:${NC}"
+echo -e "   ${CYAN}sudo reboot${NC}"
+echo -e "${GREEN}====================================================================${NC}"
