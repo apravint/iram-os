@@ -1,39 +1,17 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iram AI Voice Assistant (iram-voice)
-# Records voice input, transcribes speech, executes agent instructions, and speaks response.
-# https://github.com/apravint/iram-os
+# IRAM OS VoiceStudio Unified CLI
+# Open-Source Voice Cloning, Voice Design, Speech Synthesis & Video Dubbing
+# iram:summary=Open-Source VoiceStudio (Voice Cloning, Voice Design & Speech Synthesis)
 # ==============================================================================
-
 set -euo pipefail
 
-AUDIO_TMP="/tmp/iram_voice_input.wav"
+IRAM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${IRAM_DIR}:${PYTHONPATH:-}"
 
-notify-send -a "Iram Voice AI" "🎙️ Listening..." "Speak your command clearly (5 seconds)..." -t 3000
-
-# Record 5 seconds of audio from default mic sink
-if command -v ffmpeg >/dev/null 2>&1; then
-    ffmpeg -y -f pulse -i default -t 5 "$AUDIO_TMP" >/dev/null 2>&1 || true
-elif command -v arecord >/dev/null 2>&1; then
-    arecord -d 5 -f cd "$AUDIO_TMP" >/dev/null 2>&1 || true
+if [ "${1:-}" = "mcp" ]; then
+    shift
+    exec python3 -m iram_voice.mcp_server "$@"
 fi
 
-notify-send -a "Iram Voice AI" "🤖 Transcribing & Processing..." -t 2000
-
-# Transcribe using Whisper or local python speech pipeline
-TRANSCRIPTION=""
-if command -v whisper >/dev/null 2>&1; then
-    TRANSCRIPTION=$(whisper "$AUDIO_TMP" --model tiny --language English --output_format txt 2>/dev/null | cat /tmp/iram_voice_input.txt 2>/dev/null || true)
-fi
-
-if [ -z "$TRANSCRIPTION" ]; then
-    # Fallback to interactive text prompt if microphone or whisper is unavailable
-    TRANSCRIPTION=$(wofi --dmenu --prompt "🎙️ Voice transcription unreadable. Type command..." --width 600 --height 150 2>/dev/null || true)
-fi
-
-if [ -n "$TRANSCRIPTION" ]; then
-    notify-send -a "Iram Voice AI" "⚡ Executing Voice Command" "$TRANSCRIPTION"
-    iram-agent "$TRANSCRIPTION"
-fi
-
-rm -f "$AUDIO_TMP"
+exec python3 -m iram_voice.core "$@"
