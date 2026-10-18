@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Screen-Context Vision Assistant (iram-vision-ask)
+# Selects a screen region via grim & slurp, runs OCR & Vision analysis in floating HUD
+# iram:summary=Screen region vision & OCR agent with instant AI diagnosis
+# ==============================================================================
+set -euo pipefail
+
+TEMP_IMG=$(mktemp /tmp/iram-vision-XXXXXX.png)
+trap 'rm -f "$TEMP_IMG"' EXIT
+
+# Grab screen region with slurp and grim
+if command -v slurp >/dev/null 2>&1 && command -v grim >/dev/null 2>&1; then
+    GEOM=$(slurp -d -b "#00000088" -c "#00f0ff" -w 2 2>/dev/null || true)
+    if [ -z "$GEOM" ]; then
+        exit 0
+    fi
+    grim -g "$GEOM" "$TEMP_IMG"
+else
+    grim "$TEMP_IMG"
+fi
+
+[ ! -f "$TEMP_IMG" ] && exit 0
+
+# Extract text with tesseract or way-ocr
+OCR_TEXT=""
+if command -v tesseract >/dev/null 2>&1; then
+    OCR_TEXT=$(tesseract "$TEMP_IMG" stdout -l eng --psm 6 2>/dev/null || tesseract "$TEMP_IMG" stdout 2>/dev/null || true)
+elif command -v way-ocr >/dev/null 2>&1; then
+    OCR_TEXT=$(way-ocr 2>/dev/null || true)
+fi
+
+RUNNER=$(mktemp /tmp/iram-vision-runner-XXXXXX.sh)
+cat << 'EOF' > "$RUNNER"
+#!/usr/bin/env bash
+OCR_TEXT="$1"
+IMG_PATH="$2"
+
+echo -e "\033[1;36m===============================================================\033[0m"
+echo -e "\033[1;32m👁️  IRAM OS Screen Vision & Diagnosis Agent\033[0m"
+echo -e "\033[1;36m===============================================================\033[0m\n"
+
+if [ -n "$OCR_TEXT" ]; then
+    echo -e "\033[1;33m--- Extracted Screen Text / Code ---\033[0m"
+    echo "$OCR_TEXT"
+    echo -e "\033[1;33m-------------------------------------\033[0m\n"
+    
+    # Copy OCR text to clipboard immediately
+    echo "$OCR_TEXT" | wl-copy 2>/dev/null || true
+    echo -e "\033[1;32m✓ Text copied to Wayland clipboard.\033[0m\n"
+
+    echo -e "\033[1;35mSelect Vision Action:\033[0m"
+    echo "  1) Diagnose error & suggest terminal fix"
+    echo "  2) Explain code / technical architecture"
+    echo "  3) Refactor / clean up code"
+    echo "  4) Exit"
+    echo ""
+    read -rp "Enter choice [1-4] (default: 1): " CHOICE
+    CHOICE="${CHOICE:-1}"
+
+    ACTION_PROMPT="Diagnose this screen error and provide the exact bash or code fix"
+    case "$CHOICE" in
+        2) ACTION_PROMPT="Explain this code or architecture concisely" ;;
+        3) ACTION_PROMPT="Refactor and optimize this code" ;;
+        4) exit 0 ;;
+    esac
+
+    echo -e "\n\033[1;36m⚡ Analyzing with IRAM Sovereign AI...\033[0m\n"
+    QUERY="$ACTION_PROMPT: $OCR_TEXT"
+    
+    # Try Sovereign Hub API
+    RESPONSE=""
+    if curl -s --max-time 1 "http://127.0.0.1:8990/api/status" >/dev/null 2>&1; then
+        RESPONSE=$(curl -s --data-urlencode "prompt=$QUERY" "http://127.0.0.1:8990/api/chat" | jq -r '.response // empty' 2>/dev/null || true)
+    fi
+
+    if [ -z "$RESPONSE" ] && command -v smart-router >/dev/null 2>&1; then
+        RESPONSE=$(smart-router "$QUERY" 2>/dev/null || true)
+    fi
+
+    if [ -n "$RESPONSE" ]; then
+        echo -e "\033[1;32m--- Diagnosis & Solution ---\033[0m\n"
+        echo "$RESPONSE"
+        echo "$RESPONSE" | wl-copy 2>/dev/null || true
+        echo -e "\n\033[1;32m✓ Copied solution to clipboard!\033[0m"
+    fi
+else
+    echo -e "\033[1;31mNo text detected in screen region.\033[0m"
+    echo "Image saved to: $IMG_PATH"
+fi
+
+echo -e "\n\033[2mPress Enter to close...\033[0m"
+read -r
+EOF
+
+chmod +x "$RUNNER"
+
+alacritty --class "iram-ai-float" \
+          --title "IRAM Screen Vision Agent" \
+          -e bash "$RUNNER" "$OCR_TEXT" "$TEMP_IMG"
+
+rm -f "$RUNNER"

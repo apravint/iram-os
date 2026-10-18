@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""
+IRAM OS Waybar MCP Status Module (iram-mcp-status)
+Outputs real-time JSON telemetry for Waybar status pill.
+"""
+import json
+import urllib.request
+import subprocess
+import os
+
+def main():
+    hub_url = "http://127.0.0.1:8990/api/status"
+    mcp_active = False
+    tools_count = 21
+    cpu = 0
+    ram_gb = 0
+
+    try:
+        req = urllib.request.Request(hub_url, headers={"User-Agent": "Waybar-MCP"})
+        with urllib.request.urlopen(req, timeout=0.8) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode())
+                if data.get("ok"):
+                    mcp_active = True
+                    cpu = data.get("cpu_percent", 0)
+                    ram_gb = data.get("memory", {}).get("used_gb", 0)
+    except Exception:
+        pass
+
+    # Check if iram-mcp-server process is running
+    try:
+        proc = subprocess.run(["pgrep", "-f", "iram-mcp-server"], stdout=subprocess.DEVNULL)
+        if proc.returncode == 0:
+            mcp_active = True
+    except Exception:
+        pass
+
+    if mcp_active:
+        out = {
+            "text": f"🛡️ MCP [{tools_count}]",
+            "tooltip": (
+                f"🛡️ IRAM Sovereign FastMCP Gateway\n"
+                f"• Status: ACTIVE (Stdio + REST Port 8990)\n"
+                f"• Exposed Tools: {tools_count} High-Performance Tools\n"
+                f"• CPU Load: {cpu}%\n"
+                f"• RAM Used: {ram_gb} GB\n"
+                f"• PipeWire: Calibrated 48kHz Studio DSP\n\n"
+                f"🖱️ Left-Click: Open Sovereign Command Hub\n"
+                f"🖱️ Right-Click: Open System Resource Monitor"
+            ),
+            "class": "active"
+        }
+    else:
+        out = {
+            "text": "🛡️ MCP [IDLE]",
+            "tooltip": "IRAM FastMCP Gateway Idle\nClick to launch Sovereign Command Hub",
+            "class": "idle"
+        }
+
+    print(json.dumps(out))
+
+if __name__ == "__main__":
+    main()

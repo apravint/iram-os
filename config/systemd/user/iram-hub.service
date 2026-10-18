@@ -1,0 +1,13 @@
+[Unit]
+Description=IRAM OS Sovereign Command Hub Micro-Server
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/bin/iram-hub-server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

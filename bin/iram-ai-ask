@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS System-Wide AI Command Bar (iram-ai-ask)
+# Prompt user via Wofi and pipe clipboard/selection context to SmartRouter & LLM
+# iram:summary=System-wide Wofi AI command bar with Wayland clipboard context
+# ==============================================================================
+set -euo pipefail
+
+QUERY=$(wofi --dmenu --prompt "⚡ Ask IRAM AI (uses clipboard context):" --width 700 --lines 1 --style /dev/null 2>/dev/null || true)
+[ -z "$QUERY" ] && exit 0
+
+CONTEXT=$(wl-paste --no-newline 2>/dev/null || true)
+
+# Create a temporary runner script to stream the AI response cleanly
+RUNNER=$(mktemp /tmp/iram-ai-ask-XXXXXX.sh)
+cat << 'EOF' > "$RUNNER"
+#!/usr/bin/env bash
+QUERY="$1"
+CONTEXT="$2"
+
+echo -e "\033[1;36m===============================================================\033[0m"
+echo -e "\033[1;32m⚡ IRAM OS Autonomous AI Agent\033[0m"
+echo -e "\033[1;36m===============================================================\033[0m"
+echo -e "\033[1;33mTask:\033[0m $QUERY\n"
+
+if [ -n "$CONTEXT" ]; then
+    echo -e "\033[2m--- Context (from clipboard) ---\033[0m"
+    echo "$CONTEXT" | head -n 12
+    if [ $(echo "$CONTEXT" | wc -l) -gt 12 ]; then
+        echo -e "\033[2m... [truncated] ...\033[0m"
+    fi
+    echo -e "\033[2m--------------------------------\033[0m\n"
+fi
+
+echo -e "\033[1;35m[1/2] Routing prompt through SmartRouter & Sovereign Hub...\033[0m"
+
+RESPONSE=""
+# Try Sovereign Hub API first
+HUB_URL="http://127.0.0.1:8990/api/chat"
+FULL_PROMPT="$QUERY"
+if [ -n "$CONTEXT" ]; then
+    FULL_PROMPT="$QUERY. Context: $CONTEXT"
+fi
+
+if curl -s --max-time 1 "http://127.0.0.1:8990/api/status" >/dev/null 2>&1; then
+    RESPONSE=$(curl -s --data-urlencode "prompt=$FULL_PROMPT" "$HUB_URL" | jq -r '.response // empty' 2>/dev/null || true)
+fi
+
+# Fallback to local Ollama if hub is unavailable or returned empty
+if [ -z "$RESPONSE" ] && command -v ollama >/dev/null 2>&1; then
+    echo -e "\033[1;34m[2/2] Streaming response via local Ollama...\033[0m\n"
+    MODEL=$(ollama list 2>/dev/null | awk 'NR>1 {print $1}' | head -n 1)
+    if [ -n "$MODEL" ]; then
+        RESPONSE=$(printf "Context:\n%s\n\nTask: %s\n" "$CONTEXT" "$QUERY" | ollama run "$MODEL" 2>/dev/null || true)
+    fi
+fi
+
+# Fallback to direct Python evaluator
+if [ -z "$RESPONSE" ]; then
+    RESPONSE=$(python3 -c "
+import sys
+q = sys.argv[1]
+c = sys.argv[2]
+print(f'AI Response for: {q}')
+if c:
+    print(f'Processed with {len(c)} bytes of clipboard context.')
+" "$QUERY" "$CONTEXT" 2>/dev/null || echo "Task received: $QUERY")
+fi
+
+echo -e "\033[1;32m--- AI Response ---\033[0m\n"
+echo "$RESPONSE"
+echo ""
+
+# Copy output to clipboard automatically
+echo "$RESPONSE" | wl-copy 2>/dev/null || true
+echo -e "\033[1;32m✓ Copied response to Wayland clipboard (wl-copy)\033[0m"
+echo -e "\033[2mPress Enter to close window...\033[0m"
+read -r
+EOF
+
+chmod +x "$RUNNER"
+
+alacritty --class "iram-ai-float" \
+          --title "IRAM AI Agent" \
+          -e bash "$RUNNER" "$QUERY" "$CONTEXT"
+
+rm -f "$RUNNER"

@@ -205,6 +205,9 @@ alias 'ai-cmd'='iram-ai-cmd'
 alias 'ai-digest'='iram-ai-digest'
 alias 'ai-memory'='iram-memory'
 alias 'repo-traffic'='iram-repo-traffic'
+alias hub='iram hub'
+alias 'ai-ask'='iram-ai-ask'
+alias 'vision-ask'='iram-vision-ask'
 EOF
 fi
 
@@ -220,6 +223,8 @@ fi
 iram theme set "Cyberpunk Neon" || iram theme set "Tokyo Storm" || true
 "$HOME/.local/bin/iram-theme-sync-all" || true
 systemctl --user enable --now iram-agentd.service 2>/dev/null || true
+systemctl --user enable --now iram-cliphist.service 2>/dev/null || true
+systemctl --user enable --now iram-hub.service 2>/dev/null || true
 systemctl --user enable --now iram-healthd.timer 2>/dev/null || true
 systemctl --user enable --now iram-security.timer 2>/dev/null || true
 systemctl --user enable --now iram-organizer.timer 2>/dev/null || true

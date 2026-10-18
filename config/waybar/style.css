@@ -152,6 +152,26 @@ window#waybar {
     animation: blink 0.8s linear infinite alternate;
 }
 
+#custom-mcp-status {
+    color: #05ffa1;
+    font-weight: 700;
+    padding: 0 10px;
+    border-bottom: 2px solid rgba(5, 255, 161, 0.4);
+}
+
+#custom-mcp-status:hover {
+    background: rgba(5, 255, 161, 0.15);
+    border-bottom: 2px solid #05ffa1;
+}
+
+#custom-mcp-status.active {
+    color: #05ffa1;
+}
+
+#custom-mcp-status.idle {
+    color: @muted;
+}
+
 #custom-theme {
     color: @accent;
     font-size: 13px;

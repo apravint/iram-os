@@ -20,6 +20,7 @@
     ],
     "modules-right": [
         "custom/ai-agent",
+        "custom/mcp-status",
         "custom/theme",
         "cpu",
         "memory",
@@ -70,6 +71,15 @@
         "on-click": "~/.local/bin/iram-agent-sidecar",
         "on-click-right": "~/.local/bin/iram-models",
         "on-click-middle": "~/.local/bin/iram-health-agent"
+    },
+
+    "custom/mcp-status": {
+        "format": "{}",
+        "return-type": "json",
+        "interval": 4,
+        "exec": "~/.local/bin/iram-mcp-status",
+        "on-click": "~/.local/bin/iram-hub",
+        "on-click-right": "alacritty -e btop"
     },
 
     "mpris": {
