@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS / Kubuntu 26.04 LTS -> 26.10 (Stonking Stingray) Automated Upgrade
-# Guided, safe interactive distribution release upgrader
+# Fully automated, hands-free distribution release upgrader
 # ==============================================================================
 set -euo pipefail
 
@@ -13,10 +13,20 @@ RED="\033[0;31m"
 MAGENTA="\033[1;35m"
 NC="\033[0m"
 
+INTERACTIVE=false
+if [ "${1:-}" = "-i" ] || [ "${1:-}" = "--interactive" ]; then
+    INTERACTIVE=true
+fi
+
 clear
 echo -e "${CYAN}====================================================================${NC}"
 echo -e "${BOLD}${GREEN}   IRAM OS / Kubuntu 26.04 LTS ➔ 26.10 Upgrade Assistant${NC}"
 echo -e "   Target Release: ${BOLD}Kubuntu 26.10 (Stonking Stingray)${NC}"
+if [ "$INTERACTIVE" = true ]; then
+    echo -e "   Mode: ${YELLOW}Interactive Manual Confirmation${NC}"
+else
+    echo -e "   Mode: ${BOLD}${GREEN}Automated Hands-Free (No manual 'y' typing required)${NC}"
+fi
 echo -e "${CYAN}====================================================================${NC}\n"
 
 # 1. Prompt for Sudo Credentials once
@@ -45,7 +55,7 @@ sudo rm -f /var/log/dist-upgrade/screenlog.* 2>/dev/null || true
 sudo rm -rf /tmp/ubuntu-release-upgrader-* 2>/dev/null || true
 sudo rm -f /etc/apt/sources.list.d/*.distUpgrade
 
-# Clear any lingering APT locks
+# Clear any lingering APT / DPKG locks
 sudo fuser -k -9 /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
 sudo dpkg --configure -a
 
@@ -98,34 +108,31 @@ sudo apt --fix-broken install -y
 sudo apt full-upgrade -y
 echo -e "${GREEN}✓ Base system is fully updated and consistent.${NC}"
 
-# 5. Instructions and Launch
-echo -e "\n${BOLD}[Step 5/6] Preparing interactive release upgrader...${NC}"
-echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-echo -e "${BOLD}${MAGENTA}⚠️  CRITICAL PROMPTS CHEAT SHEET:${NC}"
-echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-echo -e "1. ${YELLOW}'Foreign Packages Installed -> Continue [yN]'${NC}:"
-echo -e "   👉 ${BOLD}${GREEN}TYPE 'y' AND PRESS ENTER${NC} (Do NOT just hit Enter, or it cancels!)"
-echo -e ""
-echo -e "2. ${YELLOW}'Do you want to start the upgrade? -> Continue [yN] Details [d]'${NC}:"
-echo -e "   👉 ${BOLD}${GREEN}TYPE 'y' AND PRESS ENTER${NC}"
-echo -e ""
-echo -e "3. ${YELLOW}'Download Phase' (~2 GB remaining, 1.9 GB already cached):${NC}"
-echo -e "   👉 APT will resume downloading. If you see intermittent retry lines,"
-echo -e "      ${BOLD}do not press Ctrl+C${NC}. APT automatically retries failed chunks."
-echo -e ""
-echo -e "4. ${YELLOW}'Configuration file /etc/... -> keep local version?'${NC}:"
-echo -e "   👉 ${BOLD}${GREEN}CHOOSE 'N'${NC} (Keep your local IRAM OS configuration files)"
-echo -e "${CYAN}--------------------------------------------------------------------${NC}\n"
+# 5. Launch Release Upgrader
+echo -e "\n${BOLD}[Step 5/6] Launching Ubuntu 26.10 Upgrader...${NC}"
+echo -e "   Partial download status: ~1.9 GB already cached in /var/cache/apt/archives/."
 
-echo -e "${CYAN}Launching do-release-upgrade in direct terminal mode (no background screen detaching)...${NC}\n"
+if [ "$INTERACTIVE" = true ]; then
+    echo -e "${CYAN}Running in interactive mode. Pass 'y' when prompted.${NC}\n"
+    export RELEASE_UPGRADER_NO_SCREEN=1
+    sudo -E RELEASE_UPGRADER_NO_SCREEN=1 do-release-upgrade -d
+else
+    echo -e "${GREEN}Running in hands-free mode. Automatically confirming prompts & preserving configs.${NC}\n"
+    export RELEASE_UPGRADER_NO_SCREEN=1
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+    export UCF_FORCE_CONFFOLD=1
 
-# Export RELEASE_UPGRADER_NO_SCREEN=1 to prevent detached screen deadlocks
-export RELEASE_UPGRADER_NO_SCREEN=1
-sudo -E RELEASE_UPGRADER_NO_SCREEN=1 do-release-upgrade -d
+    sudo -E DEBIAN_FRONTEND=noninteractive \
+            RELEASE_UPGRADER_NO_SCREEN=1 \
+            NEEDRESTART_MODE=a \
+            UCF_FORCE_CONFFOLD=1 \
+            do-release-upgrade -d -f DistUpgradeViewNonInteractive
+fi
 
 # 6. Post-Upgrade Completion
 echo -e "\n${BOLD}[Step 6/6] Upgrade process completed successfully!${NC}"
 echo -e "${GREEN}====================================================================${NC}"
-echo -e "${BOLD}🎉 Kubuntu 26.10 is now installed! Please reboot your computer:${NC}"
+echo -e "${BOLD}🎉 Kubuntu 26.10 (Stonking Stingray) is installed! Please reboot:${NC}"
 echo -e "   ${CYAN}sudo reboot${NC}"
 echo -e "${GREEN}====================================================================${NC}"
