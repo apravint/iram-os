@@ -9,17 +9,17 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v26.04.0 or v24.04.1)'
+        description: 'Release version tag (e.g. v26.10.0 or v26.04.0)'
         required: true
-        default: 'v26.04.0'
+        default: 'v26.10.0'
       base_codename:
-        description: 'Target base codename (resolute or noble)'
+        description: 'Target base codename (stonking or resolute)'
         required: true
-        default: 'resolute'
+        default: 'stonking'
       distro_version:
-        description: 'Target distro version (26.04 or 24.04)'
+        description: 'Target distro version (26.10 or 26.04)'
         required: true
-        default: '26.04'
+        default: '26.10'
 
 permissions:
   contents: write

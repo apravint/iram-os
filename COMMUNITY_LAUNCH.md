@@ -29,7 +29,7 @@ Traditionally, if you want to run Hyprland with fluid animations and modern tili
 
 ### 📦 Download & Source Code:
 * **GitHub Repository**: https://github.com/apravint/iram-os
-* **Latest ISO Download**: https://github.com/apravint/iram-os/releases/tag/v26.04.0
+* **Latest ISO Download**: https://github.com/apravint/iram-os/releases/tag/v26.10.0
 * **One-line Upgrade for existing Linux users**:
   `curl -fsSL https://raw.githubusercontent.com/apravint/iram-os/main/install.sh | bash`
 
@@ -50,7 +50,7 @@ Hi Hacker News,
 I built IRAM OS, a standalone Linux distribution that brings the fluid dynamics of the Hyprland Wayland compositor to a rock-solid, production-grade Linux foundation with an integrated autonomous AI toolchain.
 
 GitHub: https://github.com/apravint/iram-os
-Latest ISO & Release: https://github.com/apravint/iram-os/releases/tag/v26.04.0
+Latest ISO & Release: https://github.com/apravint/iram-os/releases/tag/v26.10.0
 
 Why I built it:
 Many developers love the keyboard-driven ergonomics, workspace grouping, and fluid animations of Hyprland, but don't want the rolling-release friction of Arch or NixOS for their daily driver workstations (especially when using Docker, CUDA, proprietary VPNs, or enterprise toolchains). Meanwhile, traditional desktop environments can feel heavy and lack dynamic tiling.

@@ -107,7 +107,7 @@ Depends: hyprland, waybar, wofi, swaybg, swaylock, mako-notifier, grim, slurp, w
 Recommends: ollama, mpv, fastmcp, qdrant-client
 Homepage: https://github.com/apravint/iram-os
 Description: IRAM OS Desktop - Sovereign Autonomous Agentic Linux
- IRAM OS is an agentic Linux operating environment built on Ubuntu 26.04 LTS
+ IRAM OS is an agentic Linux operating environment built on Ubuntu 26.10
  and Hyprland, tailored for digital artists, engineers, and AI pair programming.
  Features the Storytold Creative Suite, live zero-restart theming, PipeWire
  hardware DSP studio audio tuning, non-destructive migrations, and first-class

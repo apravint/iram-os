@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS Unified Command Center & Dynamic Agentic Router
-# Inspired by Omarchy (by DHH) & Engineered for IRAM OS (Ubuntu 26.04 + Hyprland)
+# Inspired by Omarchy (by DHH) & Engineered for IRAM OS (Ubuntu 26.10 + Hyprland 0.56)
 # ==============================================================================
 set -e
 
@@ -27,7 +27,7 @@ CONFIG_DIR="$HOME/.config/iram"
 mkdir -p "$CONFIG_DIR"
 
 show_banner() {
-    echo -e "${BOLD}${CYAN}IRAM OS Command Center${NC} ${GREEN}(v2.0-omarchy-enhanced)${NC}"
+    echo -e "${BOLD}${CYAN}IRAM OS Command Center${NC} ${GREEN}(v26.10-stonking-enhanced)${NC}"
     echo -e "Autonomous Agentic Desktop • Hyprland • Waybar • Storytold Craft Suite\n"
 }
 

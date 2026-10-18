@@ -1,11 +1,11 @@
 ---
 name: iram-os
-description: Authoritative guide and system reference for IRAM OS (Ubuntu 26.04 LTS + Hyprland + Waybar + Storytold Craft Suite + Agentic OS). Use to manage, troubleshoot, or configure IRAM OS.
+description: Authoritative guide and system reference for IRAM OS (Ubuntu 26.10 + Hyprland 0.56 + Waybar + Storytold Craft Suite + Agentic OS). Use to manage, troubleshoot, or configure IRAM OS.
 ---
 
 # IRAM OS Agentic Operating System
 
-IRAM OS is a high-performance, beautiful, and agentic Linux distribution built on Ubuntu 26.04 LTS and Hyprland, tailored for digital artists, engineers, and AI-assisted pair programming.
+IRAM OS is a high-performance, beautiful, and agentic Linux distribution built on Ubuntu 26.10 and Hyprland, tailored for digital artists, engineers, and AI-assisted pair programming.
 
 ## 1. Unified Command Center (`iram`)
 

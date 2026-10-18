@@ -140,7 +140,7 @@ A bootable hybrid UEFI/BIOS ISO is available for bare-metal deployment and testi
 1. Download the latest `.iso` image from [GitHub Releases](https://github.com/apravint/iram-os/releases).
 2. Flash to a USB drive using [Ventoy](https://www.ventoy.net/), [BalenaEtcher](https://etcher.balena.io/), or `dd`:
    ```bash
-   sudo dd if=iram-os-26.04-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync
+   sudo dd if=iram-os-26.10-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync
    ```
 3. Boot the USB drive and select **Start IRAM OS Live**.
    - **Username**: `iram`
@@ -314,7 +314,7 @@ IRAM OS features modular, standalone open-source companion projects maintained u
 | **[iram-themes](https://github.com/apravint/iram-themes)** | 18 modern, high-fidelity Wayland themes and dynamic multi-app synchronization engine |
 | **[iram-agentic-desktop](https://github.com/apravint/iram-agentic-desktop)** | Autonomous AI Desktop Framework: terminal copilot, sidecar companion, and model router |
 | **[storytold-craft-linux](https://github.com/apravint/storytold-craft-linux)** | First-class Linux desktop packaging and runners for the Storytold pure-Rust creative suite |
-| **[ubuntu-hyprland-iso-builder](https://github.com/apravint/ubuntu-hyprland-iso-builder)** | Automated toolchain & GitHub Actions CI to compile bootable Ubuntu 26.04 + Hyprland ISOs |
+| **[ubuntu-hyprland-iso-builder](https://github.com/apravint/ubuntu-hyprland-iso-builder)** | Automated toolchain & GitHub Actions CI to compile bootable Ubuntu 26.10 + Hyprland ISOs |
 | **[way-ocr](https://github.com/apravint/way-ocr)** | Lightweight screen OCR and text extractor utility for Wayland and Hyprland |
 
 ---

@@ -5,9 +5,9 @@
 # ==============================================================================
 set -euo pipefail
 
-# Target base release version: defaults to 26.04 (Resolute) or respects environment override
-CODENAME="${BASE_CODENAME:-resolute}"
-DISTRO_VERSION="${DISTRO_VERSION:-26.04}"
+# Target base release version: defaults to 26.10 (Stonking) or respects environment override
+CODENAME="${BASE_CODENAME:-stonking}"
+DISTRO_VERSION="${DISTRO_VERSION:-26.10}"
 DISTRO_NAME="iram-os"
 ARCH="amd64"
 ROOTFS_DIR="/tmp/iram-rootfs"

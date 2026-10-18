@@ -23,8 +23,8 @@ Use the details below to submit **IRAM OS** to the global Linux registry at **[h
 
 ### 📦 Download & Verification Links
 
-* **Latest Release Page**: `https://github.com/apravint/iram-os/releases/tag/v26.04.0`
-* **Direct ISO Download**: `https://github.com/apravint/iram-os/releases/download/v26.04.0/iram-os-24.04-amd64.iso`
+* **Latest Release Page**: `https://github.com/apravint/iram-os/releases/tag/v26.10.0`
+* **Direct ISO Download**: `https://github.com/apravint/iram-os/releases/download/v26.10.0/iram-os-26.10-amd64.iso`
 * **SHA256 Checksum URL**: `https://github.com/apravint/iram-os/releases/download/v26.04.0/sha256sum.txt`
 * **Live Session Credentials**:
   - **Username**: `iram`
