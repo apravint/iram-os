@@ -60,8 +60,8 @@ jobs:
 
       - name: Run ISO Builder
         env:
-          BASE_CODENAME: ${{ github.event.inputs.base_codename || 'resolute' }}
-          DISTRO_VERSION: ${{ github.event.inputs.distro_version || '26.04' }}
+          BASE_CODENAME: ${{ github.event.inputs.base_codename || 'stonking' }}
+          DISTRO_VERSION: ${{ github.event.inputs.distro_version || '26.10' }}
         run: |
           sudo -E bash build/build-iso.sh
 
