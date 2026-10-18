@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Sovereign Command Hub
+# iram:summary=Unified Sovereign Command Hub (3D, Voice, Agent Swarm & System Control)
+# ==============================================================================
+set -euo pipefail
+
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+BIN_DIR="$(cd "$(dirname "$REAL_PATH")" && pwd)"
+PORT="8990"
+
+if ! curl -s --max-time 0.5 "http://127.0.0.1:${PORT}/api/status" >/dev/null 2>&1; then
+    # Kill any stale simple http servers on this port
+    fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
+    sleep 0.2
+    setsid -f python3 "${BIN_DIR}/iram-hub-server.py" >/dev/null 2>&1
+    sleep 0.8
+fi
+
+URL="http://127.0.0.1:${PORT}/"
+
+if flatpak info com.google.Chrome >/dev/null 2>&1; then
+    flatpak run com.google.Chrome --app="$URL" --name="iram-hub" --class="iram-hub" >/dev/null 2>&1 &
+elif command -v google-chrome >/dev/null 2>&1; then
+    google-chrome --app="$URL" --name="iram-hub" --class="iram-hub" >/dev/null 2>&1 &
+elif command -v firefox >/dev/null 2>&1; then
+    firefox --new-window "$URL" >/dev/null 2>&1 &
+else
+    xdg-open "$URL" >/dev/null 2>&1 &
+fi

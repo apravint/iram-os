@@ -224,6 +224,84 @@ def desktop_notify(title: str, message: str) -> str:
     except Exception as e:
         return f"Notify error: {e}"
 
+# --- VOICE STUDIO MCP TOOLS ---
+@mcp.tool()
+def voice_speak(text: str, voice_id: str = "jarvis") -> str:
+    """Synthesizes text to spoken audio and plays it through PipeWire speakers (voices: jarvis, samantha, cinema-narrator, tamil-tech)."""
+    try:
+        res = subprocess.run(["iram-voice", "speak", text, "--voice", voice_id], capture_output=True, text=True)
+        return res.stdout.strip() or f"Spoke text using voice '{voice_id}'"
+    except Exception as e:
+        return f"Voice error: {e}"
+
+@mcp.tool()
+def voice_clone(audio_path: str, voice_name: str) -> str:
+    """Enrolls a new sovereign voice profile from a short (5-10s) audio sample."""
+    try:
+        res = subprocess.run(["iram-voice", "clone", audio_path, "--name", voice_name], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Clone error: {e}"
+
+@mcp.tool()
+def voice_design(prompt: str, voice_name: str) -> str:
+    """Designs a new synthetic voice persona from adjectives (e.g. 'deep authoritative narrator')."""
+    try:
+        res = subprocess.run(["iram-voice", "design", prompt, "--name", voice_name], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Design error: {e}"
+
+@mcp.tool()
+def list_voices() -> str:
+    """Lists all available pre-packaged and cloned voices in VoiceStudio."""
+    try:
+        res = subprocess.run(["iram-voice", "list"], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"List voices error: {e}"
+
+# --- 3D SPATIAL & SWARM MCP TOOLS ---
+@mcp.tool()
+def open_3d_inspector(model_path: str = "") -> str:
+    """Launches the Three.js 3D CAD & Mesh Inspector window (optionally loading an STL/OBJ file)."""
+    try:
+        cmd = ["iram-3d"]
+        if model_path:
+            cmd.append(model_path)
+        subprocess.Popen(cmd)
+        return f"Launched 3D CAD Inspector (model: {model_path or 'preset'})"
+    except Exception as e:
+        return f"3D inspector error: {e}"
+
+@mcp.tool()
+def open_agent_swarm_graph() -> str:
+    """Launches the live Three.js 3D Multi-Agent Swarm Topology Graph with animated IPC photon conduits."""
+    try:
+        subprocess.Popen(["iram-agent-graph"])
+        return "Launched 3D Multi-Agent Swarm Graph window"
+    except Exception as e:
+        return f"Agent graph error: {e}"
+
+@mcp.tool()
+def open_3d_theme_studio() -> str:
+    """Launches the Three.js 3D PBR Material Theme Studio simulating all 18 palettes under dynamic lighting."""
+    try:
+        subprocess.Popen(["iram-theme-3d"])
+        return "Launched 3D Theme Studio window"
+    except Exception as e:
+        return f"Theme studio error: {e}"
+
+# --- HARNESS² CYCLIC WORKFLOW ---
+@mcp.tool()
+def run_harness_workflow(task: str) -> str:
+    """Runs a complex task through the Harness² cyclic verification loop (Plan -> Act -> Verify -> Reflect)."""
+    try:
+        res = subprocess.run(["iram-harness2", task], capture_output=True, text=True)
+        return res.stdout.strip() or f"Harness² workflow executed for '{task}'"
+    except Exception as e:
+        return f"Harness² error: {e}"
+
 def main():
     mcp.run()
 

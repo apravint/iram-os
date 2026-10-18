@@ -39,6 +39,7 @@ show_help() {
     echo -e "  iram commands [--json] [--all]\n"
     
     echo -e "${BOLD}CORE COMMAND GROUPS:${NC}"
+    echo -e "  ${CYAN}hub${NC} [dashboard]           Sovereign Command Hub (3D, Voice, Agent Swarm & System)"
     echo -e "  ${CYAN}agent${NC} [prompt|account|usage] Autonomous coding agent, direct prompting & multi-account failover"
     echo -e "  ${CYAN}sidecar${NC}                   Toggle AI sidecar HUD floating assistant"
     echo -e "  ${CYAN}openclaw${NC} [cmd]            OpenClaw multi-channel gateway & agent daemon"
@@ -222,6 +223,11 @@ case "$cmd" in
                 echo -e "Usage: iram default agent <name> | iram default browser <name>"
                 ;;
         esac
+        ;;
+
+    # --- SOVEREIGN COMMAND HUB ---
+    hub|dashboard)
+        exec "$LOCAL_BIN/iram-hub" "$@"
         ;;
 
     # --- VOICE STUDIO SUBSYSTEM ---
