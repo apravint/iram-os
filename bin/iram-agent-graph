@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS 3D Multi-Agent Swarm Graph & Telemetry Inspector (Powered by Three.js)
+# Visualizes Tier 1 (Architect), Tier 2 (Coordinator), Tier 3 (Workers), and MCPs
+# iram:summary=3D Force-Directed Multi-Agent Swarm Graph & Telemetry Inspector
+# ==============================================================================
+set -euo pipefail
+
+ASSET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../assets/agent-graph" && pwd)"
+PORT="8975"
+
+# Start background micro-server if not running
+if ! curl -s --max-time 0.5 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
+    setsid -f python3 -m http.server "$PORT" -d "$ASSET_DIR" >/dev/null 2>&1
+    sleep 0.8
+fi
+
+URL="http://127.0.0.1:${PORT}/"
+
+# Launch 3D agent swarm window
+if flatpak info com.google.Chrome >/dev/null 2>&1; then
+    flatpak run com.google.Chrome --app="$URL" --name="iram-agent-graph" --class="iram-agent-graph" >/dev/null 2>&1 &
+elif command -v google-chrome >/dev/null 2>&1; then
+    google-chrome --app="$URL" --name="iram-agent-graph" --class="iram-agent-graph" >/dev/null 2>&1 &
+elif command -v firefox >/dev/null 2>&1; then
+    firefox --new-window "$URL" >/dev/null 2>&1 &
+else
+    xdg-open "$URL" >/dev/null 2>&1 &
+fi

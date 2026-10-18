@@ -144,6 +144,10 @@ case "$cmd" in
                 shift
                 exec "$LOCAL_BIN/iram-agent-usage" "$@"
                 ;;
+            graph|swarm|3d)
+                shift
+                exec "$LOCAL_BIN/iram-agent-graph" "$@"
+                ;;
             crash)
                 shift
                 exec "$LOCAL_BIN/iram-crash-diagnose" "$@"
@@ -154,6 +158,9 @@ case "$cmd" in
         esac
         ;;
     sidecar)
+        if [ "${1:-}" = "--3d" ] || [ "${1:-}" = "3d" ] || [ "${1:-}" = "graph" ]; then
+            exec "$LOCAL_BIN/iram-agent-graph"
+        fi
         exec "$LOCAL_BIN/iram-agent-sidecar" "$@"
         ;;
     openclaw)

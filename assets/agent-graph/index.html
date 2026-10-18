@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRAM OS Agent Swarm Graph (Three.js)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background-color: #0b0d14;
+            color: #cdd6f4;
+            font-family: "JetBrains Mono", "SF Pro Display", -apple-system, monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: rgba(14, 17, 27, 0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(0, 240, 255, 0.22);
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            pointer-events: auto;
+        }
+
+        /* Top HUD Bar */
+        .hud-top {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            z-index: 10;
+        }
+        .hud-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .hud-logo {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #00f0ff, #7000ff);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 14px;
+            color: #0b0d14;
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.5);
+        }
+        .hud-title {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+        }
+        .hud-title span {
+            color: #00f0ff;
+        }
+        .hud-subtitle {
+            font-size: 11px;
+            color: #7982a9;
+            margin-top: 1px;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(5, 255, 161, 0.12);
+            border: 1px solid rgba(5, 255, 161, 0.35);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #05ffa1;
+        }
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            background: #05ffa1;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #05ffa1;
+            animation: pulse 1.8s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* Left Side: Tree Hierarchy */
+        .hud-left {
+            position: absolute;
+            top: 86px;
+            left: 16px;
+            width: 270px;
+            padding: 16px;
+            z-index: 10;
+        }
+        .section-header {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #00f0ff;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .node-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .node-item {
+            padding: 8px 12px;
+            background: rgba(25, 30, 46, 0.6);
+            border: 1px solid #23293e;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .node-item:hover, .node-item.active {
+            background: rgba(0, 240, 255, 0.12);
+            border-color: #00f0ff;
+            transform: translateX(4px);
+        }
+        .node-item-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .node-tag {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .tag-t1 { background: rgba(255, 0, 110, 0.2); color: #ff006e; border: 1px solid rgba(255, 0, 110, 0.4); }
+        .tag-t2 { background: rgba(0, 240, 255, 0.2); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.4); }
+        .tag-t3 { background: rgba(5, 255, 161, 0.2); color: #05ffa1; border: 1px solid rgba(5, 255, 161, 0.4); }
+        .tag-mcp { background: rgba(184, 0, 255, 0.2); color: #b800ff; border: 1px solid rgba(184, 0, 255, 0.4); }
+
+        /* Right Side: Inspector Details */
+        .hud-right {
+            position: absolute;
+            top: 86px;
+            right: 16px;
+            width: 320px;
+            padding: 16px;
+            z-index: 10;
+        }
+        .detail-row {
+            margin-bottom: 12px;
+        }
+        .detail-label {
+            font-size: 10px;
+            color: #7982a9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .detail-value {
+            font-size: 13px;
+            color: #ffffff;
+            font-weight: 600;
+            word-break: break-word;
+        }
+        .detail-value.highlight {
+            color: #00f0ff;
+        }
+        .meter-container {
+            width: 100%;
+            height: 6px;
+            background: #1b2030;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        .meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00f0ff, #05ffa1);
+            width: 65%;
+            transition: width 0.4s ease;
+        }
+
+        /* Bottom Controls */
+        .hud-bottom {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            padding: 10px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background: #181d2e;
+            color: #cdd6f4;
+            border: 1px solid #28314e;
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        button:hover {
+            background: #252d47;
+            border-color: #00f0ff;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        button.primary {
+            background: linear-gradient(135deg, #0077ff, #00f0ff);
+            color: #07090e;
+            border: none;
+            font-weight: 800;
+            box-shadow: 0 4px 18px rgba(0, 240, 255, 0.35);
+        }
+        button.primary:hover {
+            box-shadow: 0 6px 24px rgba(0, 240, 255, 0.6);
+        }
+        .telemetry-bar {
+            display: flex;
+            gap: 20px;
+            font-size: 11px;
+            color: #7982a9;
+        }
+        .telemetry-bar span {
+            color: #05ffa1;
+            font-weight: 700;
+        }
+
+        /* 3D Tooltip */
+        #tooltip {
+            position: absolute;
+            display: none;
+            background: rgba(11, 13, 20, 0.9);
+            border: 1px solid #00f0ff;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #ffffff;
+            pointer-events: none;
+            z-index: 20;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+    <!-- Three.js + OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="tooltip"></div>
+
+    <!-- Top Navigation HUD -->
+    <div class="hud-top glass-panel">
+        <div class="hud-brand">
+            <div class="hud-logo">⚡</div>
+            <div>
+                <div class="hud-title">IRAM OS <span>Agent Swarm Graph</span></div>
+                <div class="hud-subtitle">3D Force-Directed Execution Topology & IPC Particle Stream</div>
+            </div>
+        </div>
+        <div class="status-pill">
+            <div class="status-dot"></div>
+            <span>SWARM ONLINE (Tiered Multi-Agent)</span>
+        </div>
+    </div>
+
+    <!-- Left: Swarm Hierarchy -->
+    <div class="hud-left glass-panel">
+        <div class="section-header">
+            <span>Swarm Architecture</span>
+            <span id="node-count">8 Nodes</span>
+        </div>
+        <div class="node-list" id="node-list-container">
+            <!-- Populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Right: Telemetry Inspector -->
+    <div class="hud-right glass-panel">
+        <div class="section-header">
+            <span>Node Telemetry</span>
+            <span id="inspect-tier">TIER 1</span>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Node Identifier</div>
+            <div class="detail-value highlight" id="inspect-name">Lead Architect</div>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Active Model & Engine</div>
+            <div class="detail-value" id="inspect-model">Gemini 2.5 Pro / Claude 3.7</div>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Current Role / Action</div>
+            <div class="detail-value" id="inspect-role">Strategic Goal Decomposition & Verification Review</div>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Execution Latency</div>
+            <div class="detail-value" id="inspect-latency">240 ms</div>
+            <div class="meter-container"><div class="meter-fill" id="meter-latency" style="width: 25%;"></div></div>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Token Burn / Usage</div>
+            <div class="detail-value" id="inspect-tokens">1,842 Tokens</div>
+            <div class="meter-container"><div class="meter-fill" id="meter-tokens" style="width: 55%; background: linear-gradient(90deg, #ff006e, #b800ff);"></div></div>
+        </div>
+        <div class="detail-row">
+            <div class="detail-label">Verification Gate</div>
+            <div class="detail-value" style="color: #05ffa1;" id="inspect-gate">✓ Synthesized & Verified</div>
+        </div>
+    </div>
+
+    <!-- Bottom Controls & Stats -->
+    <div class="hud-bottom glass-panel">
+        <div class="action-buttons">
+            <button class="primary" id="btn-simulate">
+                <span>🚀</span> Dispatch Swarm Task
+            </button>
+            <button id="btn-camera-reset">
+                <span>🎥</span> Reset Camera
+            </button>
+            <button id="btn-particles-toggle">
+                <span>⚡</span> Flow: Active
+            </button>
+            <button id="btn-focus-core">
+                <span>🎯</span> Focus Core
+            </button>
+        </div>
+        <div class="telemetry-bar">
+            <div>Active Workers: <span id="stat-workers">4</span></div>
+            <div>MCP Endpoints: <span id="stat-mcp">3</span></div>
+            <div>IPC Pulses: <span id="stat-pulses">18/s</span></div>
+            <div>FPS: <span id="stat-fps">60</span></div>
+        </div>
+    </div>
+
+    <script>
+        // Node definitions for IRAM OS Agent Swarm
+        const SWARM_NODES = [
+            {
+                id: 'core-architect',
+                name: 'Lead Architect',
+                tier: 'Tier 1',
+                tagClass: 'tag-t1',
+                model: 'gemini-2.5-pro (High Reasoning)',
+                role: 'Strategic Planning & Architectural Verification',
+                color: 0xff006e,
+                radius: 3.2,
+                pos: [0, 0, 0],
+                latency: '420 ms',
+                tokens: '3,210',
+                gate: '✓ Verified by Harness²'
+            },
+            {
+                id: 'coord-dispatcher',
+                name: 'Task Coordinator',
+                tier: 'Tier 2',
+                tagClass: 'tag-t2',
+                model: 'gemini-2.5-flash',
+                role: 'Ticket Dispatching & Gate Review',
+                color: 0x00f0ff,
+                radius: 2.2,
+                pos: [14, 4, 6],
+                latency: '110 ms',
+                tokens: '1,450',
+                gate: '✓ Active Loop Sync'
+            },
+            {
+                id: 'worker-research',
+                name: 'Worker: Research',
+                tier: 'Tier 3',
+                tagClass: 'tag-t3',
+                model: 'gemini-3.5-flash-lite',
+                role: 'Codebase Grep, Docling & Web Lookups',
+                color: 0x05ffa1,
+                radius: 1.5,
+                pos: [24, 12, 12],
+                latency: '45 ms',
+                tokens: '820',
+                gate: '✓ Read Verified'
+            },
+            {
+                id: 'worker-tdd',
+                name: 'Worker: TDD / Testing',
+                tier: 'Tier 3',
+                tagClass: 'tag-t3',
+                model: 'gemini-2.5-flash',
+                role: 'Deterministic Test Seams & Red-Green Cycle',
+                color: 0x05ffa1,
+                radius: 1.5,
+                pos: [22, -4, 16],
+                latency: '68 ms',
+                tokens: '940',
+                gate: '✓ Unit Tests Passed (14/14)'
+            },
+            {
+                id: 'worker-cad',
+                name: 'Worker: Lab CAD / 3D',
+                tier: 'Tier 3',
+                tagClass: 'tag-t3',
+                model: 'claude-3.7-sonnet',
+                role: 'build123d Parametric Modeling & STEP Export',
+                color: 0x05ffa1,
+                radius: 1.5,
+                pos: [18, -14, 6],
+                latency: '140 ms',
+                tokens: '1,280',
+                gate: '✓ Manifold Geometry Verified'
+            },
+            {
+                id: 'mcp-qdrant',
+                name: 'MCP: Qdrant Memory',
+                tier: 'Tool',
+                tagClass: 'tag-mcp',
+                model: 'FastEmbed / Cosine Similarity',
+                role: 'Hierarchical Vector Retrieval & Past ADRs',
+                color: 0xb800ff,
+                radius: 1.4,
+                pos: [-16, 12, -8],
+                latency: '18 ms',
+                tokens: '240 vectors',
+                gate: '✓ Qdrant Vector Stream Active'
+            },
+            {
+                id: 'mcp-pipewire',
+                name: 'MCP: PipeWire Audio',
+                tier: 'Tool',
+                tagClass: 'tag-mcp',
+                model: 'PipeWire DSP Bus',
+                role: 'Audio Routing, FFT Spectrogram & Sink Tuning',
+                color: 0xb800ff,
+                radius: 1.4,
+                pos: [-18, -8, -6],
+                latency: '5 ms',
+                tokens: '48kHz DSP',
+                gate: '✓ Real-time Stream Synced'
+            },
+            {
+                id: 'mcp-system',
+                name: 'MCP: System Bridge',
+                tier: 'Tool',
+                tagClass: 'tag-mcp',
+                model: 'Hyprland & OpenClaw',
+                role: 'Wayland Window Rules, Coredump & IPC Dispatch',
+                color: 0xb800ff,
+                radius: 1.4,
+                pos: [-12, -16, 10],
+                latency: '8 ms',
+                tokens: 'System Daemon',
+                gate: '✓ Socket /run/user/1000 Alive'
+            }
+        ];
+
+        // Conduits / Connections
+        const SWARM_EDGES = [
+            ['core-architect', 'coord-dispatcher'],
+            ['core-architect', 'mcp-qdrant'],
+            ['core-architect', 'mcp-system'],
+            ['coord-dispatcher', 'worker-research'],
+            ['coord-dispatcher', 'worker-tdd'],
+            ['coord-dispatcher', 'worker-cad'],
+            ['worker-research', 'mcp-qdrant'],
+            ['worker-cad', 'mcp-system'],
+            ['core-architect', 'mcp-pipewire']
+        ];
+
+        let scene, camera, renderer, controls;
+        let nodeMeshes = {};
+        let edgeLines = [];
+        let particles = [];
+        let activePulses = [];
+        let hoveredNode = null;
+        let selectedNode = SWARM_NODES[0];
+        let particleFlowEnabled = true;
+
+        const container = document.getElementById('canvas-container');
+        const tooltip = document.getElementById('tooltip');
+
+        function init() {
+            // Scene & Camera
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0b0d14, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(28, 22, 42);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 150;
+            controls.minDistance = 8;
+
+            // Ambient & Directional Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
+
+            const pLight1 = new THREE.PointLight(0x00f0ff, 2.5, 80);
+            pLight1.position.set(0, 15, 0);
+            scene.add(pLight1);
+
+            const pLight2 = new THREE.PointLight(0xff006e, 2, 80);
+            pLight2.position.set(-15, -10, 10);
+            scene.add(pLight2);
+
+            // Background Starfield
+            createStarfield();
+
+            // Cyber Floor Grid
+            const grid = new THREE.GridHelper(100, 50, 0x00f0ff, 0x181f33);
+            grid.position.y = -22;
+            scene.add(grid);
+
+            // Build Swarm Graph
+            buildGraph();
+
+            // Setup UI List & Listeners
+            populateNodeList();
+            setupEvents();
+
+            // Start Animation Loop
+            animate();
+        }
+
+        function createStarfield() {
+            const count = 1200;
+            const geom = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            for (let i = 0; i < count * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 220;
+                positions[i + 1] = (Math.random() - 0.5) * 220;
+                positions[i + 2] = (Math.random() - 0.5) * 220;
+
+                const c = Math.random();
+                if (c > 0.6) {
+                    colors[i] = 0; colors[i+1] = 0.94; colors[i+2] = 1.0; // Cyan
+                } else if (c > 0.3) {
+                    colors[i] = 1.0; colors[i+1] = 0.0; colors[i+2] = 0.43; // Pink
+                } else {
+                    colors[i] = 0.8; colors[i+1] = 0.85; colors[i+2] = 1.0;
+                }
+            }
+
+            geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const mat = new THREE.PointsMaterial({
+                size: 1.2,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
+
+            const pSystem = new THREE.Points(geom, mat);
+            scene.add(pSystem);
+        }
+
+        function buildGraph() {
+            // Create Nodes
+            SWARM_NODES.forEach(data => {
+                const group = new THREE.Group();
+                group.position.set(...data.pos);
+
+                // Core Sphere
+                const geom = new THREE.SphereGeometry(data.radius, 32, 32);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: data.color,
+                    emissive: data.color,
+                    emissiveIntensity: 0.45,
+                    roughness: 0.15,
+                    metalness: 0.8
+                });
+                const sphere = new THREE.Mesh(geom, mat);
+                group.add(sphere);
+
+                // Outer Wireframe Orbital Shell
+                const shellGeom = new THREE.IcosahedronGeometry(data.radius * 1.35, 1);
+                const shellMat = new THREE.MeshBasicMaterial({
+                    color: data.color,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.28
+                });
+                const shell = new THREE.Mesh(shellGeom, shellMat);
+                group.add(shell);
+
+                // Halo Ring for Architect Core
+                if (data.id === 'core-architect') {
+                    const ringGeom = new THREE.RingGeometry(data.radius * 1.7, data.radius * 1.9, 32);
+                    const ringMat = new THREE.MeshBasicMaterial({
+                        color: 0x00f0ff,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: 0.6
+                    });
+                    const ring = new THREE.Mesh(ringGeom, ringMat);
+                    ring.rotation.x = Math.PI / 2.5;
+                    group.add(ring);
+                    group.ringMesh = ring;
+                }
+
+                group.userData = data;
+                group.shellMesh = shell;
+                scene.add(group);
+                nodeMeshes[data.id] = group;
+            });
+
+            // Create Edges and Photon Pulse Conduits
+            SWARM_EDGES.forEach(([srcId, dstId]) => {
+                const src = nodeMeshes[srcId].position;
+                const dst = nodeMeshes[dstId].position;
+
+                // Midpoint arc
+                const mid = new THREE.Vector3().addVectors(src, dst).multiplyScalar(0.5);
+                mid.y += (src.distanceTo(dst) * 0.15); // gentle arc upwards
+
+                const curve = new THREE.CatmullRomCurve3([src, mid, dst]);
+                const points = curve.getPoints(50);
+                const geom = new THREE.BufferGeometry().setFromPoints(points);
+
+                const mat = new THREE.LineBasicMaterial({
+                    color: 0x1f2942,
+                    transparent: true,
+                    opacity: 0.75,
+                    linewidth: 1
+                });
+                const line = new THREE.Line(geom, mat);
+                scene.add(line);
+                edgeLines.push(line);
+
+                // Pulse Stream
+                activePulses.push({
+                    curve: curve,
+                    t: Math.random(),
+                    speed: 0.006 + Math.random() * 0.008,
+                    mesh: createPulseMesh()
+                });
+            });
+        }
+
+        function createPulseMesh() {
+            const geom = new THREE.SphereGeometry(0.35, 12, 12);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0x00f0ff,
+                transparent: true,
+                opacity: 0.95
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            scene.add(mesh);
+            return mesh;
+        }
+
+        function populateNodeList() {
+            const container = document.getElementById('node-list-container');
+            container.innerHTML = '';
+            SWARM_NODES.forEach(node => {
+                const item = document.createElement('div');
+                item.className = 'node-item';
+                if (node.id === selectedNode.id) item.classList.add('active');
+
+                item.innerHTML = `
+                    <div class="node-item-name">
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#${node.color.toString(16).padStart(6, '0')};"></span>
+                        ${node.name}
+                    </div>
+                    <span class="node-tag ${node.tagClass}">${node.tier}</span>
+                `;
+                item.onclick = () => selectNode(node);
+                container.appendChild(item);
+            });
+        }
+
+        function selectNode(node) {
+            selectedNode = node;
+            populateNodeList();
+
+            // Update Inspector Panel
+            document.getElementById('inspect-name').textContent = node.name;
+            document.getElementById('inspect-tier').textContent = node.tier.toUpperCase();
+            document.getElementById('inspect-model').textContent = node.model;
+            document.getElementById('inspect-role').textContent = node.role;
+            document.getElementById('inspect-latency').textContent = node.latency;
+            document.getElementById('inspect-tokens').textContent = node.tokens;
+            document.getElementById('inspect-gate').textContent = node.gate;
+
+            // Smooth Camera Focus
+            const target = new THREE.Vector3(...node.pos);
+            const offset = new THREE.Vector3(12, 8, 16);
+            const newPos = target.clone().add(offset);
+
+            animateCameraTo(newPos, target);
+        }
+
+        function animateCameraTo(targetCamPos, lookAtTarget) {
+            const startCamPos = camera.position.clone();
+            const startLookAt = controls.target.clone();
+            const duration = 800;
+            const startTime = performance.now();
+
+            function updateCam(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+
+                camera.position.lerpVectors(startCamPos, targetCamPos, ease);
+                controls.target.lerpVectors(startLookAt, lookAtTarget, ease);
+                controls.update();
+
+                if (progress < 1) requestAnimationFrame(updateCam);
+            }
+            requestAnimationFrame(updateCam);
+        }
+
+        function setupEvents() {
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Raycaster for Hover & Click
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            window.addEventListener('mousemove', (e) => {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(Object.values(nodeMeshes), true);
+
+                if (intersects.length > 0) {
+                    let obj = intersects[0].object;
+                    while (obj.parent && !obj.userData.id) obj = obj.parent;
+
+                    if (obj.userData && obj.userData.id) {
+                        hoveredNode = obj;
+                        document.body.style.cursor = 'pointer';
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = (e.clientX + 14) + 'px';
+                        tooltip.style.top = (e.clientY + 14) + 'px';
+                        tooltip.innerHTML = `<strong>${obj.userData.name}</strong><br><span style="color:#00f0ff;">${obj.userData.tier} • ${obj.userData.model}</span>`;
+                        return;
+                    }
+                }
+                hoveredNode = null;
+                document.body.style.cursor = 'default';
+                tooltip.style.display = 'none';
+            });
+
+            window.addEventListener('click', (e) => {
+                // Avoid clicks on HUD panels
+                if (e.target.closest('.glass-panel')) return;
+
+                if (hoveredNode && hoveredNode.userData) {
+                    selectNode(hoveredNode.userData);
+                }
+            });
+
+            // HUD Action Buttons
+            document.getElementById('btn-simulate').addEventListener('click', simulateSwarmTask);
+            document.getElementById('btn-camera-reset').addEventListener('click', () => {
+                animateCameraTo(new THREE.Vector3(28, 22, 42), new THREE.Vector3(0, 0, 0));
+            });
+            document.getElementById('btn-focus-core').addEventListener('click', () => {
+                selectNode(SWARM_NODES[0]);
+            });
+            const btnParticles = document.getElementById('btn-particles-toggle');
+            btnParticles.addEventListener('click', () => {
+                particleFlowEnabled = !particleFlowEnabled;
+                btnParticles.innerHTML = particleFlowEnabled ? '<span>⚡</span> Flow: Active' : '<span>⏸</span> Flow: Paused';
+                activePulses.forEach(p => p.mesh.visible = particleFlowEnabled);
+            });
+        }
+
+        function simulateSwarmTask() {
+            const btn = document.getElementById('btn-simulate');
+            btn.innerHTML = '<span>⏳</span> Orchestrating...';
+            btn.style.opacity = '0.6';
+
+            // Pulse colors rapidly
+            activePulses.forEach(p => {
+                p.speed *= 2.5;
+                p.mesh.material.color.setHex(0x05ffa1);
+            });
+
+            // Flash workers
+            ['worker-research', 'worker-tdd', 'worker-cad'].forEach((id, idx) => {
+                setTimeout(() => {
+                    const m = nodeMeshes[id];
+                    if (m) {
+                        m.children[0].material.emissiveIntensity = 1.6;
+                        setTimeout(() => m.children[0].material.emissiveIntensity = 0.45, 600);
+                    }
+                }, 400 * idx);
+            });
+
+            setTimeout(() => {
+                btn.innerHTML = '<span>✓</span> Swarm Verified';
+                activePulses.forEach(p => {
+                    p.speed /= 2.5;
+                    p.mesh.material.color.setHex(0x00f0ff);
+                });
+                setTimeout(() => {
+                    btn.innerHTML = '<span>🚀</span> Dispatch Swarm Task';
+                    btn.style.opacity = '1';
+                }, 2000);
+            }, 2500);
+        }
+
+        // Animation Loop
+        let frameCount = 0;
+        let lastTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Rotate shell wireframes
+            Object.values(nodeMeshes).forEach(group => {
+                if (group.shellMesh) {
+                    group.shellMesh.rotation.y += 0.008;
+                    group.shellMesh.rotation.x += 0.004;
+                }
+                if (group.ringMesh) {
+                    group.ringMesh.rotation.z += 0.012;
+                }
+            });
+
+            // Animate Data Particles along splines
+            if (particleFlowEnabled) {
+                activePulses.forEach(pulse => {
+                    pulse.t += pulse.speed;
+                    if (pulse.t > 1) pulse.t = 0;
+                    const pos = pulse.curve.getPoint(pulse.t);
+                    pulse.mesh.position.copy(pos);
+                });
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+
+            // FPS Counter
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                document.getElementById('stat-fps').textContent = frameCount;
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
