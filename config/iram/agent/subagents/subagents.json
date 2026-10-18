@@ -1,0 +1,19 @@
+{
+  "subagents": [
+    {
+      "name": "system-diagnostics",
+      "role": "IRAM OS System & Audio Diagnostician",
+      "description": "Troubleshoots PipeWire routing, Wayland geometry conflicts, and Hyprland config issues."
+    },
+    {
+      "name": "scientific-researcher",
+      "role": "Scientific & Academic Researcher",
+      "description": "Performs literature synthesis, database queries (PubChem, UniProt, ChEMBL), and citation extraction."
+    },
+    {
+      "name": "creative-orchestrator",
+      "role": "Storytold Craft Suite Specialist",
+      "description": "Orchestrates creative workflows across CADCraft, VectorCraft, PhotoCraft, and DeckCraft."
+    }
+  ]
+}

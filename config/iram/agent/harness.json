@@ -1,0 +1,26 @@
+{
+  "name": "iram-agent-harness",
+  "version": "1.0.0",
+  "components": {
+    "system_prompt": "system_prompt.md",
+    "guardrails": "guardrails.md",
+    "tool_guidance": "tool_guidance.md",
+    "memory_dir": "memory",
+    "skills_dir": "~/.config/iram/skills",
+    "scripts_dir": "~/.local/bin",
+    "subagents_config": "subagents/subagents.json",
+    "plugins_dir": "plugins"
+  },
+  "recursion": {
+    "task_level": {
+      "enabled": true,
+      "method": "propose-probe-compose",
+      "max_probes": 2
+    },
+    "harnessing_level": {
+      "enabled": true,
+      "persist_reflections": true,
+      "reflections_file": "memory/reflections.jsonl"
+    }
+  }
+}

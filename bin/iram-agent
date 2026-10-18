@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Iram Agentic OS Assistant (Super + A)
+# Powered by Harness² Modular Architecture & K-Dense Skills
 # Prompt-driven autonomous actions and window management
 # ==============================================================================
 
@@ -19,7 +20,7 @@ fi
 
 # Send desktop notification
 if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a "Iram Agent" "🤖 Processing Request..." "$PROMPT" -t 3000
+    notify-send -a "Iram Agent" "🤖 Processing Request..." "$PROMPT" -t 2500
 fi
 
 python3 - "$PROMPT" << 'EOF'
@@ -28,20 +29,51 @@ import json
 import urllib.request
 import subprocess
 import os
+import datetime
 
 prompt = sys.argv[1]
 print(f"🤖 Iram Agent executing: {prompt}")
 
-sys_prompt = """You are the Iram Agentic OS assistant running on IRAM OS Hyprland.
-Output concise shell commands or actions to execute the user request.
-Common actions:
-- hyprctl dispatch workspace <N>
-- hyprctl dispatch focuswindow <class>
-- iram theme set "<theme>"
-- pactl set-sink-volume @DEFAULT_AUDIO_SINK@ <level>%
-- notify-send "title" "message"
+# ------------------------------------------------------------------------------
+# 1. Harness² Component Loader
+# ------------------------------------------------------------------------------
+AGENT_DIR = os.path.expanduser("~/.config/iram/agent")
+SYSTEM_PROMPT_FILE = os.path.join(AGENT_DIR, "system_prompt.md")
+GUARDRAILS_FILE = os.path.join(AGENT_DIR, "guardrails.md")
+TOOL_GUIDANCE_FILE = os.path.join(AGENT_DIR, "tool_guidance.md")
+MEMORY_DIR = os.path.join(AGENT_DIR, "memory")
+REFLECTIONS_FILE = os.path.join(MEMORY_DIR, "reflections.jsonl")
+
+os.makedirs(MEMORY_DIR, exist_ok=True)
+
+def read_file_safe(path: str, default: str = "") -> str:
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return default
+
+sys_prompt_content = read_file_safe(SYSTEM_PROMPT_FILE, "You are the Iram Agentic OS assistant running on IRAM OS Hyprland.")
+guardrails_content = read_file_safe(GUARDRAILS_FILE, "")
+tool_guidance_content = read_file_safe(TOOL_GUIDANCE_FILE, "")
+
+# Build composite prompt from Harness components
+composite_system_prompt = f"""{sys_prompt_content}
+
+## Guardrails
+{guardrails_content}
+
+## Tool Guidance
+{tool_guidance_content}
+
+When replying, provide an explanation and list executable bash commands on separate lines starting with hyprctl, iram, wpctl, pactl, craft-, or notify-send.
 """
 
+# ------------------------------------------------------------------------------
+# 2. Model Dispatch (Gemini API / Local Ollama fallback)
+# ------------------------------------------------------------------------------
 def get_api_key():
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if key:
@@ -77,25 +109,25 @@ if api_key:
         gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
         gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
         payload = {
-            "contents": [{"parts": [{"text": f"{sys_prompt}\nUser: {prompt}\nResponse:"}]}]
+            "contents": [{"parts": [{"text": f"{composite_system_prompt}\nUser Request: {prompt}\nResponse:"}]}]
         }
         req = urllib.request.Request(
             gemini_url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             answer = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Gemini API request note: {e}")
 
 if not answer:
     url = "http://localhost:11434/api/generate"
     ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
     data = json.dumps({
         "model": ollama_model,
-        "prompt": f"{sys_prompt}\nUser: {prompt}\nResponse:",
+        "prompt": f"{composite_system_prompt}\nUser Request: {prompt}\nResponse:",
         "stream": False
     }).encode("utf-8")
 
@@ -106,16 +138,55 @@ if not answer:
             answer = res.get("response", "").strip()
     except Exception as e:
         print(f"Error contacting agent model: {e}")
+        subprocess.run(["notify-send", "-a", "Iram Agent", "⚠️ Model Unavailable", "Please ensure GEMINI_API_KEY or Ollama is running."])
         sys.exit(1)
 
 print("► Agent Response:\n", answer)
 
-# Execute supported system dispatches
-for line in answer.split("\n"):
-    clean_line = line.strip().strip("`").strip()
-    if any(clean_line.startswith(prefix) for prefix in ["hyprctl", "iram", "notify-send", "pactl"]):
+# ------------------------------------------------------------------------------
+# 3. Guardrails & Propose-Probe-Compose Execution
+# ------------------------------------------------------------------------------
+executed_commands = []
+failed_commands = []
+
+ALLOWED_PREFIXES = ["hyprctl", "iram", "notify-send", "pactl", "wpctl", "craft-"]
+FORBIDDEN_PATTERNS = ["rm -rf", "mkfs", "dd if=", ":(){ :|:& };:", "chmod -R 777 /"]
+
+for raw_line in answer.split("\n"):
+    clean_line = raw_line.strip().strip("`").strip()
+    if not clean_line:
+        continue
+
+    # Invariant Guardrail Check
+    if any(fp in clean_line for fp in FORBIDDEN_PATTERNS):
+        print(f"⛔ Blocked by Guardrail: {clean_line}")
+        continue
+
+    if any(clean_line.startswith(prefix) for prefix in ALLOWED_PREFIXES):
         print(f"⚡ Dispatching: {clean_line}")
-        subprocess.run(clean_line, shell=True)
-        
-subprocess.run(["notify-send", "-a", "Iram Agent", "✓ Action Completed", answer[:120]])
+        res = subprocess.run(clean_line, shell=True, text=True, capture_output=True)
+        if res.returncode == 0:
+            executed_commands.append(clean_line)
+        else:
+            print(f"⚠️ Command error ({res.returncode}): {res.stderr.strip()}")
+            failed_commands.append({"cmd": clean_line, "code": res.returncode, "err": res.stderr.strip()})
+
+# ------------------------------------------------------------------------------
+# 4. Harnessing-Level Reflection Persistence
+# ------------------------------------------------------------------------------
+if failed_commands:
+    reflection_record = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "prompt": prompt,
+        "failed": failed_commands,
+        "executed": executed_commands
+    }
+    try:
+        with open(REFLECTIONS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(reflection_record) + "\n")
+    except Exception:
+        pass
+
+msg = f"Executed {len(executed_commands)} action(s)." if executed_commands else "Processed query."
+subprocess.run(["notify-send", "-a", "Iram Agent", "✓ Action Completed", f"{msg}\n{prompt[:60]}"])
 EOF
