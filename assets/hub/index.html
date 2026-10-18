@@ -213,6 +213,120 @@
             color: #05ffa1;
             font-weight: 700;
         }
+
+        /* Sovereign Multi-Turn Chat Drawer */
+        #chat-modal {
+            display: none;
+            position: absolute;
+            bottom: 96px;
+            left: 16px;
+            right: 16px;
+            height: 430px;
+            flex-direction: column;
+            z-index: 40;
+            border-color: #00f0ff;
+            box-shadow: 0 16px 64px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 240, 255, 0.2);
+            overflow: hidden;
+            transition: all 0.25s ease;
+        }
+        #chat-modal.expanded {
+            top: 76px;
+            bottom: 96px;
+            height: auto;
+        }
+        .chat-modal-header {
+            padding: 10px 18px;
+            background: rgba(13, 16, 26, 0.95);
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            scroll-behavior: smooth;
+        }
+        .chat-bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            word-break: break-word;
+            position: relative;
+        }
+        .bubble-user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(112, 0, 255, 0.25));
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            color: #ffffff;
+        }
+        .bubble-agent {
+            align-self: flex-start;
+            background: rgba(18, 22, 36, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #cdd6f4;
+        }
+        .bubble-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+            font-size: 10px;
+        }
+        .bubble-code {
+            background: #080a10;
+            border: 1px solid #28314e;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin: 6px 0;
+            font-family: monospace;
+            overflow-x: auto;
+            position: relative;
+            color: #00f0ff;
+        }
+        .copy-code-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #181d2e;
+            border: 1px solid #28314e;
+            color: #00f0ff;
+            padding: 2px 8px;
+            font-size: 9px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .quick-chips {
+            display: flex;
+            gap: 8px;
+            padding: 0 4px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            margin-bottom: 6px;
+        }
+        .quick-chip {
+            background: rgba(24, 29, 46, 0.75);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            border-radius: 12px;
+            padding: 4px 10px;
+            font-size: 10px;
+            color: #949cbb;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .quick-chip:hover {
+            background: rgba(0, 240, 255, 0.15);
+            border-color: #00f0ff;
+            color: #ffffff;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -387,20 +501,49 @@
             </div>
     </div>
 
-    <!-- Sovereign Agent Command & Chat Bar -->
-    <div id="chat-response-card" class="glass-panel" style="display:none; position:absolute; bottom:98px; left:16px; right:16px; padding:14px 20px; z-index:30; border-color:#00f0ff;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span id="chat-response-tier" class="card-tag tag-cyan" style="font-size:10px;">Tier 3 (Local Cache)</span>
-            <span id="chat-close-btn" style="cursor:pointer; color:#7982a9; font-size:12px;">✕</span>
+    <!-- Sovereign Multi-Turn Agent Chat Drawer -->
+    <div id="chat-modal" class="glass-panel">
+        <div class="chat-modal-header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:16px;">🤖</span>
+                <span style="font-weight:800; font-size:13px; color:#ffffff;">IRAM Sovereign Agent Copilot</span>
+                <span id="chat-tier-badge" class="card-tag tag-cyan" style="font-size:9px;">SmartRouter</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <select id="chat-model-select" style="width:auto; padding:3px 8px; font-size:10px; background:#181d2e; border:1px solid #28314e; border-radius:4px; color:#00f0ff;">
+                    <option value="auto">⚡ SmartRouter (Auto)</option>
+                </select>
+                <button id="btn-clear-chat" style="width:auto; padding:3px 8px; font-size:10px; background:transparent; border:1px solid #28314e;" title="Clear Chat History">🗑️</button>
+                <button id="btn-expand-chat" style="width:auto; padding:3px 8px; font-size:10px; background:transparent; border:1px solid #28314e;" title="Toggle Fullscreen">↕</button>
+                <button id="btn-close-chat" style="width:auto; padding:3px 8px; font-size:10px; background:transparent; border:1px solid #28314e;" title="Close Chat">✕</button>
+            </div>
         </div>
-        <div id="chat-response-text" style="font-size:12px; color:#ffffff; line-height:1.5;"></div>
+        <div id="chat-messages" class="chat-messages">
+            <div class="chat-bubble bubble-agent">
+                <div class="bubble-meta">
+                    <span style="color:#00f0ff; font-weight:800;">🤖 IRAM Sovereign Copilot</span>
+                    <span style="color:#7982a9;">System Ready</span>
+                </div>
+                Welcome to your Sovereign Desktop Copilot! Control themes, launch 3D tools, monitor Wayland telemetry, or query local Ollama LLMs with 0ms SmartRouter caching.
+            </div>
+        </div>
+        <div class="quick-chips" id="quick-chips-container" style="padding: 6px 16px; border-top: 1px solid rgba(255,255,255,0.05);">
+            <div class="quick-chip" data-prompt="system status">📊 System Health</div>
+            <div class="quick-chip" data-prompt="switch theme to cyberpunk neon">🎨 Cyberpunk Neon</div>
+            <div class="quick-chip" data-prompt="switch theme to tokyo storm">🌸 Tokyo Storm</div>
+            <div class="quick-chip" data-prompt="launch 3d cad">🪐 3D Mesh Inspector</div>
+            <div class="quick-chip" data-prompt="inspect mcp">🛡️ MCP 21 Tools</div>
+            <div class="quick-chip" data-prompt="speak Welcome to IRAM OS Sovereign Hub">🔊 Voice Demo</div>
+            <div class="quick-chip" data-prompt="Give 3 tips for Wayland performance">⚡ Wayland Tips</div>
+        </div>
     </div>
 
+    <!-- Bottom Command & Chat Bar -->
     <div class="chat-bar glass-panel" style="position:absolute; bottom:48px; left:16px; right:16px; padding:8px 14px; display:flex; align-items:center; gap:10px; z-index:20;">
-        <span style="font-size:16px; color:#00f0ff;">⚡</span>
-        <input type="text" id="chat-input" placeholder="Ask IRAM Agent (e.g. 'system status', 'switch theme to cyberpunk neon', 'launch 3d cad', 'speak greeting')..." style="flex-grow:1; background:transparent; border:none; outline:none; color:#ffffff; font-size:12px;" />
-        <button id="btn-chat-send" style="width:auto; padding:6px 14px; background:linear-gradient(135deg, #00f0ff, #7000ff); color:#080a10; border:none; border-radius:6px; font-weight:800; cursor:pointer;">Ask</button>
-        <button id="btn-chat-speak" style="width:auto; padding:6px 12px; background:#181d2e; border:1px solid #28314e; border-radius:6px; cursor:pointer;">🔊 Voice</button>
+        <span id="btn-toggle-drawer" style="font-size:18px; color:#00f0ff; cursor:pointer;" title="Toggle Chat Panel">⚡</span>
+        <input type="text" id="chat-input" placeholder="Ask IRAM Agent (e.g. 'system status', 'switch theme to tokyo storm', 'launch 3d cad')..." style="flex-grow:1; background:transparent; border:none; outline:none; color:#ffffff; font-size:12px;" />
+        <button id="btn-chat-send" style="width:auto; padding:6px 16px; background:linear-gradient(135deg, #00f0ff, #7000ff); color:#080a10; border:none; border-radius:6px; font-weight:800; cursor:pointer;">Ask</button>
+        <button id="btn-chat-speak" style="width:auto; padding:6px 12px; background:#181d2e; border:1px solid #28314e; border-radius:6px; cursor:pointer;" title="Speak response through PipeWire">🔊 Voice</button>
     </div>
 
     <!-- Footer -->
@@ -552,46 +695,227 @@
                 };
             }
 
-            // Sovereign Agent Command & Chat Handlers
+            // Sovereign Multi-Turn Agent Chat Drawer Handlers
+            const chatModal = document.getElementById('chat-modal');
+            const chatMessages = document.getElementById('chat-messages');
             const chatInput = document.getElementById('chat-input');
-            const chatCard = document.getElementById('chat-response-card');
-            const chatText = document.getElementById('chat-response-text');
-            const chatTier = document.getElementById('chat-response-tier');
-            const chatClose = document.getElementById('chat-close-btn');
+            const chatTierBadge = document.getElementById('chat-tier-badge');
+            const chatModelSelect = document.getElementById('chat-model-select');
+            const btnToggleDrawer = document.getElementById('btn-toggle-drawer');
+            const btnExpandChat = document.getElementById('btn-expand-chat');
+            const btnCloseChat = document.getElementById('btn-close-chat');
+            const btnClearChat = document.getElementById('btn-clear-chat');
+            const btnChatSend = document.getElementById('btn-chat-send');
+            const btnChatSpeak = document.getElementById('btn-chat-speak');
 
-            if (chatClose) {
-                chatClose.onclick = () => { chatCard.style.display = 'none'; };
+            let promptHistory = [];
+            let historyIndex = -1;
+
+            // Load available models from Sovereign Hub Backend
+            function loadModels() {
+                fetch('/api/models')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.ok && Array.isArray(data.models)) {
+                            chatModelSelect.innerHTML = '';
+                            data.models.forEach(m => {
+                                const opt = document.createElement('option');
+                                opt.value = m.id;
+                                opt.innerText = m.name;
+                                chatModelSelect.appendChild(opt);
+                            });
+                        }
+                    })
+                    .catch(() => {});
+            }
+            loadModels();
+
+            // Toggle / Expand / Close Controls
+            if (btnToggleDrawer) {
+                btnToggleDrawer.onclick = () => {
+                    const isOpen = chatModal.style.display === 'flex';
+                    chatModal.style.display = isOpen ? 'none' : 'flex';
+                    if (!isOpen) chatInput.focus();
+                };
+            }
+            if (btnCloseChat) {
+                btnCloseChat.onclick = () => { chatModal.style.display = 'none'; };
+            }
+            if (btnExpandChat) {
+                btnExpandChat.onclick = () => {
+                    chatModal.classList.toggle('expanded');
+                };
+            }
+            if (btnClearChat) {
+                btnClearChat.onclick = () => {
+                    chatMessages.innerHTML = `
+                        <div class="chat-bubble bubble-agent">
+                            <div class="bubble-meta">
+                                <span style="color:#00f0ff; font-weight:800;">🤖 IRAM Sovereign Copilot</span>
+                                <span style="color:#7982a9;">Session Cleared</span>
+                            </div>
+                            Chat history cleared. How can I assist you with IRAM OS today?
+                        </div>
+                    `;
+                    showToast("Chat history reset");
+                };
+            }
+
+            // Quick Chips Auto-Execution
+            document.querySelectorAll('.quick-chip').forEach(chip => {
+                chip.onclick = () => {
+                    const prompt = chip.getAttribute('data-prompt');
+                    if (prompt) {
+                        chatInput.value = prompt;
+                        sendAgentPrompt(false);
+                    }
+                };
+            });
+
+            // Safe Markdown & Code Formatter
+            function formatMarkdown(text) {
+                if (!text) return "";
+                // Escape raw HTML tags
+                let safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+                // Replace code blocks
+                safe = safe.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+                    const blockId = 'code-' + Math.random().toString(36).substr(2, 9);
+                    return `
+                        <div class="bubble-code">
+                            <button class="copy-code-btn" onclick="copyCode('${blockId}')">📋 Copy</button>
+                            <pre id="${blockId}"><code>${code.trim()}</code></pre>
+                        </div>
+                    `;
+                });
+
+                // Inline code
+                safe = safe.replace(/`([^`]+)`/g, '<code style="background:#080a10; padding:2px 6px; border-radius:4px; color:#00f0ff;">$1</code>');
+                // Bold
+                safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#ffffff;">$1</strong>');
+                // Line breaks
+                safe = safe.replace(/\n/g, '<br/>');
+                return safe;
+            }
+
+            window.copyCode = function(id) {
+                const el = document.getElementById(id);
+                if (el) {
+                    navigator.clipboard.writeText(el.innerText).then(() => {
+                        showToast("✓ Code copied to clipboard");
+                    });
+                }
+            };
+
+            function appendBubble(role, content, meta = {}) {
+                chatModal.style.display = 'flex';
+                const bubble = document.createElement('div');
+                bubble.className = `chat-bubble ${role === 'user' ? 'bubble-user' : 'bubble-agent'}`;
+
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'bubble-meta';
+
+                const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                if (role === 'user') {
+                    metaDiv.innerHTML = `<span style="color:#ffffff; font-weight:800;">󱙺 User</span><span style="color:#a6adc8;">${now}</span>`;
+                    bubble.appendChild(metaDiv);
+                    const bodyDiv = document.createElement('div');
+                    bodyDiv.innerText = content;
+                    bubble.appendChild(bodyDiv);
+                } else {
+                    const modelTag = meta.cached ? '⚡ 0ms Cache ($0)' : (meta.model || 'IRAM Agent');
+                    metaDiv.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="color:#00f0ff; font-weight:800;">🤖 ${modelTag}</span>
+                            <span class="card-tag tag-cyan" style="font-size:8px;">${meta.tier || 'Routed'}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="cursor:pointer; color:#00f0ff; font-size:11px;" title="Listen via PipeWire" onclick="callApi('/api/voice?text=' + encodeURIComponent('${encodeURIComponent(content.slice(0, 150))}'), '🔊 Speaking response')">🔊</span>
+                            <span style="color:#7982a9;">${now}</span>
+                        </div>
+                    `;
+                    bubble.appendChild(metaDiv);
+                    const bodyDiv = document.createElement('div');
+                    bodyDiv.innerHTML = formatMarkdown(content);
+                    bubble.appendChild(bodyDiv);
+                }
+
+                chatMessages.appendChild(bubble);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
             function sendAgentPrompt(voiceSpeak = false) {
                 const prompt = chatInput.value.trim();
                 if (!prompt) return;
-                showToast("🤖 Agent evaluating intent...");
-                fetch(`/api/chat?prompt=${encodeURIComponent(prompt)}&voice=${voiceSpeak ? '1' : '0'}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.ok) {
-                            chatCard.style.display = 'block';
-                            chatText.innerText = data.response;
-                            chatTier.innerText = `${data.tier || 'Tier 2'} • ${data.cached ? '⚡ 0ms Cache Hit ($0)' : 'Model Routed'}`;
-                            chatInput.value = '';
-                            showToast(data.cached ? "⚡ SmartRouter Cache Hit" : "✓ Intent Executed");
-                        } else {
-                            showToast("⚠ " + (data.error || "Query failed"));
-                        }
+
+                promptHistory.push(prompt);
+                historyIndex = promptHistory.length;
+
+                appendBubble('user', prompt);
+                chatInput.value = '';
+
+                const chosenModel = chatModelSelect ? chatModelSelect.value : 'auto';
+
+                // Pulsing temporary loading bubble
+                const loadingBubble = document.createElement('div');
+                loadingBubble.className = 'chat-bubble bubble-agent';
+                loadingBubble.id = 'temp-loading-bubble';
+                loadingBubble.innerHTML = `<span style="color:#00f0ff;">⚡ Reasoning with ${chosenModel}...</span>`;
+                chatMessages.appendChild(loadingBubble);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        model: chosenModel,
+                        voice: voiceSpeak ? '1' : '0'
                     })
-                    .catch(() => showToast("⚠ Hub gateway unreachable"));
+                })
+                .then(r => r.json())
+                .then(data => {
+                    const el = document.getElementById('temp-loading-bubble');
+                    if (el) el.remove();
+
+                    if (data.ok) {
+                        appendBubble('agent', data.response, data);
+                        if (chatTierBadge) {
+                            chatTierBadge.innerText = data.cached ? "⚡ SmartRouter (0ms Cache)" : (data.tier || "Model Executed");
+                        }
+                        showToast(data.cached ? "⚡ SmartRouter 0ms Cache Hit" : "✓ Intent Resolved");
+                    } else {
+                        appendBubble('agent', "⚠️ " + (data.error || "Execution failed"), { model: "Error" });
+                    }
+                })
+                .catch(err => {
+                    const el = document.getElementById('temp-loading-bubble');
+                    if (el) el.remove();
+                    appendBubble('agent', "⚠️ Hub gateway unreachable. Ensure iram-hub.service is running.", { model: "Offline" });
+                });
             }
 
-            const btnChatSend = document.getElementById('btn-chat-send');
             if (btnChatSend) btnChatSend.onclick = () => sendAgentPrompt(false);
-
-            const btnChatSpeak = document.getElementById('btn-chat-speak');
             if (btnChatSpeak) btnChatSpeak.onclick = () => sendAgentPrompt(true);
 
             if (chatInput) {
                 chatInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') sendAgentPrompt(false);
+                    if (e.key === 'Enter') {
+                        sendAgentPrompt(false);
+                    } else if (e.key === 'ArrowUp') {
+                        if (historyIndex > 0) {
+                            historyIndex--;
+                            chatInput.value = promptHistory[historyIndex] || '';
+                        }
+                    } else if (e.key === 'ArrowDown') {
+                        if (historyIndex < promptHistory.length - 1) {
+                            historyIndex++;
+                            chatInput.value = promptHistory[historyIndex] || '';
+                        } else {
+                            historyIndex = promptHistory.length;
+                            chatInput.value = '';
+                        }
+                    }
                 });
             }
         }

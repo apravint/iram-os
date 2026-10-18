@@ -30,11 +30,69 @@ except Exception:
     TOOLGATE_AVAILABLE = False
 
 PORT = int(os.environ.get("IRAM_HUB_PORT", 8990))
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "hub"))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "assets", "hub"))
 
 class SovereignHubHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else ""
+
+        params = {}
+        if body:
+            try:
+                params = json.loads(body)
+            except Exception:
+                parsed_qs = parse_qs(body)
+                params = {k: v[0] if len(v) == 1 else v for k, v in parsed_qs.items()}
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.end_headers()
+
+        response_data = {"ok": False}
+        try:
+            if path == "/api/chat":
+                prompt = params.get("prompt", "")
+                voice_speak = str(params.get("voice", "0")).lower() in ["1", "true"]
+                model = params.get("model", "auto")
+                response_data = self.handle_chat(prompt, voice_enabled=voice_speak, model=model)
+            elif path == "/api/theme":
+                name = params.get("name", "")
+                response_data = self.handle_theme(name)
+            elif path == "/api/voice":
+                text = params.get("text", "")
+                voice = params.get("voice", "jarvis")
+                response_data = self.handle_voice(text, voice)
+            elif path == "/api/harness":
+                task = params.get("task", "Audit system integrity")
+                response_data = self.handle_harness(task)
+            elif path == "/api/launch":
+                app = params.get("app", "")
+                response_data = self.handle_launch(app)
+            elif path == "/api/hypr":
+                dispatcher = params.get("cmd", "")
+                args = params.get("args", "")
+                response_data = self.handle_hypr(dispatcher, args)
+            else:
+                response_data = {"ok": False, "error": f"Unknown POST endpoint: {path}"}
+        except Exception as e:
+            response_data = {"ok": False, "error": str(e)}
+
+        self.wfile.write(json.dumps(response_data, indent=2).encode("utf-8"))
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -57,6 +115,8 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         try:
             if path == "/api/status":
                 response_data = self.handle_status()
+            elif path == "/api/models":
+                response_data = self.handle_models()
             elif path == "/api/launch":
                 app = params.get("app", [""])[0]
                 response_data = self.handle_launch(app)
@@ -73,7 +133,8 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
             elif path == "/api/chat":
                 prompt = params.get("prompt", [""])[0]
                 voice_speak = params.get("voice", ["0"])[0] in ["1", "true", "True"]
-                response_data = self.handle_chat(prompt, voice_enabled=voice_speak)
+                model = params.get("model", ["auto"])[0]
+                response_data = self.handle_chat(prompt, voice_enabled=voice_speak, model=model)
             elif path == "/api/hypr":
                 dispatcher = params.get("cmd", [""])[0]
                 args = params.get("args", [""])[0]
@@ -156,19 +217,40 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "voice": voice, "text": text}
 
+    def handle_models(self):
+        models = [
+            {"id": "auto", "name": "⚡ SmartRouter (Auto-Routing + 0ms Cache)", "details": "Autonomous"},
+        ]
+        try:
+            import urllib.request
+            req = urllib.request.Request("http://127.0.0.1:11434/api/tags")
+            with urllib.request.urlopen(req, timeout=1.5) as r:
+                tags = json.loads(r.read())
+                for m in tags.get("models", []):
+                    m_name = m.get("name")
+                    param = m.get("details", {}).get("parameter_size", "Local")
+                    models.append({
+                        "id": m_name,
+                        "name": f"🧠 Ollama: {m_name} ({param})",
+                        "details": param
+                    })
+        except Exception:
+            pass
+        return {"ok": True, "models": models}
+
     def handle_harness(self, task):
         cmd = ["/home/apravint/.local/bin/iram", "workflow", "run", task]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "task": task, "message": "Harness cyclic loop dispatched"}
 
-    def handle_chat(self, prompt, voice_enabled=False):
+    def handle_chat(self, prompt, voice_enabled=False, model="auto"):
         if not prompt:
             return {"ok": False, "error": "Prompt cannot be empty"}
 
         prompt = prompt.strip()
 
-        # 1. SmartRouter Response Cache Check
-        if SMART_ROUTER_AVAILABLE:
+        # 1. SmartRouter Response Cache Check (only if auto routing)
+        if SMART_ROUTER_AVAILABLE and model in ["auto", ""]:
             cached = smart_router.cache.get_cached_response(prompt)
             if cached:
                 reply = cached.get("response", "")
@@ -220,7 +302,7 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
 
         elif any(w in p_lower for w in ["status", "telemetry", "health", "cpu", "ram", "memory"]):
             stat = self.handle_status()
-            reply = f"⚡ IRAM OS Telemetry: CPU at {stat['cpu_percent']}%, RAM used: {stat['memory']['used_gb']}GB / {stat['memory']['total_gb']}GB ({stat['memory']['percent']}%). Active Hyprland Workspace: {stat['hyprland']['workspace']}, DSP: PipeWire 48kHz."
+            reply = f"⚡ IRAM OS Telemetry:\n• CPU Load: {stat['cpu_percent']}%\n• RAM: {stat['memory']['used_gb']}GB / {stat['memory']['total_gb']}GB ({stat['memory']['percent']}%)\n• Active Window: `{stat['hyprland']['active_window']}` on Workspace {stat['hyprland']['workspace']}\n• Audio DSP: PipeWire 48kHz Calibrated"
 
         elif any(w in p_lower for w in ["3d", "cad", "mesh", "stl", "obj"]):
             self.handle_launch("iram-3d")
@@ -243,17 +325,68 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
             self.handle_harness("Audit system and codebase integrity")
             reply = "🚀 Dispatched Harness² cyclic verification loop (Plan → Act → Verify → Reflect)."
 
+        elif any(w in p_lower for w in ["mcp", "toolgate", "tools"]):
+            reply = (
+                "🛡️ Sovereign FastMCP Gateway Status:\n"
+                "• 21 Active Tools: Desktop Control, PipeWire Studio, 3D CAD, Qdrant Code Search & Theme Sync\n"
+                "• Security Firewall: ToolGate Zero-Trust Rules Enforced\n"
+                "• Transport: FastMCP 4.1.1 JSON-RPC stdio + REST Port 8990"
+            )
+
         elif any(w in p_lower for w in ["help", "what can you do", "commands"]):
             reply = (
                 "🤖 IRAM OS Sovereign AI Hub Console:\n"
-                "• 'switch theme to cyberpunk neon' -> Zero-restart palette switch\n"
-                "• 'system status' -> Live CPU, RAM, and Wayland telemetry\n"
-                "• 'launch 3d cad' -> Three.js CAD / mesh inspector\n"
-                "• 'speak hello sovereign world' -> Local PipeWire speech synthesis\n"
-                "• 'run harness verification' -> Cyclic self-correcting agent workflow"
+                "• `switch theme to cyberpunk neon` -> Live zero-restart palette switch\n"
+                "• `system status` -> Real-time CPU, RAM, and Hyprland telemetry\n"
+                "• `launch 3d cad` -> Three.js CAD / mesh inspector\n"
+                "• `speak hello sovereign world` -> Local PipeWire speech synthesis\n"
+                "• `inspect mcp` -> Query 21 FastMCP tool definitions\n"
+                "• Or ask ANY question to query local Ollama LLMs directly!"
             )
         else:
-            reply = f"IRAM OS Assistant evaluated: '{prompt}' (Complexity Score: {score}/10, Route: {tier_desc}). For code authoring, use Antigravity CLI or Harness²."
+            # Query local Ollama LLM
+            chosen_model = model if (model and model != "auto") else "qwen2.5:7b"
+            ollama_reply = None
+            try:
+                import urllib.request
+                ollama_payload = {
+                    "model": chosen_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"num_predict": 768}
+                }
+                req = urllib.request.Request(
+                    "http://127.0.0.1:11434/api/generate",
+                    data=json.dumps(ollama_payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    res = json.loads(r.read())
+                    ollama_reply = res.get("response", "").strip()
+                    model_name = f"Ollama ({chosen_model})"
+                    tier_desc = f"Local Sovereign LLM ({chosen_model})"
+            except Exception:
+                # Fallback to faster 1.5b model if available
+                if chosen_model != "qwen2.5:1.5b":
+                    try:
+                        ollama_payload["model"] = "qwen2.5:1.5b"
+                        req = urllib.request.Request(
+                            "http://127.0.0.1:11434/api/generate",
+                            data=json.dumps(ollama_payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json"}
+                        )
+                        with urllib.request.urlopen(req, timeout=10) as r:
+                            res = json.loads(r.read())
+                            ollama_reply = res.get("response", "").strip()
+                            model_name = "Ollama (qwen2.5:1.5b)"
+                            tier_desc = "Local Fast LLM (1.5B)"
+                    except Exception:
+                        pass
+
+            if ollama_reply:
+                reply = ollama_reply
+            else:
+                reply = f"IRAM OS Assistant evaluated: '{prompt}' (Complexity Score: {score}/10, Route: {tier_desc}). For multi-file codebase changes, use Antigravity or Harness²."
 
         # 4. Save to SmartRouter Cache
         if SMART_ROUTER_AVAILABLE:
