@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS 3D Studio & CAD Mesh Viewer (Powered by Three.js)
+# View STL, OBJ, glTF or explore parametric 3D models interactively
+# iram:summary=Three.js 3D Studio & CAD/Mesh Inspector (STL, OBJ, glTF)
+# ==============================================================================
+set -euo pipefail
+
+ASSET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../assets/3d-viewer" && pwd)"
+PORT="8974"
+
+# Start background micro-server if not running
+if ! curl -s --max-time 0.5 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
+    setsid -f python3 -m http.server "$PORT" -d "$ASSET_DIR" >/dev/null 2>&1
+    sleep 0.8
+fi
+
+URL="http://127.0.0.1:${PORT}/"
+
+# If a local file argument was passed, copy/symlink it to the asset directory
+if [ -n "${1:-}" ] && [ -f "$1" ]; then
+    INPUT_FILE="$(readlink -f "$1")"
+    FILE_EXT="${INPUT_FILE##*.}"
+    TARGET_NAME="loaded_model.${FILE_EXT}"
+    cp -f "$INPUT_FILE" "${ASSET_DIR}/${TARGET_NAME}"
+    URL="${URL}?file=${TARGET_NAME}"
+fi
+
+# Launch viewer window
+if flatpak info com.google.Chrome >/dev/null 2>&1; then
+    flatpak run com.google.Chrome --app="$URL" --name="iram-3d-viewer" --class="iram-3d-viewer" >/dev/null 2>&1 &
+elif command -v google-chrome >/dev/null 2>&1; then
+    google-chrome --app="$URL" --name="iram-3d-viewer" --class="iram-3d-viewer" >/dev/null 2>&1 &
+elif command -v firefox >/dev/null 2>&1; then
+    firefox --new-window "$URL" >/dev/null 2>&1 &
+else
+    xdg-open "$URL" >/dev/null 2>&1 &
+fi
