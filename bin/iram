@@ -259,7 +259,6 @@ case "$cmd" in
                     if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
                         /usr/local/bin/omarchy-theme-set "$target"
                     fi
-                    "$LOCAL_BIN/iram-theme-switch" "$target" 2>/dev/null || true
                     "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
                     echo -e "${GREEN}✓ Theme switched to:${NC} ${BOLD}$target${NC}"
                 else
@@ -290,7 +289,6 @@ case "$cmd" in
                 if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
                     /usr/local/bin/omarchy-theme-set "$sub"
                 fi
-                "$LOCAL_BIN/iram-theme-switch" "$sub" 2>/dev/null || true
                 "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
                 echo -e "${GREEN}✓ Theme applied:${NC} ${BOLD}$sub${NC}"
                 ;;
