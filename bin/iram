@@ -225,6 +225,9 @@ case "$cmd" in
 
     # --- VIDEO ENGINE SUBSYSTEM ---
     video)
+        if [ "${1:-}" = "3d" ] || [ "${1:-}" = "--3d" ] || [ "${1:-}" = "intro" ]; then
+            exec "$LOCAL_BIN/iram-video-3d"
+        fi
         if command -v iram-video >/dev/null 2>&1; then
             exec iram-video "$@"
         elif [ -f "$HOME/iram-video/bin/iram-video" ]; then
@@ -248,6 +251,9 @@ case "$cmd" in
     # --- ZERO-RESTART THEME ENGINE ---
     theme|themes)
         sub="${1:-}"
+        if [ "$sub" = "3d" ] || [ "$sub" = "--3d" ]; then
+            exec "$LOCAL_BIN/iram-theme-3d"
+        fi
         shift 2>/dev/null || true
         case "$sub" in
             list)

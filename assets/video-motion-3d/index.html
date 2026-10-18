@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRAM OS 3D Motion Graphics & Intro Studio</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+        body {
+            background:#07090e;
+            color:#cdd6f4;
+            font-family:"JetBrains Mono", monospace;
+            overflow:hidden;
+            width:100vw;
+            height:100vh;
+        }
+        #canvas-container { width:100%; height:100%; position:absolute; top:0; left:0; }
+        .glass-panel {
+            background:rgba(14, 17, 27, 0.85);
+            backdrop-filter:blur(14px);
+            border:1px solid rgba(0, 240, 255, 0.25);
+            border-radius:10px;
+            box-shadow:0 10px 40px rgba(0,0,0,0.6);
+            pointer-events:auto;
+        }
+        .hud-top {
+            position:absolute; top:16px; left:16px; right:16px;
+            display:flex; justify-content:space-between; align-items:center;
+            padding:12px 20px; z-index:10;
+        }
+        .hud-left {
+            position:absolute; top:86px; left:16px; width:330px;
+            padding:18px; z-index:10;
+        }
+        .hud-bottom {
+            position:absolute; bottom:16px; left:16px; right:16px;
+            display:flex; justify-content:space-between; align-items:center;
+            padding:12px 20px; z-index:10;
+        }
+        .form-row { margin-bottom:12px; }
+        label { display:block; font-size:10px; color:#7982a9; text-transform:uppercase; margin-bottom:4px; font-weight:700; }
+        input, select {
+            width:100%; background:#1b2032; border:1px solid #28314e;
+            color:#ffffff; padding:8px 12px; border-radius:6px; font-family:inherit; font-size:12px;
+        }
+        button {
+            background:#181d2e; color:#cdd6f4; border:1px solid #28314e;
+            border-radius:6px; padding:8px 16px; font-size:12px; font-weight:700;
+            cursor:pointer; transition:all 0.2s ease;
+        }
+        button:hover { background:#252d47; border-color:#00f0ff; color:#ffffff; }
+        button.record {
+            background:linear-gradient(135deg, #ff0055, #ff5500);
+            color:#ffffff; border:none; box-shadow:0 4px 18px rgba(255, 0, 85, 0.4);
+        }
+        button.record.active { animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="hud-top glass-panel">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:20px;">🎬</span>
+            <div>
+                <strong style="color:#ffffff;">IRAM 3D Motion Graphics & Film Intro Studio</strong>
+                <div style="font-size:11px; color:#7982a9;">Cinematic WebGL Title Sequences for iram-video & Shorts</div>
+            </div>
+        </div>
+        <div id="record-status" style="font-size:11px; color:#05ffa1; font-weight:700;">● READY TO RENDER</div>
+    </div>
+
+    <!-- Left Controls -->
+    <div class="hud-left glass-panel">
+        <div class="form-row">
+            <label>Title Headline</label>
+            <input type="text" id="input-title" value="IRAM OS v26.10">
+        </div>
+        <div class="form-row">
+            <label>Subhead / Hook</label>
+            <input type="text" id="input-subhead" value="AUTONOMOUS SPATIAL DESKTOP">
+        </div>
+        <div class="form-row">
+            <label>Cinematic Camera Recipe</label>
+            <select id="select-recipe">
+                <option value="hero-sweep">Hero Reveal (Orbital Sweep)</option>
+                <option value="cyber-crash">Cyber Crash-Zoom</option>
+                <option value="macro-drift">Macro Floating Drift</option>
+                <option value="matrix-spiral">Matrix Spiral Flythrough</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Neon Lighting Core</label>
+            <select id="select-color">
+                <option value="cyan">Cyberpunk Cyan (#00f0ff)</option>
+                <option value="crimson">Crimson Neon (#ff0055)</option>
+                <option value="gold">Cinema Gold (#ffb800)</option>
+                <option value="emerald">Matrix Emerald (#05ffa1)</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Aspect Ratio</label>
+            <select id="select-aspect">
+                <option value="16:9">16:9 Widescreen (YouTube / Cinema)</option>
+                <option value="9:16">9:16 Vertical (Shorts / Reels)</option>
+            </select>
+        </div>
+        <button class="record" id="btn-record" style="width:100%; margin-top:8px;">
+            ⏺ Record 3D Video Clip (5s WebM/MP4)
+        </button>
+    </div>
+
+    <!-- Bottom HUD -->
+    <div class="hud-bottom glass-panel">
+        <div style="font-size:11px; color:#7982a9;">
+            Integration: Connects directly with <strong style="color:#00f0ff;">iram-video --recipe</strong> & FFMPEG
+        </div>
+        <div style="font-size:11px; color:#cdd6f4;">
+            Output: <span id="stat-res" style="color:#05ffa1; font-weight:700;">1920x1080 @ 60 FPS</span>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let titleGroup, particlesMesh, gridFloor;
+        let pointLight1, pointLight2;
+        let isRecording = false;
+        let mediaRecorder, recordedChunks = [];
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x07090e, 0.015);
+
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 4, 22);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Lights
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            pointLight1 = new THREE.PointLight(0x00f0ff, 3, 60);
+            pointLight1.position.set(10, 15, 10);
+            scene.add(pointLight1);
+
+            pointLight2 = new THREE.PointLight(0xff0055, 2, 60);
+            pointLight2.position.set(-10, -10, 10);
+            scene.add(pointLight2);
+
+            // 3D Grid & Particle field
+            gridFloor = new THREE.GridHelper(80, 40, 0x00f0ff, 0x1f263d);
+            gridFloor.position.y = -6;
+            scene.add(gridFloor);
+
+            buildParticleField();
+            buildTitle3D();
+
+            window.addEventListener('resize', onResize);
+            document.getElementById('input-title').oninput = updateTitle;
+            document.getElementById('input-subhead').oninput = updateTitle;
+            document.getElementById('select-color').onchange = updateColor;
+            document.getElementById('btn-record').onclick = toggleRecord;
+
+            animate();
+        }
+
+        function buildParticleField() {
+            const count = 800;
+            const geom = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+            for (let i = 0; i < count * 3; i++) pos[i] = (Math.random() - 0.5) * 100;
+            geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            particlesMesh = new THREE.Points(geom, new THREE.PointsMaterial({
+                size: 0.8, color: 0x00f0ff, transparent: true, opacity: 0.6
+            }));
+            scene.add(particlesMesh);
+        }
+
+        function buildTitle3D() {
+            titleGroup = new THREE.Group();
+
+            // Central Monolith Plate
+            const plateGeom = new THREE.BoxGeometry(16, 5.5, 0.6);
+            const plateMat = new THREE.MeshStandardMaterial({
+                color: 0x0d111d,
+                metalness: 0.8,
+                roughness: 0.2,
+                emissive: 0x00f0ff,
+                emissiveIntensity: 0.1
+            });
+            const plate = new THREE.Mesh(plateGeom, plateMat);
+            titleGroup.add(plate);
+
+            // Kinetic Accents
+            const ringGeom = new THREE.TorusGeometry(5, 0.15, 16, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+            const ring = new THREE.Mesh(ringGeom, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            titleGroup.add(ring);
+            titleGroup.ring = ring;
+
+            scene.add(titleGroup);
+        }
+
+        function updateTitle() {
+            // Title reactive changes
+            const text = document.getElementById('input-title').value;
+            // dynamically shifts scale
+            titleGroup.scale.set(1 + text.length * 0.02, 1, 1);
+        }
+
+        function updateColor(e) {
+            const val = e.target.value;
+            const colors = {
+                cyan: 0x00f0ff,
+                crimson: 0xff0055,
+                gold: 0xffb800,
+                emerald: 0x05ffa1
+            };
+            const hex = colors[val] || 0x00f0ff;
+            pointLight1.color.setHex(hex);
+            titleGroup.ring.material.color.setHex(hex);
+            particlesMesh.material.color.setHex(hex);
+        }
+
+        function toggleRecord() {
+            if (isRecording) return;
+            isRecording = true;
+            const btn = document.getElementById('btn-record');
+            const status = document.getElementById('record-status');
+            btn.classList.add('active');
+            btn.textContent = 'Recording 3D Motion (5s)...';
+            status.textContent = '● RECORDING STREAM...';
+            status.style.color = '#ff0055';
+
+            const stream = renderer.domElement.captureStream(60);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `iram_3d_intro_${Date.now()}.webm`;
+                a.click();
+                btn.classList.remove('active');
+                btn.textContent = '⏺ Record 3D Video Clip (5s WebM/MP4)';
+                status.textContent = '● RENDER SAVED TO DOWNLOADS';
+                status.style.color = '#05ffa1';
+                isRecording = false;
+            };
+
+            mediaRecorder.start();
+            setTimeout(() => mediaRecorder.stop(), 5000);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+
+            if (titleGroup) {
+                titleGroup.rotation.y = Math.sin(time) * 0.15;
+                if (titleGroup.ring) titleGroup.ring.rotation.z += 0.02;
+            }
+            if (particlesMesh) particlesMesh.rotation.y += 0.002;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

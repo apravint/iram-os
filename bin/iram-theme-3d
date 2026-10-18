@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS 3D Theme Studio & Palette Shading Simulator (Powered by Three.js)
+# iram:summary=3D Theme Studio & Palette Shading Simulator (All 18 Themes)
+# ==============================================================================
+set -euo pipefail
+
+ASSET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../assets/theme-studio" && pwd)"
+PORT="8976"
+
+if ! curl -s --max-time 0.5 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
+    setsid -f python3 -m http.server "$PORT" -d "$ASSET_DIR" >/dev/null 2>&1
+    sleep 0.8
+fi
+
+URL="http://127.0.0.1:${PORT}/"
+
+if flatpak info com.google.Chrome >/dev/null 2>&1; then
+    flatpak run com.google.Chrome --app="$URL" --name="iram-theme-3d" --class="iram-theme-3d" >/dev/null 2>&1 &
+elif command -v google-chrome >/dev/null 2>&1; then
+    google-chrome --app="$URL" --name="iram-theme-3d" --class="iram-theme-3d" >/dev/null 2>&1 &
+elif command -v firefox >/dev/null 2>&1; then
+    firefox --new-window "$URL" >/dev/null 2>&1 &
+else
+    xdg-open "$URL" >/dev/null 2>&1 &
+fi
