@@ -7,14 +7,35 @@
 A high-performance Linux operating system powered by Hyprland, featuring sharp geometric tiling, zero-restart live theme switching, studio-grade PipeWire audio routing, automated multi-display intelligence, and a deeply integrated autonomous AI toolchain.
 
 [![GitHub Release](https://img.shields.io/github/v/release/apravint/iram-os?color=7aa2f7&logo=github&label=Release)](https://github.com/apravint/iram-os/releases)
-[![Compositor: Hyprland](https://img.shields.io/badge/Compositor-Hyprland%20Wayland-00c853.svg?logo=wayland&logoColor=white)](https://hyprland.org)
-[![Platform: Linux](https://img.shields.io/badge/Platform-Linux%2064--bit-FCC624.svg?logo=linux&logoColor=black)](https://kernel.org)
-[![Audio: PipeWire](https://img.shields.io/badge/Audio-PipeWire%20%2B%20WirePlumber-brightgreen.svg)](https://pipewire.org)
+[![Ubuntu 26.10](https://img.shields.io/badge/Base-Ubuntu%2026.10%20Stonking-E95420.svg?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com)
+[![Compositor: Hyprland](https://img.shields.io/badge/Compositor-Hyprland%200.56-00c853.svg?logo=wayland&logoColor=white)](https://hyprland.org)
+[![Audio: PipeWire](https://img.shields.io/badge/Audio-PipeWire%20Studio-brightgreen.svg)](https://pipewire.org)
+[![3D Engine: Three.js](https://img.shields.io/badge/Spatial-Three.js%20r128-cyan.svg)](https://github.com/mrdoob/three.js/)
+[![Voice: VoiceStudio](https://img.shields.io/badge/Voice-VoiceStudio%20MCP-purple.svg)](https://github.com/debpalash/VoiceStudio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <br/>
 
-<img src="assets/preview.png" alt="IRAM OS Desktop" width="100%" style="border-radius: 6px;" />
+### 📸 Desktop Visual Showcase
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/screenshots/3d_agent_swarm.png" alt="3D Agent Swarm Graph" width="100%" />
+      <p align="center"><b>3D Multi-Agent Swarm Topology (Three.js)</b><br/><code>iram agent graph</code></p>
+    </td>
+    <td width="50%">
+      <img src="assets/screenshots/3d_cad_inspector.png" alt="3D CAD Mesh Inspector" width="100%" />
+      <p align="center"><b>Hardware CAD & Biomolecule Inspector</b><br/><code>iram 3d &lt;model.stl&gt;</code></p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="assets/screenshots/theme_switcher.png" alt="Zero-Restart Theme Switcher" width="100%" />
+      <p align="center"><b>Zero-Restart Theme Switcher (18 Curated Palettes & Live Preview Grid)</b><br/><code>iram theme</code></p>
+    </td>
+  </tr>
+</table>
 
 </div>
 
@@ -97,7 +118,11 @@ IRAM OS is the first desktop operating system to embed a complete, production-gr
 | **Web Documentation Scraper**| `iram-crawl` | Token-efficient web documentation extractor powered by Crawl4AI converting web pages to clean Markdown |
 | **Document Ingestion** | `iram-docling` | Multimodal document parser converting PDFs, Office documents, and presentation slides into structured tables and text |
 | **Code-as-Action Engine** | `iram-code-agent` | AST sandbox executor powered by smolagents synthesizing atomic Python snippets to accomplish desktop workflows in fewer LLM turns |
-| **Stateful Cyclic Loops** | `iram-workflow` | Stateful coding graph powered by LangGraph with Plan → Execute → Verify → Self-Heal stages and SQLite checkpoints |
+| **3D Spatial Computing** | `iram 3d` | Hardware-accelerated Three.js WebGL studio for 3D CAD (.stl/.obj), biomolecules, and mesh inspection |
+| **3D Agent Swarm Graph** | `iram agent graph` | Force-directed 3D multi-agent swarm visualizer with animated IPC photon conduits and live telemetry |
+| **VoiceStudio Speech AI** | `iram voice` | Sovereign zero-shot voice cloning, prompt-to-voice design, video dubbing, and stdio MCP server |
+| **3D Theme Studio** | `iram theme 3d` | Three.js PBR material and lighting simulator for all 18 zero-restart palettes |
+| **Stateful Cyclic Loops** | `iram-workflow` | Stateful coding graph powered by Google Research Harness² and LangGraph with Plan → Act → Verify → Reflect stages |
 | **Telemetry & Observability**| `iram-trace` | Span and trace instrumentation powered by Arize Phoenix feeding latency and error metrics to the Waybar telemetry HUD |
 | **Repository Bundler** | `repomix` | Bundles entire repositories into clean, single-file prompt contexts for LLM analysis |
 | **Shell Copilot** | `?? "<prompt>"` | Real-time CLI copilot converting natural language requests into modern, optimal bash commands |
