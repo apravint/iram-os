@@ -97,7 +97,7 @@
             top: 96px;
             left: 16px;
             right: 16px;
-            bottom: 72px;
+            bottom: 116px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 16px;
@@ -199,14 +199,14 @@
         /* Bottom Status Bar */
         .hub-footer {
             position: absolute;
-            bottom: 16px;
+            bottom: 10px;
             left: 16px;
             right: 16px;
-            padding: 12px 24px;
+            padding: 6px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 11px;
+            font-size: 10px;
             color: #7982a9;
         }
         .footer-stat span {
@@ -385,7 +385,22 @@
                     <span>🔍</span> Inspect MCP Endpoints
                 </button>
             </div>
+    </div>
+
+    <!-- Sovereign Agent Command & Chat Bar -->
+    <div id="chat-response-card" class="glass-panel" style="display:none; position:absolute; bottom:98px; left:16px; right:16px; padding:14px 20px; z-index:30; border-color:#00f0ff;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span id="chat-response-tier" class="card-tag tag-cyan" style="font-size:10px;">Tier 3 (Local Cache)</span>
+            <span id="chat-close-btn" style="cursor:pointer; color:#7982a9; font-size:12px;">✕</span>
         </div>
+        <div id="chat-response-text" style="font-size:12px; color:#ffffff; line-height:1.5;"></div>
+    </div>
+
+    <div class="chat-bar glass-panel" style="position:absolute; bottom:48px; left:16px; right:16px; padding:8px 14px; display:flex; align-items:center; gap:10px; z-index:20;">
+        <span style="font-size:16px; color:#00f0ff;">⚡</span>
+        <input type="text" id="chat-input" placeholder="Ask IRAM Agent (e.g. 'system status', 'switch theme to cyberpunk neon', 'launch 3d cad', 'speak greeting')..." style="flex-grow:1; background:transparent; border:none; outline:none; color:#ffffff; font-size:12px;" />
+        <button id="btn-chat-send" style="width:auto; padding:6px 14px; background:linear-gradient(135deg, #00f0ff, #7000ff); color:#080a10; border:none; border-radius:6px; font-weight:800; cursor:pointer;">Ask</button>
+        <button id="btn-chat-speak" style="width:auto; padding:6px 12px; background:#181d2e; border:1px solid #28314e; border-radius:6px; cursor:pointer;">🔊 Voice</button>
     </div>
 
     <!-- Footer -->
@@ -535,6 +550,49 @@
                         })
                         .catch(() => showToast("⚠ Failed to query MCP status"));
                 };
+            }
+
+            // Sovereign Agent Command & Chat Handlers
+            const chatInput = document.getElementById('chat-input');
+            const chatCard = document.getElementById('chat-response-card');
+            const chatText = document.getElementById('chat-response-text');
+            const chatTier = document.getElementById('chat-response-tier');
+            const chatClose = document.getElementById('chat-close-btn');
+
+            if (chatClose) {
+                chatClose.onclick = () => { chatCard.style.display = 'none'; };
+            }
+
+            function sendAgentPrompt(voiceSpeak = false) {
+                const prompt = chatInput.value.trim();
+                if (!prompt) return;
+                showToast("🤖 Agent evaluating intent...");
+                fetch(`/api/chat?prompt=${encodeURIComponent(prompt)}&voice=${voiceSpeak ? '1' : '0'}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.ok) {
+                            chatCard.style.display = 'block';
+                            chatText.innerText = data.response;
+                            chatTier.innerText = `${data.tier || 'Tier 2'} • ${data.cached ? '⚡ 0ms Cache Hit ($0)' : 'Model Routed'}`;
+                            chatInput.value = '';
+                            showToast(data.cached ? "⚡ SmartRouter Cache Hit" : "✓ Intent Executed");
+                        } else {
+                            showToast("⚠ " + (data.error || "Query failed"));
+                        }
+                    })
+                    .catch(() => showToast("⚠ Hub gateway unreachable"));
+            }
+
+            const btnChatSend = document.getElementById('btn-chat-send');
+            if (btnChatSend) btnChatSend.onclick = () => sendAgentPrompt(false);
+
+            const btnChatSpeak = document.getElementById('btn-chat-speak');
+            if (btnChatSpeak) btnChatSpeak.onclick = () => sendAgentPrompt(true);
+
+            if (chatInput) {
+                chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') sendAgentPrompt(false);
+                });
             }
         }
 

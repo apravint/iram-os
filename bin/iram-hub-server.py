@@ -15,6 +15,20 @@ import subprocess
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
+# Import Sovereign Ecosystem Modules
+try:
+    import smart_router.cache
+    import smart_router.scorer
+    SMART_ROUTER_AVAILABLE = True
+except Exception:
+    SMART_ROUTER_AVAILABLE = False
+
+try:
+    import toolgate.firewall
+    TOOLGATE_AVAILABLE = True
+except Exception:
+    TOOLGATE_AVAILABLE = False
+
 PORT = int(os.environ.get("IRAM_HUB_PORT", 8990))
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "hub"))
 
@@ -56,6 +70,10 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
             elif path == "/api/harness":
                 task = params.get("task", ["Audit system integrity"])[0]
                 response_data = self.handle_harness(task)
+            elif path == "/api/chat":
+                prompt = params.get("prompt", [""])[0]
+                voice_speak = params.get("voice", ["0"])[0] in ["1", "true", "True"]
+                response_data = self.handle_chat(prompt, voice_enabled=voice_speak)
             elif path == "/api/hypr":
                 dispatcher = params.get("cmd", [""])[0]
                 args = params.get("args", [""])[0]
@@ -142,6 +160,117 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         cmd = ["/home/apravint/.local/bin/iram", "workflow", "run", task]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "task": task, "message": "Harness cyclic loop dispatched"}
+
+    def handle_chat(self, prompt, voice_enabled=False):
+        if not prompt:
+            return {"ok": False, "error": "Prompt cannot be empty"}
+
+        prompt = prompt.strip()
+
+        # 1. SmartRouter Response Cache Check
+        if SMART_ROUTER_AVAILABLE:
+            cached = smart_router.cache.get_cached_response(prompt)
+            if cached:
+                reply = cached.get("response", "")
+                if voice_enabled:
+                    self.handle_voice(reply[:120], "jarvis")
+                return {
+                    "ok": True,
+                    "response": reply,
+                    "cached": True,
+                    "model": cached.get("model", "Cache Hit (0ms, $0)"),
+                    "score": 1,
+                    "tier": "Tier 3 (Local Cache Hit)"
+                }
+
+        # 2. SmartRouter Complexity Scoring
+        score = 3
+        tier_desc = "Tier 2 (Daily Driver)"
+        if SMART_ROUTER_AVAILABLE:
+            score, tier_desc = smart_router.scorer.score_prompt_complexity(prompt)
+
+        p_lower = prompt.lower()
+        reply = ""
+        model_name = "IRAM Sovereign Agent"
+
+        # 3. Intent Resolution & Direct Command Execution
+        if "theme" in p_lower and any(w in p_lower for w in ["switch", "set", "change", "apply"]):
+            themes_map = {
+                "tokyo storm": "tokyo-storm", "cyberpunk neon": "cyberpunk-neon",
+                "synthwave 84": "synthwave-84", "catppuccin mocha": "catppuccin-mocha",
+                "dracula": "dracula", "nord frost": "nord-frost",
+                "rose pine moon": "rose-pine-moon", "gruvbox": "gruvbox",
+                "matte black": "matte-black", "aura dark": "aura-dark",
+                "oxocarbon": "oxocarbon", "vesper": "vesper"
+            }
+            applied = False
+            for k, slug in themes_map.items():
+                if k in p_lower:
+                    if TOOLGATE_AVAILABLE:
+                        safety, flags = toolgate.firewall.evaluate_command_risk(f"iram theme set {slug}")
+                        if safety == "DENY":
+                            reply = f"🛡️ Blocked by ToolGate Firewall: {flags[0]}"
+                            break
+                    self.handle_theme(slug)
+                    reply = f"✨ Applied theme '{k.title()}' live across Hyprland, Waybar, and terminals with zero restarts."
+                    applied = True
+                    break
+            if not applied:
+                reply = "Available palettes: Tokyo Storm, Cyberpunk Neon, Synthwave 84, Catppuccin Mocha, Dracula, Nord Frost, Rosé Pine Moon, Gruvbox, Matte Black, Aura Dark, Oxocarbon, Vesper."
+
+        elif any(w in p_lower for w in ["status", "telemetry", "health", "cpu", "ram", "memory"]):
+            stat = self.handle_status()
+            reply = f"⚡ IRAM OS Telemetry: CPU at {stat['cpu_percent']}%, RAM used: {stat['memory']['used_gb']}GB / {stat['memory']['total_gb']}GB ({stat['memory']['percent']}%). Active Hyprland Workspace: {stat['hyprland']['workspace']}, DSP: PipeWire 48kHz."
+
+        elif any(w in p_lower for w in ["3d", "cad", "mesh", "stl", "obj"]):
+            self.handle_launch("iram-3d")
+            reply = "🪐 Launched Three.js 3D CAD & Mesh Inspector."
+
+        elif any(w in p_lower for w in ["swarm", "topology", "agent graph"]):
+            self.handle_launch("iram-agent-graph")
+            reply = "⚡ Opened 3D Multi-Agent Swarm Topology Graph."
+
+        elif any(w in p_lower for w in ["voice", "speak", "say"]):
+            spoken = prompt
+            for pfx in ["speak", "say", "voice"]:
+                if p_lower.startswith(pfx):
+                    spoken = prompt[len(pfx):].strip()
+            spoken_text = spoken or "IRAM OS sovereign voice synthesis online."
+            self.handle_voice(spoken_text, "jarvis")
+            reply = f"🔊 Spoke through PipeWire studio audio: '{spoken_text}'"
+
+        elif "harness" in p_lower or "verify" in p_lower:
+            self.handle_harness("Audit system and codebase integrity")
+            reply = "🚀 Dispatched Harness² cyclic verification loop (Plan → Act → Verify → Reflect)."
+
+        elif any(w in p_lower for w in ["help", "what can you do", "commands"]):
+            reply = (
+                "🤖 IRAM OS Sovereign AI Hub Console:\n"
+                "• 'switch theme to cyberpunk neon' -> Zero-restart palette switch\n"
+                "• 'system status' -> Live CPU, RAM, and Wayland telemetry\n"
+                "• 'launch 3d cad' -> Three.js CAD / mesh inspector\n"
+                "• 'speak hello sovereign world' -> Local PipeWire speech synthesis\n"
+                "• 'run harness verification' -> Cyclic self-correcting agent workflow"
+            )
+        else:
+            reply = f"IRAM OS Assistant evaluated: '{prompt}' (Complexity Score: {score}/10, Route: {tier_desc}). For code authoring, use Antigravity CLI or Harness²."
+
+        # 4. Save to SmartRouter Cache
+        if SMART_ROUTER_AVAILABLE:
+            smart_router.cache.save_cached_response(prompt, reply, model_name)
+
+        # 5. Optional Spoken Output
+        if voice_enabled:
+            self.handle_voice(reply[:140], "jarvis")
+
+        return {
+            "ok": True,
+            "response": reply,
+            "cached": False,
+            "model": model_name,
+            "score": score,
+            "tier": tier_desc
+        }
 
     def handle_hypr(self, dispatcher, args):
         cmd = ["hyprctl", "dispatch", dispatcher]
