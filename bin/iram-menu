@@ -51,11 +51,29 @@ case "$route" in
     ;;
   *)
     # Root menu
-    CHOICE=$(printf "🚀 Applications Launcher (All Apps)\n🖥️ Display and Monitor Settings\n🔊 Sound and Audio Control (Pavucontrol)\n⚙️ System Settings\n🎨 Theme Switcher (22 Themes)\n🔤 Font Switcher\n🖱️ Cursor Theme Switcher\n🖼️ Next Background Wallpaper\n⌨️ Keybindings Cheat Sheet\n⏱️ Set Reminder\n📸 Screenshot and Screen Recording\n📋 Clipboard History\n📶 Network and Wi-Fi Settings\n󰂯 Bluetooth Devices\n󰃝 Toggle Nightlight (Eye Care)\n⏻ Power Menu (Lock, Sleep, Shutdown)" | wofi --dmenu --prompt "Iram Menu:" --lines 16 --style ~/.config/wofi/style.css -i)
+    CHOICE=$(printf "🚀 Applications Launcher (All Apps)\n🌐 WorldMonitor Planetary Radar\n🛡️ Adversarial Security Audit\n📈 Financial Valuation (DCF)\n⚡ Visual Architecture Map\n🔬 Reverse Engineer Binary (REA)\n🧠 Long-Term Memory (Hindsight)\n🖥️ Display and Monitor Settings\n🔊 Sound and Audio Control (Pavucontrol)\n⚙️ System Settings\n🎨 Theme Switcher (43 Curated Themes)\n🔤 Font Switcher\n🖱️ Cursor Theme Switcher\n🖼️ Next Background Wallpaper\n⌨️ Keybindings Cheat Sheet\n⏱️ Set Reminder\n📸 Screenshot and Screen Recording\n📋 Clipboard History\n📶 Network and Wi-Fi Settings\n󰂯 Bluetooth Devices\n󰃝 Toggle Nightlight (Eye Care)\n⏻ Power Menu (Lock, Sleep, Shutdown)" | wofi --dmenu --prompt "Iram Menu:" --lines 18 --style ~/.config/wofi/style.css -i)
     
     [[ -z "$CHOICE" ]] && exit 0
     
     case "$CHOICE" in
+      *"WorldMonitor"*)
+        alacritty --class iram-ai-float --title "IRAM WorldMonitor Radar" -e ~/.local/bin/iram-worldmonitor
+        ;;
+      *"Security Audit"*)
+        alacritty --class iram-ai-float --title "IRAM Adversarial Security Audit" -e ~/.local/bin/iram-audit
+        ;;
+      *"Financial"*)
+        alacritty --class iram-ai-float --title "IRAM Financial Intelligence" -e ~/.local/bin/iram-finance dcf NVDA
+        ;;
+      *"Architecture"*)
+        ~/.local/bin/iram-arch --open
+        ;;
+      *"Reverse Engineer"*)
+        alacritty --class iram-ai-float --title "IRAM Reverse Engineering" -e bash -c "read -e -p 'Target file: ' target; iram-reverse \"\$target\"; read -p 'Press enter to exit...'"
+        ;;
+      *"Long-Term Memory"*)
+        alacritty --class iram-ai-float --title "IRAM Hindsight Memory" -e bash -c "iram-hindsight reflect; echo ''; read -e -p 'Search memory (or enter to quit): ' q; [ -n \"\$q\" ] && iram-hindsight recall \"\$q\"; read -p 'Press enter...'"
+        ;;
       *"Applications"*)
         exec ~/.local/bin/iram-app-launcher
         ;;
