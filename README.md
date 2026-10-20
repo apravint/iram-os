@@ -336,6 +336,12 @@ IRAM OS features modular, standalone open-source companion projects maintained u
 
 | Repository | Focus & Role |
 | :--- | :--- |
+| **[context-condenser](https://github.com/apravint/context-condenser)** | 98% BM25 Context Compression Engine for AI Coding Agents (Claude, Cursor, Antigravity) |
+| **[agent-hindsight](https://github.com/apravint/agent-hindsight)** | Temporal long-term episodic memory engine with recency decay and SQLite FTS5 for AI agents |
+| **[adversarial-pre-push](https://github.com/apravint/adversarial-pre-push)** | 6-phase adversarial vulnerability auditing git pre-push gate with Hunter/Verifier separation |
+| **[fastmcp-linux-desktop](https://github.com/apravint/fastmcp-linux-desktop)** | FastMCP 2.0+ Model Context Protocol server for Linux desktops (Hyprland, PipeWire, systemd) |
+| **[linux-dual-wifi](https://github.com/apravint/linux-dual-wifi)** | Multi-WAN & Dual Wi-Fi ECMP load balancer with Layer 4 flow hashing and keepalive daemon |
+| **[archify-py](https://github.com/apravint/archify-py)** | Zero-dependency interactive SVG and HTML architecture visualizer for software projects |
 | **[iram-themes](https://github.com/apravint/iram-themes)** | 18 modern, high-fidelity Wayland themes and dynamic multi-app synchronization engine |
 | **[iram-agentic-desktop](https://github.com/apravint/iram-agentic-desktop)** | Autonomous AI Desktop Framework: terminal copilot, sidecar companion, and model router |
 | **[storytold-craft-linux](https://github.com/apravint/storytold-craft-linux)** | First-class Linux desktop packaging and runners for the Storytold pure-Rust creative suite |
