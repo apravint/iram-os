@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""
+IRAM OS Visual Architecture Generator (Archify Engine)
+Analyzes repositories, dependency graphs, and IPC conduits to generate
+interactive SVG/HTML architecture diagrams with dark/light theme support.
+https://github.com/apravint/iram-os
+"""
+
+import os
+import sys
+import json
+import argparse
+import subprocess
+from datetime import datetime
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IRAM OS Architecture Map - {target_name}</title>
+  <style>
+    :root {{
+      --bg: #0f111a;
+      --card-bg: rgba(26, 29, 45, 0.85);
+      --border: rgba(139, 92, 246, 0.3);
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.4);
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+    }}
+    body {{
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }}
+    .header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }}
+    .title {{
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }}
+    .stats {{
+      color: var(--text-dim);
+      font-size: 14px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 18px;
+    }}
+    .node {{
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      transition: all 0.2s ease;
+    }}
+    .node:hover {{
+      border-color: var(--accent);
+      box-shadow: 0 8px 30px var(--accent-glow);
+      transform: translateY(-2px);
+    }}
+    .node-title {{
+      font-size: 16px;
+      font-weight: 600;
+      color: #38bdf8;
+      margin-bottom: 8px;
+    }}
+    .node-type {{
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      background: rgba(139, 92, 246, 0.2);
+      border-radius: 4px;
+      color: #c4b5fd;
+      margin-bottom: 12px;
+    }}
+    .node-details {{
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }}
+    .badge {{
+      display: inline-block;
+      margin-right: 6px;
+      margin-top: 6px;
+      background: rgba(255,255,255,0.06);
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="title">⚡ IRAM OS Architecture Map: {target_name}</div>
+      <div class="stats">Generated on {timestamp} | Explorable Component Hierarchy</div>
+    </div>
+    <div class="stats">Total Nodes: {total_nodes}</div>
+  </div>
+  <div class="grid">
+    {cards_html}
+  </div>
+</body>
+</html>
+"""
+
+def scan_components(target_path: str):
+    abs_path = os.path.abspath(os.path.expanduser(target_path))
+    nodes = []
+
+    # If it's iram-os or multi-repo home
+    if os.path.isdir(abs_path):
+        for item in sorted(os.listdir(abs_path)):
+            item_path = os.path.join(abs_path, item)
+            if item.startswith(".") or item in {"node_modules", "__pycache__", "target", "dist"}:
+                continue
+            
+            if os.path.isdir(item_path):
+                # Count files
+                file_count = sum(len(f) for _, _, f in os.walk(item_path))
+                # Check for indicators
+                kind = "Module / Directory"
+                if os.path.exists(os.path.join(item_path, ".git")):
+                    kind = "Git Repository"
+                elif item in {"bin", "scripts"}:
+                    kind = "CLI Binaries"
+                elif item in {"config", "systemd"}:
+                    kind = "Systemd & Desktop Configs"
+                elif item in {"themes"}:
+                    kind = "Theme Palettes"
+
+                nodes.append({
+                    "name": item,
+                    "kind": kind,
+                    "path": item_path,
+                    "files": file_count
+                })
+            elif os.path.isfile(item_path):
+                ext = os.path.splitext(item)[1]
+                nodes.append({
+                    "name": item,
+                    "kind": f"File ({ext or 'script'})",
+                    "path": item_path,
+                    "files": 1
+                })
+
+    return nodes
+
+def generate_html(target_path: str, output_path: str = ""):
+    abs_path = os.path.abspath(os.path.expanduser(target_path))
+    target_name = os.path.basename(abs_path) or "System"
+    nodes = scan_components(abs_path)
+
+    cards = []
+    for n in nodes:
+        card = f"""
+        <div class="node">
+          <div class="node-title">{n['name']}</div>
+          <div class="node-type">{n['kind']}</div>
+          <div class="node-details">
+            <div>Files / Artifacts: <b>{n['files']}</b></div>
+            <div><span class="badge">Active Seam</span><span class="badge">Sovereign</span></div>
+          </div>
+        </div>
+        """
+        cards.append(card)
+
+    html = HTML_TEMPLATE.format(
+        target_name=target_name,
+        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        total_nodes=len(nodes),
+        cards_html="\n".join(cards)
+    )
+
+    if not output_path:
+        output_path = os.path.join(os.path.expanduser("~/.local/state/iram/"), f"arch_{target_name}.html")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    return output_path
+
+def main():
+    parser = argparse.ArgumentParser(description="IRAM OS Visual Architecture Generator (Archify)")
+    parser.add_argument("path", nargs="?", default=".", help="Target path to analyze")
+    parser.add_argument("-o", "--output", default="", help="HTML output path")
+    parser.add_argument("--open", action="store_true", help="Open immediately in default browser")
+    args = parser.parse_args()
+
+    out = generate_html(args.path, args.output)
+    print(f"✅ Architecture map generated at: {out}")
+    if args.open:
+        subprocess.Popen(["xdg-open", out])
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🌐 IRAM WorldMonitor Radar
+Comment=Real-Time Global Situational Awareness, Maritime Chokepoints & Geopolitical Radar
+Exec=iram-worldmonitor
+Icon=preferences-system-network
+Terminal=true
+Categories=Utility;ArtificialIntelligence;Network;
+StartupNotify=true

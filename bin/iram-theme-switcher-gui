@@ -40,6 +40,7 @@ MODERN_THEME_IDS = [
 ]
 
 THEMES_DIRS = [
+    os.path.expanduser('~/iram-os/themes'),
     os.path.expanduser('~/.config/iram/themes'),
     os.path.expanduser('~/.config/omarchy/themes'),
     os.path.expanduser('~/.config/omarchy/themes.bak'),
@@ -55,7 +56,9 @@ def get_current_theme():
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, 'r', encoding='utf-8') as f:
-                return f.read().strip()
+                val = f.read().strip()
+                if val:
+                    return val.lower().replace(' ', '-')
         except Exception:
             pass
     return "cyberpunk-neon"
@@ -417,9 +420,10 @@ class ThemeSwitcherApp(Gtk.Window):
     def load_themes(self):
         themes = get_all_themes()
         selected_child = None
+        cur_slug = self.current_theme.lower().replace(' ', '-')
 
         for t in themes:
-            is_active = (t['name'] == self.current_theme)
+            is_active = (t['name'].lower().replace(' ', '-') == cur_slug)
             card = ThemeCard(t, is_active=is_active)
             self.cards[t['name']] = card
             self.flowbox.add(card)

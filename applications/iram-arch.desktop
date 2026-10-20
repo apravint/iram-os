@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=⚡ IRAM Visual Architecture
+Comment=Interactive Component Maps, Dependency Graphs & System Topologies
+Exec=iram-arch --open
+Icon=system-run
+Terminal=false
+Categories=Development;ArtificialIntelligence;
+StartupNotify=true

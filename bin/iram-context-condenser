@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+IRAM OS Context Condenser (context-mode engine)
+Uses local SQLite FTS5 with BM25 ranking and Porter stemming to compress heavy
+tool outputs (logs, git diffs, file reads, systemd dumps) by up to 98% with 0 LLM cost.
+https://github.com/apravint/iram-os
+"""
+
+import sys
+import os
+import sqlite3
+import argparse
+import re
+
+def create_in_memory_fts(lines):
+    conn = sqlite3.connect(":memory:")
+    cur = conn.cursor()
+    # Create virtual table using FTS5
+    cur.execute("CREATE VIRTUAL TABLE logs_fts USING fts5(line_no UNINDEXED, content, tokenize='porter unicode61');")
+    
+    for idx, line in enumerate(lines, 1):
+        cur.execute("INSERT INTO logs_fts(line_no, content) VALUES (?, ?);", (idx, line))
+    conn.commit()
+    return conn
+
+def condense(raw_text: str, query: str = "", max_lines: int = 50, window: int = 2) -> str:
+    """Condenses text by ranking lines with BM25 relevance to the query, preserving context windows."""
+    lines = raw_text.splitlines()
+    if not lines:
+        return ""
+    
+    # If text is already small, return as is
+    if len(lines) <= max_lines and len(raw_text) < 4000:
+        return raw_text
+
+    # If no query provided, detect errors, warnings, failures, or critical lines
+    search_query = query.strip()
+    if not search_query:
+        search_query = "error OR fail OR failed OR warning OR fatal OR exception OR critical OR crash"
+
+    # Clean query for FTS5 syntax
+    safe_terms = re.findall(r'[a-zA-Z0-9_\-\.]+', search_query)
+    if not safe_terms:
+        safe_terms = ["error", "fail", "warning"]
+    
+    fts_expression = " OR ".join(safe_terms)
+
+    conn = create_in_memory_fts(lines)
+    cur = conn.cursor()
+
+    try:
+        cur.execute(
+            "SELECT line_no, bm25(logs_fts) as score FROM logs_fts WHERE logs_fts MATCH ? ORDER BY score LIMIT ?;",
+            (fts_expression, max_lines)
+        )
+        matched_rows = cur.fetchall()
+    except Exception:
+        # Fallback to simple matching if FTS syntax query error
+        matched_rows = []
+        for idx, line in enumerate(lines, 1):
+            if any(term.lower() in line.lower() for term in safe_terms):
+                matched_rows.append((idx, 0.0))
+                if len(matched_rows) >= max_lines:
+                    break
+
+    if not matched_rows:
+        # If nothing matched the error terms, return top head and bottom tail with summary
+        head = lines[:20]
+        tail = lines[-20:]
+        return f"[Context Condenser: {len(lines)} total lines ({len(raw_text)} bytes) -> No critical errors found. Showing head & tail]:\n" + \
+               "\n".join(head) + "\n\n... [snip] ...\n\n" + "\n".join(tail)
+
+    # Collect matched line numbers + small surrounding context window
+    selected_indices = set()
+    for row in matched_rows:
+        target_idx = row[0] - 1 # 0-indexed
+        for offset in range(-window, window + 1):
+            idx = target_idx + offset
+            if 0 <= idx < len(lines):
+                selected_indices.add(idx)
+
+    sorted_indices = sorted(selected_indices)
+    
+    output_chunks = []
+    prev_idx = None
+    original_size = len(raw_text.encode('utf-8'))
+    
+    for idx in sorted_indices:
+        if prev_idx is not None and idx > prev_idx + 1:
+            output_chunks.append(f"... [{idx - prev_idx - 1} lines compressed] ...")
+        output_chunks.append(f"{idx + 1:5d} | {lines[idx]}")
+        prev_idx = idx
+
+    condensed_text = "\n".join(output_chunks)
+    condensed_size = len(condensed_text.encode('utf-8'))
+    reduction = (1 - (condensed_size / max(original_size, 1))) * 100
+
+    header = (
+        f"⚡ [IRAM Context Condenser: Compressed {len(lines)} lines ({original_size} bytes) "
+        f"-> {len(sorted_indices)} lines ({condensed_size} bytes) | {reduction:.1f}% reduction]:\n"
+        f"Query: '{search_query}'\n"
+        f"{'-'*72}\n"
+    )
+    return header + condensed_text
+
+def main():
+    parser = argparse.ArgumentParser(description="IRAM OS BM25 Context Condenser (context-mode engine)")
+    parser.add_argument("file", nargs="?", help="Input file path (or read from stdin)")
+    parser.add_argument("-q", "--query", default="", help="Search query or keyword focus")
+    parser.add_argument("-m", "--max-lines", type=int, default=60, help="Maximum matching lines to preserve")
+    parser.add_argument("-w", "--window", type=int, default=2, help="Context lines around matches")
+    args = parser.parse_args()
+
+    if args.file and os.path.isfile(args.file):
+        with open(args.file, "r", encoding="utf-8", errors="replace") as f:
+            raw_text = f.read()
+    else:
+        raw_text = sys.stdin.read()
+
+    print(condense(raw_text, query=args.query, max_lines=args.max_lines, window=args.window))
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=📈 IRAM Financial Intelligence
+Comment=DCF Valuation Models, SEC 3-Statement Analytics & Quantitative Valuation
+Exec=iram-finance dcf NVDA
+Icon=accessories-calculator
+Terminal=true
+Categories=Office;Finance;ArtificialIntelligence;
+StartupNotify=true

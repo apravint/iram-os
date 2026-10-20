@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+IRAM OS Hindsight Long-Term Agent Memory Engine
+Implements temporal reasoning, weighted fact retention, query recall,
+and cross-session reflection using SQLite with temporal decay scoring.
+https://github.com/apravint/iram-os
+"""
+
+import os
+import sys
+import time
+import math
+import re
+import sqlite3
+import argparse
+import json
+from datetime import datetime
+
+DB_DIR = os.path.expanduser("~/.local/share/iram/hindsight")
+DB_PATH = os.path.join(DB_DIR, "memory.db")
+
+def init_db():
+    os.makedirs(DB_DIR, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fact TEXT NOT NULL,
+        category TEXT DEFAULT 'general',
+        importance INTEGER DEFAULT 5,
+        access_count INTEGER DEFAULT 0,
+        created_at REAL,
+        last_accessed REAL
+    );
+    """)
+    cur.execute("""
+    CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+        fact,
+        category UNINDEXED,
+        content='memories',
+        content_rowid='id'
+    );
+    """)
+    cur.execute("""
+    CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+      INSERT INTO memories_fts(rowid, fact, category) VALUES (new.id, new.fact, new.category);
+    END;
+    """)
+    cur.execute("""
+    CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, fact, category) VALUES('delete', old.id, old.fact, old.category);
+    END;
+    """)
+    conn.commit()
+    return conn
+
+def retain(fact: str, category: str = "general", importance: int = 5):
+    """Retains a fact in long-term memory."""
+    conn = init_db()
+    cur = conn.cursor()
+    now = time.time()
+    cur.execute(
+        "INSERT INTO memories (fact, category, importance, access_count, created_at, last_accessed) VALUES (?, ?, ?, 1, ?, ?)",
+        (fact.strip(), category.lower(), importance, now, now)
+    )
+    conn.commit()
+    mem_id = cur.lastrowid
+    conn.close()
+    return {"ok": True, "id": mem_id, "fact": fact, "category": category, "importance": importance}
+
+def recall(query: str = "", category: str = "", limit: int = 10):
+    """Recalls facts ranked by BM25 relevance and temporal recency decay."""
+    conn = init_db()
+    cur = conn.cursor()
+    now = time.time()
+
+    query_clean = query.strip()
+    if query_clean:
+        # Clean terms for FTS5: wrap in double quotes to avoid hyphen subtraction
+        words = re.findall(r'[a-zA-Z0-9_]+', query_clean)
+        terms = [f'"{w}"' for w in words if len(w) > 1]
+        fts_query = " OR ".join(terms) if terms else f'"{query_clean}"'
+        sql = """
+        SELECT m.id, m.fact, m.category, m.importance, m.access_count, m.created_at, m.last_accessed, bm25(memories_fts) as bm25_score
+        FROM memories m
+        JOIN memories_fts fts ON m.id = fts.rowid
+        WHERE memories_fts MATCH ?
+        """
+        params = [fts_query]
+        if category:
+            sql += " AND m.category = ?"
+            params.append(category.lower())
+    else:
+        sql = "SELECT id, fact, category, importance, access_count, created_at, last_accessed, 0.0 as bm25_score FROM memories"
+        params = []
+        if category:
+            sql += " WHERE category = ?"
+            params.append(category.lower())
+
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+
+    scored = []
+    for r in rows:
+        m_id, fact, cat, importance, acc_count, created_at, last_acc, bm25 = r
+        age_hours = (now - last_acc) / 3600.0
+        # Recency decay formula: e^(-0.005 * age)
+        decay = math.exp(-0.005 * age_hours)
+        total_score = (abs(bm25) * 1.5 if bm25 != 0 else 1.0) * (importance / 5.0) * decay
+        scored.append({
+            "id": m_id,
+            "fact": fact,
+            "category": cat,
+            "importance": importance,
+            "created_at": datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M"),
+            "score": round(total_score, 3)
+        })
+
+    # Sort descending by composite score
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    results = scored[:limit]
+
+    # Update access timestamps
+    for item in results:
+        cur.execute("UPDATE memories SET access_count = access_count + 1, last_accessed = ? WHERE id = ?", (now, item["id"]))
+    conn.commit()
+    conn.close()
+    return results
+
+def reflect():
+    """Consolidates memory statistics, top themes, and long-term insights."""
+    conn = init_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*), AVG(importance), COUNT(DISTINCT category) FROM memories")
+    total, avg_imp, distinct_cats = cur.fetchone()
+    
+    cur.execute("SELECT category, COUNT(*) FROM memories GROUP BY category ORDER BY COUNT(*) DESC LIMIT 5")
+    cat_counts = cur.fetchall()
+
+    cur.execute("SELECT id, fact, importance, access_count FROM memories ORDER BY importance DESC, access_count DESC LIMIT 5")
+    top_memories = cur.fetchall()
+    conn.close()
+
+    return {
+        "ok": True,
+        "total_memories": total or 0,
+        "avg_importance": round(avg_imp or 0, 1),
+        "categories_count": distinct_cats or 0,
+        "top_categories": [{"category": c, "count": count} for c, count in cat_counts],
+        "top_anchors": [{"id": m[0], "fact": m[1], "importance": m[2], "accesses": m[3]} for m in top_memories]
+    }
+
+def main():
+    parser = argparse.ArgumentParser(description="IRAM OS Hindsight Long-Term Memory")
+    sub = parser.add_subparsers(dest="cmd")
+
+    p_retain = sub.add_parser("retain", help="Retain a new fact")
+    p_retain.add_argument("fact", help="Fact statement to store")
+    p_retain.add_argument("-c", "--category", default="general", help="Category tag")
+    p_retain.add_argument("-i", "--importance", type=int, default=5, help="Importance rating (1-10)")
+
+    p_recall = sub.add_parser("recall", help="Recall facts by query")
+    p_recall.add_argument("query", nargs="?", default="", help="Search query")
+    p_recall.add_argument("-c", "--category", default="", help="Filter by category")
+    p_recall.add_argument("-n", "--limit", type=int, default=10, help="Max results")
+
+    sub.add_parser("reflect", help="Synthesize and reflect on stored memory")
+
+    args = parser.parse_args()
+
+    if args.cmd == "retain":
+        res = retain(args.fact, category=args.category, importance=args.importance)
+        print(f"🧠 [Hindsight Retained #{res['id']}]: {res['fact']} (cat: {res['category']}, imp: {res['importance']})")
+    elif args.cmd == "recall":
+        results = recall(query=args.query, category=args.category, limit=args.limit)
+        print(f"🔍 [Hindsight Recall for '{args.query}'] ({len(results)} matches):")
+        for r in results:
+            print(f"  • [#{r['id']} | score {r['score']} | {r['category']}]: {r['fact']}")
+    elif args.cmd == "reflect":
+        ref = reflect()
+        print("💡 [Hindsight System Reflection]:")
+        print(f"Total Memories: {ref['total_memories']} | Distinct Categories: {ref['categories_count']} | Avg Importance: {ref['avg_importance']}")
+        print("Top Categories:")
+        for c in ref["top_categories"]:
+            print(f"  - {c['category']}: {c['count']}")
+        print("Core Anchor Memories:")
+        for a in ref["top_anchors"]:
+            print(f"  - [#{a['id']} (imp:{a['importance']}, accessed:{a['accesses']})]: {a['fact']}")
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

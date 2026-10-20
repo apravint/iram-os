@@ -25,12 +25,14 @@ def generate_digest():
     uptime = run_cmd("uptime -p")
     git_recent = run_cmd("cd \"$HOME/iram-os\" 2>/dev/null && git log -n 3 --oneline || git log -n 3 --oneline")
     market_head = run_cmd("~/.local/bin/iram-stock-briefing | tail -n 2")
+    world_status = run_cmd("~/.local/bin/iram-worldmonitor | grep 'State:'") or "State: NOMINAL"
     
     context = (
         f"Uptime: {uptime}\n"
         f"Memory: {free_mem}\n"
         f"Failed Services: {failed_services}\n"
         f"Recent Iram Git Commits:\n{git_recent}\n"
+        f"Global Situational Telemetry: {world_status}\n"
     )
     
     prompt = (

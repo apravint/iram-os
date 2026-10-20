@@ -5,3 +5,5 @@ __pycache__/
 out/
 *.deb
 *.iso
+.audit/
+bin/.audit/

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🛡️ IRAM Adversarial Security Audit
+Comment=6-Phase Multi-Agent Vulnerability Hunting & Verification Engine
+Exec=iram-audit
+Icon=security-high
+Terminal=true
+Categories=Development;Security;ArtificialIntelligence;
+StartupNotify=true

@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""
+IRAM OS Reverse Engineer Anything (REA Engine)
+Disassembles ELF binaries, inspects symbols and dynamic libraries,
+extracts Electron asar archives, and analyzes unknown files via MCP.
+https://github.com/apravint/iram-os
+"""
+
+import os
+import sys
+import shutil
+import subprocess
+import argparse
+import json
+
+def run_tool(cmd, timeout=10):
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Error: {e}"
+
+def analyze_target(path: str):
+    target = os.path.realpath(os.path.expanduser(path))
+    if not os.path.exists(target):
+        return {"ok": False, "error": f"Target not found: {target}"}
+
+    file_info = run_tool(["file", "-b", target])
+    size = os.path.getsize(target)
+    
+    is_elf = "ELF" in file_info
+    is_script = "script" in file_info or "text" in file_info
+    is_asar = target.endswith(".asar") or "asar" in file_info.lower()
+
+    summary = {
+        "ok": True,
+        "target": target,
+        "file_type": file_info,
+        "size_bytes": size,
+        "architecture": "Unknown",
+        "libraries": [],
+        "exported_symbols": [],
+        "strings_sample": []
+    }
+
+    if is_elf:
+        # 1. Architecture & Headers
+        header = run_tool(["readelf", "-h", target])
+        summary["elf_header"] = header[:800]
+        
+        # 2. Dynamic shared libraries (ldd)
+        ldd_out = run_tool(["ldd", target])
+        summary["libraries"] = [l.strip() for l in ldd_out.splitlines() if l.strip()][:30]
+
+        # 3. Dynamic symbols (nm)
+        nm_out = run_tool(["nm", "-D", "--demangle", target])
+        summary["exported_symbols"] = [s.strip() for s in nm_out.splitlines() if " T " in s][:25]
+
+        # 4. Interesting strings
+        strings_out = run_tool(["strings", "-n", "8", target])
+        summary["strings_sample"] = [s.strip() for s in strings_out.splitlines() if len(s.strip()) > 8][:30]
+
+    elif is_asar:
+        # Check if npx asar can list contents
+        asar_list = run_tool(["npx", "-y", "asar", "list", target])
+        summary["asar_contents"] = asar_list.splitlines()[:50]
+
+    elif is_script:
+        with open(target, "r", errors="ignore") as f:
+            summary["script_head"] = f.read(1500)
+
+    return summary
+
+def main():
+    parser = argparse.ArgumentParser(description="IRAM OS Reverse Engineering Engine (REA)")
+    parser.add_argument("target", help="File, binary, or package to reverse engineer")
+    parser.add_argument("--json", action="store_true", help="Output JSON analysis")
+    args = parser.parse_args()
+
+    analysis = analyze_target(args.target)
+    if args.json:
+        print(json.dumps(analysis, indent=2))
+        return
+
+    print("="*75)
+    print("🔬 IRAM OS REVERSE ENGINEERING (REA) INSPECTION")
+    print(f"Target: {analysis.get('target')}")
+    print(f"Type:   {analysis.get('file_type')}")
+    print(f"Size:   {analysis.get('size_bytes')} bytes")
+    print("="*75)
+
+    if "libraries" in analysis and analysis["libraries"]:
+        print("\n📚 Linked Dynamic Libraries:")
+        for lib in analysis["libraries"][:10]:
+            print(f"  • {lib}")
+
+    if "exported_symbols" in analysis and analysis["exported_symbols"]:
+        print("\n⚡ Exported Functional Symbols (sample):")
+        for sym in analysis["exported_symbols"][:10]:
+            print(f"  • {sym}")
+
+    if "asar_contents" in analysis:
+        print("\n📦 ASAR Package Files:")
+        for item in analysis["asar_contents"][:15]:
+            print(f"  • {item}")
+
+    if "strings_sample" in analysis and analysis["strings_sample"]:
+        print("\n🔍 Interesting String Literals:")
+        for s in analysis["strings_sample"][:8]:
+            print(f"  • {s}")
+    print("="*75)
+
+if __name__ == "__main__":
+    main()
