@@ -2,16 +2,18 @@
 
 # IRAM OS 🌌
 
-### The Autonomous Agentic Desktop Operating System
+### The Sovereign Autonomous Agentic Desktop Operating System
 
-A high-performance Linux operating system powered by Hyprland, featuring sharp geometric tiling, zero-restart live theme switching, studio-grade PipeWire audio routing, automated multi-display intelligence, and a deeply integrated autonomous AI toolchain.
+A high-performance Linux operating system powered by Hyprland, featuring sharp geometric tiling, zero-restart live theme switching across 43 palettes, studio-grade PipeWire audio routing, automated multi-display intelligence, hardware-isolated agent sandboxing, and a deeply integrated autonomous AI runtime.
 
 [![GitHub Release](https://img.shields.io/github/v/release/apravint/iram-os?color=7aa2f7&logo=github&label=Release)](https://github.com/apravint/iram-os/releases)
 [![Ubuntu 26.10](https://img.shields.io/badge/Base-Ubuntu%2026.10%20Stonking-E95420.svg?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com)
 [![Compositor: Hyprland](https://img.shields.io/badge/Compositor-Hyprland%200.56-00c853.svg?logo=wayland&logoColor=white)](https://hyprland.org)
-[![Audio: PipeWire](https://img.shields.io/badge/Audio-PipeWire%20Studio-brightgreen.svg)](https://pipewire.org)
+[![Themes: 43 Live Palettes](https://img.shields.io/badge/Themes-43%20Live%20Palettes-ff007f.svg)](#-zero-restart-theming-engine-43-palettes)
+[![FastMCP 2.0](https://img.shields.io/badge/MCP-FastMCP%202.0%20Gateway-blueviolet.svg)](https://modelcontextprotocol.io)
+[![Audio: PipeWire Studio](https://img.shields.io/badge/Audio-PipeWire%20Studio-brightgreen.svg)](https://pipewire.org)
 [![3D Engine: Three.js](https://img.shields.io/badge/Spatial-Three.js%20r128-cyan.svg)](https://github.com/mrdoob/three.js/)
-[![Voice: VoiceStudio](https://img.shields.io/badge/Voice-VoiceStudio%20MCP-purple.svg)](https://github.com/debpalash/VoiceStudio)
+[![Security: Pre--Push Audit](https://img.shields.io/badge/Security-Adversarial%20Audit-red.svg)](https://github.com/apravint/adversarial-pre-push)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <br/>
@@ -22,7 +24,7 @@ A high-performance Linux operating system powered by Hyprland, featuring sharp g
   <tr>
     <td width="50%">
       <img src="assets/screenshots/3d_agent_swarm.png" alt="3D Agent Swarm Graph" width="100%" />
-      <p align="center"><b>3D Multi-Agent Swarm Topology (Three.js)</b><br/><code>iram agent graph</code></p>
+      <p align="center"><b>3D Multi-Agent Swarm Topology (Three.js WebGL)</b><br/><code>iram agent graph</code></p>
     </td>
     <td width="50%">
       <img src="assets/screenshots/3d_cad_inspector.png" alt="3D CAD Mesh Inspector" width="100%" />
@@ -32,7 +34,7 @@ A high-performance Linux operating system powered by Hyprland, featuring sharp g
   <tr>
     <td colspan="2">
       <img src="assets/screenshots/theme_switcher.png" alt="Zero-Restart Theme Switcher" width="100%" />
-      <p align="center"><b>Zero-Restart Theme Switcher (18 Curated Palettes & Live Preview Grid)</b><br/><code>iram theme</code></p>
+      <p align="center"><b>Zero-Restart Theme Switcher (43 Curated Palettes & Live Preview Grid)</b><br/><code>iram theme</code> or <code>Super + T</code></p>
     </td>
   </tr>
 </table>
@@ -44,96 +46,189 @@ A high-performance Linux operating system powered by Hyprland, featuring sharp g
 ## 📖 About IRAM OS
 
 ### What is IRAM OS?
-**IRAM OS** is an independent, turnkey 64-bit Linux operating system distribution engineered from the ground up for modern developers, power users, and AI practitioners. It bridges the gap between ultra-fluid Wayland dynamic tiling and autonomous desktop computing, providing a cohesive environment where the user interface, system hardware, and local/cloud AI agents collaborate seamlessly.
+**IRAM OS** is an independent, turnkey 64-bit Linux operating system distribution engineered from the ground up for modern developers, power users, and autonomous AI engineering. It bridges the gap between ultra-fluid Wayland dynamic tiling and sovereign desktop computing, providing a cohesive environment where the user interface, system hardware, and local/cloud AI agents collaborate seamlessly.
 
-### The Vision: The Interface Becomes the API
-Traditional operating systems treat artificial intelligence as a passive side-panel chatbot. IRAM OS fundamentally rethinks the desktop by making the system itself agent-controllable:
-- **Agents can observe and query**: Window hierarchy, active workspaces, audio routing topology, system telemetry, and clipboard history.
-- **Agents can act**: Dispatch windows, switch themes, execute sandboxed code-as-action snippets, and diagnose failed services without human friction.
-- **Zero Configuration Headaches**: Multi-monitor overlaps, audio sink stalls, and manual daemon configuration are solved out of the box with intelligent automation.
+### The Vision: The Operating System as an Agentic Substrate
+Traditional operating systems treat artificial intelligence as a passive side-panel chatbot. IRAM OS fundamentally rethinks the desktop by making the system itself agent-controllable and self-healing:
+- **Agents can observe and query**: Window hierarchy, active workspaces, PipeWire audio routing topology, system telemetry, and clipboard history via standard Model Context Protocol (MCP).
+- **Agents can act**: Dispatch windows, switch themes, execute sandboxed code-as-action snippets in rootless bubblewrap jails, and diagnose failed services without human friction.
+- **Zero Configuration Headaches**: Multi-monitor offsets, audio sink stalls, and manual daemon configuration are solved out of the box with intelligent automation.
 
 ### Project Heritage & Evolution
 IRAM OS was originally inspired by the desktop concept of **Omarchy** authored by David Heinemeier Hansson (DHH). Recognizing the demand for a turnkey, production-grade operating system with native dual-monitor resilience, systemd service supervision, and a full-stack autonomous AI runtime, the project was completely re-architected into an independent distribution:
-1. **Desktop Engine**: Engineered sharp 90° geometry (`rounding = 0`), a flush edge-to-edge status bar, and custom dual-display collision avoidance (`iram-displays-gui`).
+1. **Desktop Engine**: Engineered sharp 90° geometry (`rounding = 0`), acrylic background blur, flush edge-to-edge status bar, and custom dual-display collision avoidance (`iram-displays-gui`).
 2. **Audio Stack**: Built studio-grade PipeWire/WirePlumber priority rules with instant 1-key output cycling across analog lines, HDMI converters, and Bluetooth.
-3. **Agentic Layer**: Integrated embedded vector memory (Qdrant), temporal knowledge graphs (Graphiti), web scrapers (Crawl4AI), document parsers (Docling), code executors (smolagents), and long-running cyclic loops (LangGraph).
-4. **Distribution Pipeline**: Built a hybrid UEFI/BIOS bootable Live ISO compiler that produces flashable, autologin media with bare-metal installer capability.
+3. **Agentic Layer**: Integrated embedded vector memory (Qdrant), temporal knowledge graphs (Graphiti), BM25 context compression (`context-condenser`), episodic hindsight memory (`agent-hindsight`), and rootless code isolation (`agent-jail`).
+4. **Sovereign Awareness**: Native radar feeds monitoring global live CCTV streams, AIS maritime vessels, ADS-B aircraft telemetry, and seismic events (`iram worldmonitor`).
+5. **Distribution Pipeline**: Built a hybrid UEFI/BIOS bootable Live ISO compiler that produces flashable, autologin media with bare-metal installer capability.
 
 ---
 
-## 🏛️ Core Architecture
+## 🏛️ System Architecture
 
+```mermaid
+graph TD
+    subgraph L1["Sovereign Agentic Runtime"]
+        Hub["Sovereign Hub (Super+H)<br/>Multi-Turn Chat & Quick Chips"]
+        MCP["FastMCP 2.0 Desktop Server<br/>Window / Audio / Workspace Stdio"]
+        Jail["Agent-Jail Sandbox<br/>Rootless Bubblewrap AST Engine"]
+        Mem["Context & Memory Layer<br/>BM25 Condenser + Hindsight FTS5"]
+        Swarm["Three.js Swarm Graph<br/>3D Multi-Agent Visualizer"]
+    end
+
+    subgraph L2["Wayland Desktop Environment"]
+        Hypr["Hyprland 0.56 (0px Sharp Geometry)<br/>Acrylic Blur & Multi-Monitor Affinities"]
+        Bar["Waybar HUD<br/>Flush Telemetry, MCP Pill & Audio Sink"]
+        Themes["43 Zero-Restart Theme Engine<br/>Live CSS & Compositor Sync"]
+        Layout["Hybrid Desktop Switcher<br/>Tiling vs Traditional Floating"]
+    end
+
+    subgraph L3["Spatial, Audio & Situation Awareness"]
+        Voice["VoiceStudio Engine<br/>Neural Zero-Shot Voice Cloning"]
+        WebGL["Three.js 3D Mesh Studio<br/>CAD, STL, OBJ & Biomolecules"]
+        Radar["Sovereign WorldMonitor<br/>CCTV, AIS Maritime, ADS-B Flights"]
+        Pipe["PipeWire Studio Router<br/>Sidechain Ducking & HDMI Priority"]
+    end
+
+    subgraph L4["Kernel, Security & Hardware Layer"]
+        OS["Debian / Ubuntu 26.10 Core<br/>systemd User Supervision"]
+        Net["linux-dual-wifi<br/>Layer 4 ECMP Multi-WAN Balancer"]
+        Sec["adversarial-pre-push<br/>6-Phase Git Audit Gatekeeper"]
+    end
+
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                               IRAM OS                                  │
-├────────────────────────────────────────────────────────────────────────┤
-│  AUTONOMOUS AGENTIC RUNTIME                                            │
-│  FastMCP ── Qdrant ── Graphiti ── Crawl4AI ── Docling ── LangGraph    │
-├────────────────────────────────────────────────────────────────────────┤
-│  WAYLAND DESKTOP ENVIRONMENT                                          │
-│  Hyprland (0px Sharp) ── Waybar (Flush) ── Rofi/Wofi ── Mako ── Swaybg │
-├────────────────────────────────────────────────────────────────────────┤
-│  CREATIVE PRODUCTIVITY & SERVICES                                      │
-│  Storytold Craft Suite ── PipeWire ── 18-Theme Sync ── Wayland OCR     │
-├────────────────────────────────────────────────────────────────────────┤
-│  LINUX KERNEL & HARDWARE ABSTRACTION                                  │
-│  Debian/GNU Core ── systemd Daemons ── Multi-Monitor GPU Pipeline      │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-### 1. Compositor & Window Mechanics
-- **Compositor**: [Hyprland](https://hyprland.org) with strict rectangular geometry (`rounding = 0`), compact 2px inner window gaps, 4px outer margins, and fluid dwindle layouts.
-- **Status Bar**: [Waybar](https://github.com/Alexays/Waybar) designed edge-to-edge with workspace tabs, CPU/RAM telemetry, active audio sink indicators, weather, and power controls.
-- **Application Launcher**: Enhanced launcher with single-instance instant toggle (`iram-app-launcher`) and fuzzy keyboard navigation.
-
-### 2. Multi-Display Intelligence
-- Automatically detects connected monitors, television displays, and auxiliary screens.
-- Eliminates common `0x0` geometry overlapping bugs by calculating offsets dynamically.
-- Ships with a native GTK display management panel (`iram-displays-gui`) to set refresh rates, orientations, and custom resolutions persistently.
-
-### 3. Studio-Grade Audio Subsystem
-- Powered by [PipeWire](https://pipewire.org) and [WirePlumber](https://gitlab.freedesktop.org/pipewire/wireplumber).
-- Automatic HDMI audio converter priority rules to prevent display sleeping stalls.
-- Instant 1-touch output toggle shortcut (`Super + Shift + A`) that switches streams live across Motherboard 3.5mm jacks, HDMI TV outputs, USB interfaces, and Bluetooth headsets.
-
-### 4. Zero-Restart Theming Engine (18 Modern Themes)
-- 18 hand-curated color palettes: Tokyo Storm, Catppuccin Mocha, Nord Frost, Gruvbox, Everforest, Rose Pine Moon, Dracula, Solarized Dark, Cyberpunk Neon, Oxocarbon, Monokai Pro, Synthwave '84, Kanagawa Wave, Vesper, Ayu Mirage, Material Ocean, Aura Dark, and One Dark.
-- Switching themes (`Super + Ctrl + Shift + Space` or `iram theme`) instantly updates Hyprland borders, Waybar styling, launcher palettes, terminal colors, and notifications simultaneously with **zero session restarts**.
-
-### 5. Storytold Craft Creative Suite
-- Integrated pure-Rust creative desktop applications replacing proprietary suites: **PhotoCraft** (Photoshop alternative), **VectorCraft** (Illustrator alternative), **FilmCraft** (Premiere alternative), **SoundCraft** (DAW alternative), **LightCraft** (Lightroom alternative), **CADCraft** (AutoCAD alternative), and **WordCraft** (Word alternative).
-- Launched via the unified command `iram craft [app]` or the `artcraft-launcher` hub.
 
 ---
 
-## 🤖 The Agentic AI Toolchain
+## 🌟 Key Highlights & Innovations
 
-IRAM OS is the first desktop operating system to embed a complete, production-grade autonomous agentic stack directly into the system shell:
+### 1. 🤖 Sovereign Command Hub & AI Desktop (`Super + H`)
+- **Interactive Multi-Turn Drawer**: Slide-out floating AI command center (`Super + H` or `iram hub`) with continuous conversational context.
+- **Local-First Model Routing**: Integrates local Ollama inference with cloud fallbacks via intelligent circuit breakers and token-saving BM25 response caching.
+- **Multimodal Screen Vision (`Super + Shift + Print`)**: Snip any region of your screen to extract text, analyze UI errors, or trigger instant AI code generation with action chips.
+- **Desktop Stdio FastMCP**: Built-in `iram-mcp-server` exposing Hyprland window tiling, audio routing, display geometry, theme changes, and systemd services to Claude, Cursor, and Antigravity.
 
-| Subsystem | Binary | Description |
+### 2. 🎨 Zero-Restart Theming Engine (43 Curated Palettes)
+Switching themes via `Super + T` or `iram theme` dynamically re-skins Hyprland borders, Waybar styling, Wofi palettes, terminal colors, and desktop notifications simultaneously with **zero session restarts**.
+
+| Category | Palettes Included |
+| :--- | :--- |
+| **Cyber & Synth** | Cyberpunk Neon, Synthwave '84, Oxocarbon, Aura Dark, Ryoku Crimson |
+| **Tokyo & Japanese** | Tokyo Night, Tokyo Storm, Kanagawa Wave, Kanagawa Dragon |
+| **Classic Developer** | Catppuccin Mocha, One Dark, Monokai Pro, Dracula, Nord Frost, Solarized Dark |
+| **Organic & Earth** | Everforest, Rose Pine Moon, Ayu Mirage, Vesper, Ristretto, Solitude |
+| **Minimalist & Monolith** | Vantablack, White Monochrome, Retro '82, Material Ocean, Gruvbox |
+
+*Preview materials and lighting dynamically in the **Three.js 3D Theme Studio** using `iram theme 3d`.*
+
+### 3. 🛡️ Hardened Security & Rootless Agent Sandboxing
+- **`agent-jail`**: Autonomous code agents execute inside unprivileged, rootless Bubblewrap containers with isolated filesystem mounts, loopback-only networking, and strict process limits.
+- **`adversarial-pre-push`**: Integrated 6-phase pre-push git security gate with Hunter/Verifier separation that blocks credential leaks, hardcoded paths, and suspicious `eval/exec` payloads before code leaves your machine.
+- **`iram-toolgate`**: Enforces a 7-point risk evaluation firewall before any agent can execute destructive bash or filesystem operations.
+
+### 4. 🧠 High-Efficiency Context & Long-Term Memory
+- **`context-condenser`**: Compresses terminal logs, git diffs, and large source files by up to **98%** using lexical BM25 ranking—zero LLM token costs, zero latency.
+- **`agent-hindsight`**: Persistent episodic memory engine with exponential recency decay and SQLite FTS5 full-text indexing, eliminating the need for heavy vector DB Docker containers.
+- **Embedded Qdrant & Graphiti**: High-speed local dense vector retrieval and temporal knowledge graphs tracking project decisions across sessions.
+
+### 5. 📡 Multi-WAN Dual Wi-Fi Load Balancer (`linux-dual-wifi`)
+- Bonds multiple physical wireless adapters (e.g. onboard Wi-Fi + external high-gain USB dongle) simultaneously.
+- Distributes outbound TCP/UDP connections using Linux kernel Layer 4 ECMP flow hashing.
+- Automated systemd keepalive service that gracefully sleeps when adapters are detached, preventing crash loops.
+
+### 6. 🌐 Sovereign WorldMonitor Radar (`Super + Alt + I`)
+- Real-time global situational awareness hub launched via hotkey or Wofi root menu.
+- **Live CCTV Surveillance Feeds**: Real-time HLS streams from Tokyo Shibuya Crossing, New York Times Square, ISS Low Earth Orbit, London Piccadilly, and Chennai Harbour.
+- **AIS Maritime & ADS-B Aviation**: Live ship positioning radar and flight transponder tracking.
+- **Global Seismic Monitor**: Live earthquake and volcanic activity telemetry.
+
+### 7. 🎛️ Hybrid Traditional vs Tiling Layout Switcher
+- New to dynamic tiling? Toggle instantly between **Strict Tiling Mode** and **Traditional Floating Desktop** with taskbars using `Super + Alt + L` or `iram layout`.
+- Ships with an interactive **Welcome Onboarding GUI** (`iram welcome`) to customize themes, monitors, and audio devices on first launch.
+
+---
+
+## 🤖 The Autonomous Agentic Toolchain
+
+IRAM OS embeds an exhaustive suite of autonomous engineering binaries in `bin/` and `~/.local/bin/`:
+
+| Subsystem | Command | Description |
 | :--- | :--- | :--- |
-| **Model Context Protocol** | `iram-mcp-server` | FastMCP desktop server exposing Hyprland window actions, audio sinks, display geometry, theme switcher, and memory tools over stdio MCP |
-| **Dense Vector Retrieval** | `iram-qdrant` | Embedded local Qdrant vector database (`~/.local/state/iram/qdrant_db`) for fast semantic codebase indexing and conversation memory without background daemon overhead |
-| **Temporal Knowledge Graph** | `iram-graphiti` | Persistent knowledge graph tracking project entities, chronological decisions, facts, and dependency relationships |
-| **Web Documentation Scraper**| `iram-crawl` | Token-efficient web documentation extractor powered by Crawl4AI converting web pages to clean Markdown |
-| **Document Ingestion** | `iram-docling` | Multimodal document parser converting PDFs, Office documents, and presentation slides into structured tables and text |
-| **Code-as-Action Engine** | `iram-code-agent` | AST sandbox executor powered by smolagents synthesizing atomic Python snippets to accomplish desktop workflows in fewer LLM turns |
-| **3D Spatial Computing** | `iram 3d` | Hardware-accelerated Three.js WebGL studio for 3D CAD (.stl/.obj), biomolecules, and mesh inspection |
-| **3D Agent Swarm Graph** | `iram agent graph` | Force-directed 3D multi-agent swarm visualizer with animated IPC photon conduits and live telemetry |
-| **VoiceStudio Speech AI** | `iram voice` | Sovereign zero-shot voice cloning, prompt-to-voice design, video dubbing, and stdio MCP server |
-| **3D Theme Studio** | `iram theme 3d` | Three.js PBR material and lighting simulator for all 18 zero-restart palettes |
-| **Stateful Cyclic Loops** | `iram-workflow` | Stateful coding graph powered by Google Research Harness² and LangGraph with Plan → Act → Verify → Reflect stages |
-| **Telemetry & Observability**| `iram-trace` | Span and trace instrumentation powered by Arize Phoenix feeding latency and error metrics to the Waybar telemetry HUD |
-| **Repository Bundler** | `repomix` | Bundles entire repositories into clean, single-file prompt contexts for LLM analysis |
-| **Shell Copilot** | `?? "<prompt>"` | Real-time CLI copilot converting natural language requests into modern, optimal bash commands |
+| **Sovereign Hub** | `iram hub` (`Super + H`) | Slide-out interactive agent chat drawer with local Ollama routing and action chips |
+| **Agent Dispatcher** | `iram agent` (`Super + A`) | Hierarchical agent tree (Architect reasoning $\rightarrow$ Coordinator $\rightarrow$ Worker fleet) |
+| **Agent Sidecar** | `iram-agent-sidecar` | Floating companion window providing persistent desktop assistance |
+| **Model Context Protocol** | `iram-mcp-server` | FastMCP 2.0 server bridging Hyprland, audio, and system actions to LLMs |
+| **Rootless Code Sandbox**| `iram-code-agent` | AST Python executor powered by smolagents inside Bubblewrap containment |
+| **Context Compressor** | `iram-context-condenser` | 98% BM25 context compression engine for coding agent sessions |
+| **Episodic Memory** | `iram-memory` | Temporal memory with recency decay (`agent-hindsight`) and Qdrant vector store |
+| **Adversarial Gate** | `iram-pre-push` | 6-phase pre-push git security audit engine with Hunter/Verifier separation |
+| **Screen Vision** | `iram vision` (`Super+Shift+Print`) | Multimodal desktop snapshot analyzer with interactive OCR action chips |
+| **VoiceStudio** | `iram voice` (`Super+Alt+V`) | Sovereign zero-shot voice cloning, prompt-to-voice design, and multilingual dubbing |
+| **3D CAD Mesh Studio** | `iram 3d <file.stl>` | Three.js WebGL hardware inspector for 3D CAD meshes and biomolecules |
+| **3D Swarm Visualizer** | `iram agent graph` | Force-directed 3D multi-agent swarm graph with animated IPC photon conduits |
+| **Situation Radar** | `iram worldmonitor` (`Super+Alt+I`) | Global situation awareness radar (CCTV, AIS Maritime, ADS-B Flights, Quakes) |
+| **Audio Tuning** | `iram-audio-tuning` | Studio DSP equalization and pipewire output routing rules |
+| **Dual Wi-Fi Balancer** | `iram-dual-wifi` | Multi-WAN Layer 4 ECMP network bonding daemon |
+| **Layout Switcher** | `iram-layout-switch` | Instant toggle between strict Hyprland tiling and traditional floating desktop |
+| **Self-Healing Agent** | `iram-health-agent` (`Super+Ctrl+H`) | Autonomous diagnosis and recovery for failed systemd services and audio sinks |
 
 ---
 
-## 🚀 Installation
+## ⌨️ Master Keyboard Shortcuts Cheat Sheet
+
+### 🤖 Autonomous AI & Sovereign Tools
+| Shortcut | Action | Description |
+| :--- | :--- | :--- |
+| `Super + H` | **Sovereign Hub** | Slide-out interactive agent chat drawer and command bar |
+| `Super + A` | **Agent Tree** | Launch autonomous hierarchical agent fleet |
+| `Super + Shift + A` | **AI Sidecar** | Open floating persistent AI companion window |
+| `Super + Ctrl + H` | **Health Agent** | Trigger AI self-healing diagnostic recovery for services |
+| `Super + Alt + V` | **VoiceStudio** | Launch voice cloning and speech synthesis studio |
+| `Super + Shift + Print` | **Screen Vision** | Capture screen region for multimodal vision analysis |
+| `Super + Shift + O` | **OCR Action Chips** | Extract on-screen text with copy/search/AI action chips |
+| `Super + Alt + I` | **Sovereign Radar** | Open WorldMonitor radar (CCTV, Flights, Vessels) |
+| `Super + Alt + S` | **Security Audit** | Execute adversarial security audit on current project |
+| `Super + Alt + F` | **Financial Intel** | Open DCF valuation and algorithmic financial terminal |
+| `Super + Alt + A` | **Architecture** | Open interactive SVG software architecture visualizer |
+| `Super + Alt + O` | **Swarm Team** | Launch multi-agent swarm collaboration session |
+
+### 🪟 Window Management & Workspaces
+| Shortcut | Action | Description |
+| :--- | :--- | :--- |
+| `Super + Return` | **Terminal** | Launch GPU-accelerated Alacritty terminal |
+| `Super + Alt + Return` | **Tmux Session** | Open Alacritty attached to persistent tmux workspace |
+| `Super + Q` / `Super + W` | **Close Window** | Close active focused window |
+| `Super + V` | **Toggle Floating** | Switch focused window between tiling and floating mode |
+| `Super + F` | **Fullscreen** | Toggle borderless fullscreen |
+| `Super + O` | **Pin / PiP** | Pin floating window across all workspaces (Picture-in-Picture) |
+| `Super + G` | **Tabbed Group** | Group active windows into a tabbed container |
+| `Super + S` or `Super + \`` | **Scratchpad** | Toggle dropdown quick scratchpad workspace |
+| `Super + 1` .. `Super + 0` | **Switch Workspace** | Navigate to workspaces 1 through 10 |
+| `Super + Shift + 1..0` | **Move Window** | Move focused window to specific workspace |
+| `Super + Left/Right/Up/Down`| **Focus Move** | Move focus between tiled windows |
+
+### 🎨 Themes, Audio & Displays
+| Shortcut | Action | Description |
+| :--- | :--- | :--- |
+| `Super + T` | **Theme Switcher** | Open visual selector for all 43 Curated Themes |
+| `Super + Shift + W` | **Next Wallpaper** | Cycle high-resolution wallpaper within active theme |
+| `Super + Shift + A` | **Cycle Audio Output** | Instantly route audio between 3.5mm, HDMI, and Bluetooth |
+| `Super + Ctrl + D` | **Display Manager** | Open `iram-displays-gui` monitor alignment panel |
+| `Super + Ctrl + L` | **Lock Screen** | Lock session via native `hyprlock` |
+| `Super + Escape` | **Power Menu** | Quick power menu (Lock, Suspend, Reboot, Shutdown) |
+| `Super + Shift + Space` | **Toggle Bar** | Toggle Waybar visibility |
+| `Super + Ctrl + Shift + B` | **Restart Bar** | Reload Waybar and recompile CSS stylesheets |
+
+---
+
+## 🚀 Installation & Deployment
 
 ### Method 1: Automated Script (Recommended)
 
-Run the automated installer on an existing Linux installation:
+Run the automated installer on an existing Ubuntu/Debian/Arch Linux environment:
 
 ```bash
 # Clone repository
@@ -145,277 +240,88 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Or run directly via curl:
+Or deploy directly via curl:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/apravint/iram-os/main/install.sh | bash
 ```
 
 #### Launching the Desktop:
-1. Log out of your current session.
-2. At the display manager login screen (GDM, SDDM, or LightDM), select **IRAM OS** (or **Hyprland**).
-3. Log in to start the session.
+1. Log out of your current display manager.
+2. At the login screen (GDM, SDDM, or LightDM), select session **IRAM OS** (or **Hyprland**).
+3. Log in to launch the sovereign desktop.
 
 ---
 
-### Method 2: Bootable Live ISO
+### Method 2: Bootable Live ISO (Bare-Metal & USB)
 
-A bootable hybrid UEFI/BIOS ISO is available for bare-metal deployment and testing:
+A hybrid UEFI/BIOS bootable Live ISO is compiled and released for direct hardware testing:
 
-1. Download the latest `.iso` image from [GitHub Releases](https://github.com/apravint/iram-os/releases).
-2. Flash to a USB drive using [Ventoy](https://www.ventoy.net/), [BalenaEtcher](https://etcher.balena.io/), or `dd`:
+1. Download the latest ISO from [GitHub Releases](https://github.com/apravint/iram-os/releases).
+2. Flash to a USB drive using [Ventoy](https://www.ventoy.net/), [BalenaEtcher](https://etcher.balena.io/), or standard `dd`:
    ```bash
    sudo dd if=iram-os-26.10-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync
    ```
-3. Boot the USB drive and select **Start IRAM OS Live**.
-   - **Username**: `iram`
+3. Boot the machine from USB and choose **Start IRAM OS Live**:
+   - **Default User**: `iram`
    - **Password**: `iram` *(Passwordless sudo enabled)*
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## 🌐 The Modular Open-Source Ecosystem
 
-### General & Applications
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| `Super + Return` | **Terminal** | Opens Alacritty terminal |
-| `Super + Alt + Return` | **Tmux Terminal** | Opens terminal attached to tmux session |
-| `Super + Space` | **App Launcher** | Opens Wofi searchable application launcher |
-| `Super + V` | **Clipboard History** | Search and paste clipboard history (`cliphist`) |
-| `Super + K` | **Keybindings Menu** | Displays on-screen interactive shortcut cheat sheet |
-| `Super + Escape` | **Power Menu** | Lock, Suspend, Reboot, or Shutdown |
-| `Super + Ctrl + T` | **Activity Monitor** | Opens `btop` process & resource monitor |
-
-### Window & Workspace Tiling
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| `Super + Q` / `Super + W` | **Close Window** | Closes active window |
-| `Super + T` | **Toggle Floating** | Switches focused window between tiling and floating |
-| `Super + F` | **Fullscreen** | Toggles true fullscreen mode |
-| `Super + O` | **Pin / PiP** | Pins floating window across all workspaces (Picture-in-Picture) |
-| `Super + G` | **Toggle Tab Group** | Groups windows into tabbed containers |
-| `Super + S` or `Super + Grave` | **Scratchpad** | Toggles drop-down scratchpad workspace |
-| `Super + 1` .. `Super + 0` | **Switch Workspace** | Switch to Workspace 1 through 10 |
-| `Super + Shift + 1..0` | **Move Window** | Move focused window to Workspace 1 through 10 |
-| `Super + Mouse Drag` | **Move / Resize** | Left-click drag to move; Right-click drag to resize |
-
-### Displays, Audio & Hardware
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| `Super + Ctrl + D` | **Display Settings** | Opens `iram-displays-gui` monitor setup panel |
-| `Super + Shift + A` | **Cycle Audio Output** | Cycles audio between HDMI, TV, Analog 3.5mm, and Bluetooth |
-| `Super + Ctrl + A` | **Volume Mixer** | Opens `pavucontrol` mixer |
-| `Super + Ctrl + B` | **Bluetooth Manager** | Opens `blueman-manager` device panel |
-| `Super + Ctrl + W` | **Network Settings** | Opens network connection manager |
-
-### Themes & Status Bar
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| `Super + Ctrl + Shift + Space` | **Theme Switcher** | Opens visual card-grid selector for 18 Curated World-Class Modern Themes (Ryoku Crimson, Cyberpunk Neon, One Dark, Catppuccin Mocha, Kanagawa Wave, Nord Frost, Night Owl, Synthwave '84, Dracula, Oxocarbon, Vesper, Ayu Mirage, Material Ocean, Aura Dark, Rose Pine Moon, Monokai Pro, Solarized Dark, Tokyo Storm) |
-| `Super + Ctrl + Space` | **Next Wallpaper** | Cycles wallpaper within active theme |
-| `Super + Shift + Space` | **Toggle Top Bar** | Shows / hides Waybar |
-| `Super + Ctrl + Shift + B` | **Restart Top Bar** | Restarts Waybar and reloads CSS styles |
-
-### Screenshots, Recording & OCR
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| `Print` or `Super + Shift + S` | **Region Screenshot** | Drag to snip region; saves to `~/Pictures` & clipboard |
-| `Alt + Print` | **Screen Recorder** | Start / stop screen recording (`wf-recorder`) |
-| `Super + Ctrl + M` or `Alt + Shift + Print` | **Monologue Screencast** | 1-key dedicated dev talking-head & microphone recording (`iram-monologue`) |
-| `Super + Print` | **Color Picker** | Eyedropper tool to copy hex color (`hyprpicker`) |
-| `Super + Ctrl + Print` | **OCR Text Snipper** | Extracts on-screen text directly to clipboard (`tesseract`) |
-
----
-
-## 🛠️ CLI Utilities Reference
-
-All tools are located in `bin/` and automatically installed to `~/.local/bin/` and `/usr/local/bin/`:
-
-### 👑 Unified Command Center
-| Command | Description |
-| :--- | :--- |
-| `iram` | **Unified Command Center**: One command to control everything (`iram theme`, `iram craft`, `iram ocr`, `iram display`, `iram agent`, `iram clean`, `iram info`) |
-
-### Desktop & Display Management
-| Command | Description |
-| :--- | :--- |
-| `iram-app-launcher` | Single-instance toggle for the Wayland application launcher |
-| `iram-displays-gui` | GTK GUI for configuring monitor positions, resolutions, and refresh rates |
-| `iram-restart-bar` | Cleanly reloads Waybar with display readiness check |
-| `iram-power-menu` | Fast session power menu (lock, sleep, reboot, shutdown) |
-| `iram-emoji-picker` | Wofi-based searchable emoji selector |
-
-### Audio, Media & Screen Tools
-| Command | Description |
-| :--- | :--- |
-| `iram-ocr` / `way-ocr` | Instant region screen OCR using Tesseract, copying text straight to Wayland clipboard |
-| `iram-monologue` | Dedicated lightweight developer screencast recorder (OBS alternative with zero bloat) |
-| `iram-audio-toggle` | Cycles active default audio sink and moves active playback streams |
-| `iram-audio-init` | Startup sound service ensuring HDMI/TV outputs are unmuted and persistent |
-| `iram-screenshot` | Interactive region screenshot utility |
-| `iram-screenrecord` | Screen recorder writing MP4 output to `~/Videos` |
-| `iram-color-picker` | Eyedropper tool for copying hex color values |
-
-### Creative Productivity (Storytold Craft Suite)
-| Command | Description |
-| :--- | :--- |
-| `artcraft-launcher` | Central launch hub for the entire Storytold pure-Rust creative suite |
-| `craft-app-runner` | High-performance runner with automatic AppImage discovery and updates |
-| `photocraft` .. `wordcraft` | Direct CLI shortcuts for all 13 pure-Rust creative desktop apps |
-
-### Theming Subsystem
-| Command | Description |
-| :--- | :--- |
-| `iram-theme-switch` | CLI theme selector supporting 18 modern curated themes |
-| `iram-theme-switcher-gui` | GTK GUI theme selector with visual color previews |
-| `iram-theme-sync-all` | Re-applies active theme palette across Hyprland, Waybar, Wofi, and Mako |
-| `iram-theme-bg-set` | Wallpaper changer with live compositor refresh |
-
-### Autonomous Agentic AI Toolchain
-| Command | Description |
-| :--- | :--- |
-| `iram-agent-tree` | Hierarchical tiered agent engine (Architect reasoning -> Coordinator -> Grunt Workers) |
-| `iram-ai-route` | Intelligent compute router (RouteLLM + GPTCache): routes simple tasks to $0 local models and caches responses |
-| `iram-toolgate` | Tool-call safety firewall (7 risk questions) + Canny evidence verification ledger |
-| `iram-code-review` | $0 open-source pre-push code review gatekeeper with 100+ local scanners & AI audit |
-| `iram-memory` | Unified multi-tier persistent memory (Mem0 preferences, Letta session, Graphiti graph) |
-| `iram-skills` | Modular skill loader executing specialized instructions on demand without context bloat |
-| `iram-mcp-server` | FastMCP desktop server exposing Hyprland, audio, themes, and memory over stdio MCP |
-| `iram-qdrant` | Embedded local Qdrant vector retrieval engine for codebase chunks and memory |
-| `iram-graphiti` | Temporal knowledge graph tracking project decisions, facts, and entity relations |
-| `iram-crawl` | Documentation scraper powered by Crawl4AI converting web pages to clean markdown |
-| `iram-docling` | Document parser powered by Docling converting PDFs and Office files to markdown |
-| `iram-code-agent` | Code-as-action autonomous agent running atomic Python snippets via smolagents |
-| `iram-workflow` | Stateful coding graph with verification and self-healing loops via LangGraph |
-| `iram-trace` | Observability and execution traces layer powered by Arize Phoenix |
-| `repomix` | Single-file AI context bundler for repositories |
-| `?? "<prompt>"` | Shell copilot translating plain English queries to bash commands |
-
-### System Health & Maintenance
-| Command | Description |
-| :--- | :--- |
-| `iram-health-agent` | Diagnoses failed systemd services, recovers audio daemons, and frees RAM |
-| `iram-crash-diagnose` | Captures system crash reports and triggers AI root-cause analysis |
-| `iram-update` | Synchronizes repositories and updates desktop components |
-| `iram-repo-traffic` | Real-time clone and traffic analytics for GitHub repositories |
-
----
-
-## ⚙️ Configuration Paths
-
-All configuration files adhere to standard XDG specifications in `~/.config/`:
-
-```
-~/.config/
-├── hypr/
-│   ├── hyprland.conf          # Compositor layout, gaps, keybindings, and window rules
-│   └── cursor.conf            # Active cursor theme and size
-├── waybar/
-│   ├── config.jsonc           # Bar modules, ordering, and exec hooks
-│   ├── style.css              # Waybar CSS layout and styling
-│   └── colors.css             # Active theme color variables
-├── wofi/
-│   └── style.css              # Application launcher appearance
-├── mako/
-│   └── config                 # Desktop notification styling
-└── wireplumber/
-    └── wireplumber.conf.d/
-        └── 50-hdmi-priority.conf # Audio hardware prioritization rules
-```
-
----
-
-## 🌐 Modular Ecosystem Repositories
-
-IRAM OS features modular, standalone open-source companion projects maintained under the same vision:
+IRAM OS is architected into standalone, independently maintainable open-source packages:
 
 | Repository | Focus & Role |
 | :--- | :--- |
-| **[context-condenser](https://github.com/apravint/context-condenser)** | 98% BM25 Context Compression Engine for AI Coding Agents (Claude, Cursor, Antigravity) |
-| **[agent-hindsight](https://github.com/apravint/agent-hindsight)** | Temporal long-term episodic memory engine with recency decay and SQLite FTS5 for AI agents |
-| **[adversarial-pre-push](https://github.com/apravint/adversarial-pre-push)** | 6-phase adversarial vulnerability auditing git pre-push gate with Hunter/Verifier separation |
-| **[fastmcp-linux-desktop](https://github.com/apravint/fastmcp-linux-desktop)** | FastMCP 2.0+ Model Context Protocol server for Linux desktops (Hyprland, PipeWire, systemd) |
-| **[linux-dual-wifi](https://github.com/apravint/linux-dual-wifi)** | Multi-WAN & Dual Wi-Fi ECMP load balancer with Layer 4 flow hashing and keepalive daemon |
-| **[archify-py](https://github.com/apravint/archify-py)** | Zero-dependency interactive SVG and HTML architecture visualizer for software projects |
-| **[iram-themes](https://github.com/apravint/iram-themes)** | 18 modern, high-fidelity Wayland themes and dynamic multi-app synchronization engine |
-| **[iram-agentic-desktop](https://github.com/apravint/iram-agentic-desktop)** | Autonomous AI Desktop Framework: terminal copilot, sidecar companion, and model router |
-| **[storytold-craft-linux](https://github.com/apravint/storytold-craft-linux)** | First-class Linux desktop packaging and runners for the Storytold pure-Rust creative suite |
-| **[ubuntu-hyprland-iso-builder](https://github.com/apravint/ubuntu-hyprland-iso-builder)** | Automated toolchain & GitHub Actions CI to compile bootable Ubuntu 26.10 + Hyprland ISOs |
-| **[way-ocr](https://github.com/apravint/way-ocr)** | Lightweight screen OCR and text extractor utility for Wayland and Hyprland |
+| [**`context-condenser`**](https://github.com/apravint/context-condenser) | 98% BM25 Context Compression Engine for AI Coding Agents (Claude, Cursor, Antigravity) |
+| [**`agent-hindsight`**](https://github.com/apravint/agent-hindsight) | Temporal long-term episodic memory engine with recency decay and SQLite FTS5 |
+| [**`adversarial-pre-push`**](https://github.com/apravint/adversarial-pre-push) | 6-phase adversarial vulnerability auditing git pre-push gate with Hunter/Verifier separation |
+| [**`linux-dual-wifi`**](https://github.com/apravint/linux-dual-wifi) | Multi-WAN & Dual Wi-Fi ECMP load balancer with Layer 4 flow hashing daemon |
+| [**`fastmcp-linux-desktop`**](https://github.com/apravint/fastmcp-linux-desktop) | FastMCP 2.0+ Model Context Protocol server for Linux desktops (Hyprland, PipeWire, systemd) |
+| [**`archify-py`**](https://github.com/apravint/archify-py) | Zero-dependency interactive SVG and HTML architecture visualizer for software projects |
+| [**`iram-themes`**](https://github.com/apravint/iram-themes) | 43 modern Wayland themes and dynamic multi-application palette synchronization engine |
+| [**`iram-agentic-desktop`**](https://github.com/apravint/iram-agentic-desktop) | Autonomous AI Desktop Framework: terminal copilot, sidecar companion, and model router |
+| [**`storytold-craft-linux`**](https://github.com/apravint/storytold-craft-linux) | Native packaging and AppImage runners for the Storytold pure-Rust creative desktop suite |
+| [**`ubuntu-hyprland-iso-builder`**](https://github.com/apravint/ubuntu-hyprland-iso-builder) | Automated toolchain & GitHub Actions CI compiling bootable Ubuntu 26.10 + Hyprland ISOs |
+| [**`way-ocr`**](https://github.com/apravint/way-ocr) | Lightweight screen OCR and interactive text action chip extractor for Wayland |
 
 ---
 
-## 📚 Developer Knowledge Bases & Blueprints
+## 🏗️ Compiling the ISO from Source
 
-Preloaded in `docs/` and `~/resources/` for both human developers and autonomous AI agents:
-
-- **[Autonomous Web Application Stack](docs/autonomous-web-app-stack.md)** ([JSON](docs/autonomous-web-app-stack.json)): 10 open-source repositories to build, deploy, and operate production web apps with foundation models.
-- **[AI Engineering Lab Stack](docs/ai-engineering-lab-stack.md)** ([JSON](docs/ai-engineering-lab-stack.json)): 10 open-source repositories for synthetic data generation, specialist fleet fine-tuning, standardized evaluation, and model serving.
-- **[Design Engineering Toolkit](docs/design-engineering-resources.md)** ([JSON](docs/design-engineering-resources.json)): 23 tools combining the Design Engineer Essential Toolkit (3D, canvas, motion) with 2026 rapid shipping accelerators.
-- **[UI Component Libraries](docs/ui-component-libraries.md)** ([JSON](docs/ui-components.json)): 10 premier web animation and modern React component systems.
-
----
-
-## 🏗️ Building the ISO from Source
-
-To compile the bootable Live ISO from source:
+To build a fresh bootable ISO using the Ubuntu 26.10 toolchain:
 
 ```bash
-# Clone the repository
 git clone https://github.com/apravint/iram-os.git
 cd iram-os
 
-# Run ISO build engine (requires root)
+# Run the ISO compiler (requires sudo)
 sudo bash build/build-iso.sh
 ```
 
-The build engine outputs the final ISO and SHA-256 checksum in `out/`.
-
----
-
-## 🧹 Uninstallation
-
-To restore your original configurations and remove installed scripts:
-
-```bash
-cd iram-os
-./uninstall.sh
-```
+The compiled bootable ISO and SHA-256 integrity checksum will be generated in `out/`.
 
 ---
 
 ## ⚖️ License & Trademarks
 
-This project is open-source software licensed under the **[MIT License](LICENSE)**.
+This project is licensed under the **[MIT License](LICENSE)**.
 
-### Legal & Trademark Notices
-- **IRAM OS**: IRAM OS is an independent open-source desktop operating system project maintained by Ayyappa Pravin.
+### Legal Notices
+- **IRAM OS**: Independent open-source desktop operating system developed and maintained by Ayyappa Pravin.
 - **Ubuntu**: Ubuntu is a registered trademark of Canonical Ltd. IRAM OS is an independent project and is not affiliated with, sponsored by, or endorsed by Canonical Ltd.
-- **Third-Party Trademarks**: All other trademarks, service marks, trade names, product names, and logos appearing in this repository are the property of their respective owners. Use of these names, logos, and brands is for identification purposes only and does not imply endorsement or affiliation.
+- **Third-Party Trademarks**: Hyprland, Waybar, PipeWire, Three.js, Qdrant, and all other referenced trademarks belong to their respective creators.
 
 ---
 
-## ❤️ Acknowledgments & Special Thanks
+## ❤️ Acknowledgments & Credits
 
-IRAM OS stands on the shoulders of brilliant open-source pioneers, communities, and projects:
+- **Canonical & The Ubuntu Community**: For the foundational Debian/Ubuntu package ecosystem and hardware driver compatibility.
+- **David Heinemeier Hansson (DHH)** & the **Omarchy Community**: For the initial desktop concept and aesthetic inspiration.
+- **Vaxry and the Hyprland Team**: For creating the most fluid Wayland dynamic tiling compositor.
+- **The PipeWire & WirePlumber Engineers**: For glitch-free, professional-grade Linux audio routing.
+- **The Model Context Protocol (FastMCP) Team**: For standardizing the interface between AI agents and desktop environments.
+- **All Community Contributors & Testers**: To every stargazer, tester, and developer helping build the sovereign agentic future.
 
-- **Canonical & The Ubuntu Community**: For providing the rock-solid Debian-based package ecosystem, hardware drivers, and long-term release foundations that empower our system binaries and live ISO media.
-- **David Heinemeier Hansson (DHH)** & the **Omarchy Community**: For the foundational desktop concept and aesthetic inspiration that sparked the initial journey.
-- **Vaxry and the Hyprland Team**: For engineering the fluid, dynamic Wayland compositor that powers this desktop.
-- **Alexays and the Waybar Contributors**: For building the modular, flexible status bar framework.
-- **Wim Taymans, George Kiagiadakis, and the PipeWire / WirePlumber Teams**: For creating studio-grade, glitch-free audio routing on Linux.
-- **The Model Context Protocol (FastMCP) Team**: For creating the universal protocol bridging AI models and desktop environments.
-- **The Qdrant Team**: For their embedded, vector search engine.
-- **The Zep / Graphiti Team**: For temporal knowledge graphs that give AI persistent project memory.
-- **The Crawl4AI Team**: For high-speed, LLM-friendly web scraping and content extraction.
-- **The Docling Team**: For document parsing capabilities across PDFs and office documents.
-- **The Hugging Face / smolagents Team**: For code-as-action AST sandboxing.
-- **Harrison Chase & the LangGraph Team**: For resilient, stateful cyclical agent workflows.
-- **The Arize Phoenix Team**: For telemetry, traces, and AI observability.
-- **The Designers of the 18 Curated Themes**: The artists and creators of Tokyo Night, Catppuccin, Nord, Gruvbox, Everforest, Rosé Pine, Dracula, and Kanagawa.
-- **Every Community Supporter & Tester**: To all early testers, stargazers, and contributors who tested ISO builds, reported bugs, and helped refine IRAM OS into what it is today.
+</div>
