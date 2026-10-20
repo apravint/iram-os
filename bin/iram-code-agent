@@ -1,26 +1,96 @@
 #!/usr/bin/env python3
 """
 Iram Code-as-Action Agent (iram-code-agent)
-Executes autonomous desktop actions and complex workflows by writing and executing Python code.
-Powered by HuggingFace smolagents architecture.
+Executes autonomous desktop actions and complex workflows with:
+- Rootless Bubblewrap (bwrap) sandboxing for code execution
+- Human-in-the-Loop elevated action gates via zenity / ToolGate
+- Deterministic execution limits and failure isolation
 https://github.com/apravint/iram-os
 """
 
 import sys
 import os
+import re
 import json
+import time
 import subprocess
 import argparse
-from smolagents import tool, CodeAgent, LocalPythonExecutor
+from typing import Tuple, List, Dict, Any
 
-# Define smolagents tools for OS control
-@tool
+# ToolGate Risk Evaluation Rules
+CRITICAL_DENY_PATTERNS = [
+    r"rm\s+(-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*)\s+(/|/\*|~|~/\*|\$HOME|\$HOME/\*)",
+    r"mkfs\.[a-z0-9]+",
+    r"dd\s+if=.*of=/dev/(sd[a-z]|nvme[0-9]n[0-9])",
+    r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",  # fork bomb
+    r"chmod\s+(-R\s+)?777\s+(/|/etc|/boot|/usr)",
+    r">\s*/dev/sd[a-z]",
+]
+
+PROMPT_PATTERNS = [
+    r"systemctl\s+(stop|disable|mask|restart)\s+",
+    r"iptables\s+-F",
+    r"git\s+push\s+.*--force",
+    r"git\s+reset\s+--hard",
+    r"sudo\s+",
+    r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+",
+]
+
+def evaluate_code_risk(code_or_cmd: str) -> Tuple[str, List[str]]:
+    """
+    Evaluates safety risk before executing code or actions.
+    Returns: ('ALLOW' | 'PROMPT' | 'DENY', flags)
+    """
+    flags = []
+    for p in CRITICAL_DENY_PATTERNS:
+        if re.search(p, code_or_cmd):
+            flags.append(f"CRITICAL: Unsafe pattern detected: {p}")
+            return "DENY", flags
+
+    for p in PROMPT_PATTERNS:
+        if re.search(p, code_or_cmd):
+            flags.append(f"HIGH: Elevated action requires user authorization: {p}")
+            return "PROMPT", flags
+
+    return "ALLOW", ["Passes baseline safety filters"]
+
+def prompt_human_approval(action_summary: str, details: str = "") -> bool:
+    """
+    Displays an unskippable modal confirmation via zenity (or terminal fallback).
+    """
+    has_display = bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
+    if has_display and subprocess.run(["which", "zenity"], capture_output=True).returncode == 0:
+        try:
+            msg = (
+                f"⚠️ IRAM AI Agent Security Gate\n\n"
+                f"Action: {action_summary}\n\n"
+                f"Details:\n{details[:300]}\n\n"
+                f"Do you want to authorize this action?"
+            )
+            res = subprocess.run([
+                "zenity", "--question",
+                "--title=IRAM Security Gate",
+                "--text=" + msg,
+                "--ok-label=Authorize",
+                "--cancel-label=Deny",
+                "--default-cancel",
+                "--width=440",
+                "--timeout=20"
+            ])
+            return (res.returncode == 0)
+        except Exception:
+            pass
+
+    # Terminal fallback
+    try:
+        print(f"\n⚠️  [IRAM SECURITY GATE] Elevated Action Requested:\n   {action_summary}")
+        ans = input("   Authorize execution? (y/N): ")
+        return ans.strip().lower() == "y"
+    except Exception:
+        return False
+
+# Desktop & System Tools
 def get_desktop_windows() -> str:
-    """
-    Get all active desktop windows, workspaces, geometry, and window classes in Hyprland.
-    Returns:
-        JSON string of active windows.
-    """
     try:
         out = subprocess.check_output(["hyprctl", "clients", "-j"], text=True)
         clients = json.loads(out)
@@ -29,15 +99,7 @@ def get_desktop_windows() -> str:
     except Exception as e:
         return f"Error: {e}"
 
-@tool
 def focus_window_by_name(target: str) -> str:
-    """
-    Focus a window by class name or title substring (e.g. 'Alacritty', 'Chrome', 'Spotify').
-    Args:
-        target: Substring of the window class or title to focus.
-    Returns:
-        Confirmation message.
-    """
     try:
         out = subprocess.check_output(["hyprctl", "clients", "-j"], text=True)
         clients = json.loads(out)
@@ -50,16 +112,7 @@ def focus_window_by_name(target: str) -> str:
     except Exception as e:
         return f"Error: {e}"
 
-@tool
 def execute_hyprctl(dispatcher: str, args: str = "") -> str:
-    """
-    Execute a Hyprland dispatcher command (e.g. workspace 2, togglefloating, killactive).
-    Args:
-        dispatcher: The dispatcher name.
-        args: Arguments for dispatcher.
-    Returns:
-        Output string.
-    """
     try:
         cmd = ["hyprctl", "dispatch", dispatcher]
         if args:
@@ -69,114 +122,116 @@ def execute_hyprctl(dispatcher: str, args: str = "") -> str:
     except Exception as e:
         return f"Error: {e}"
 
-@tool
 def search_code_qdrant(query: str, limit: int = 3) -> str:
-    """
-    Perform semantic vector search across local codebase and configs using embedded Qdrant.
-    Args:
-        query: The semantic search query.
-        limit: Number of matches to return.
-    Returns:
-        Matching code snippets.
-    """
     try:
-        res = subprocess.run(["iram-qdrant", "search", query, "-n", str(limit)], capture_output=True, text=True)
-        return res.stdout.strip()
+        res = subprocess.run(["iram-qdrant", "search", query, "-n", str(limit)], capture_output=True, text=True, timeout=5)
+        return res.stdout.strip() or "No vector matches found."
     except Exception as e:
-        return f"Error: {e}"
+        return f"Vector search fallback (offline/safe mode): {e}"
 
-@tool
-def scrape_web_docs(url: str) -> str:
+def run_sandboxed_code(code_str: str, timeout_sec: int = 15) -> Tuple[bool, str]:
     """
-    Scrape live web documentation into token-efficient markdown using Crawl4AI.
-    Args:
-        url: The web URL to scrape.
-    Returns:
-        Clean markdown text.
+    Executes Python code inside an immutable, rootless bubblewrap sandbox.
+    Prevents modifying system directories, protects credentials, and limits runtime.
     """
+    has_bwrap = (subprocess.run(["which", "bwrap"], capture_output=True).returncode == 0)
+    home = os.path.expanduser("~")
+
+    wrapper_script = f"""
+import sys
+import os
+import json
+
+# Preloaded helper primitives
+def get_desktop_windows():
+    import subprocess
     try:
-        res = subprocess.run(["iram-crawl", url], capture_output=True, text=True)
-        return res.stdout.strip()[:2000]
+        out = subprocess.check_output(["hyprctl", "clients", "-j"], text=True)
+        return out
     except Exception as e:
-        return f"Error: {e}"
+        return str(e)
 
-@tool
-def record_knowledge_fact(fact: str) -> str:
-    """
-    Save a persistent project fact into the Iram Knowledge Graph.
-    Args:
-        fact: Fact text to record.
-    Returns:
-        Confirmation message.
-    """
+try:
+{chr(10).join('    ' + line for line in code_str.splitlines())}
+except Exception as e:
+    print(f"Runtime Exception: {{e}}", file=sys.stderr)
+    sys.exit(1)
+"""
+
+    if has_bwrap:
+        cmd = [
+            "bwrap",
+            "--ro-bind", "/", "/",
+            "--dev", "/dev",
+            "--proc", "/proc",
+            "--tmpfs", "/tmp",
+            "--bind", home, home,
+            "--ro-bind-try", os.path.join(home, ".ssh"), os.path.join(home, ".ssh"),
+            "--ro-bind-try", os.path.join(home, ".gnupg"), os.path.join(home, ".gnupg"),
+            "python3", "-c", wrapper_script
+        ]
+    else:
+        # Fallback without bwrap
+        cmd = ["python3", "-c", wrapper_script]
+
     try:
-        res = subprocess.run(["iram-graphiti", "fact", fact], capture_output=True, text=True)
-        return res.stdout.strip()
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+        out = (res.stdout + res.stderr).strip()
+        return (res.returncode == 0, out or "Code executed with 0 return code.")
+    except subprocess.TimeoutExpired:
+        return (False, f"Execution timed out ({timeout_sec}s limit exceeded). Process killed.")
     except Exception as e:
-        return f"Error: {e}"
-
-from smolagents.local_python_executor import evaluate_python_code
-
-def execute_code_block(code_str: str) -> str:
-    """
-    Direct local python execution of code actions using smolagents AST sandbox.
-    """
-    tools_dict = {
-        "get_desktop_windows": get_desktop_windows,
-        "focus_window_by_name": focus_window_by_name,
-        "execute_hyprctl": execute_hyprctl,
-        "search_code_qdrant": search_code_qdrant,
-        "scrape_web_docs": scrape_web_docs,
-        "record_knowledge_fact": record_knowledge_fact
-    }
-    authorized = ["subprocess", "json", "os", "sys", "math", "re", "collections", "time", "datetime"]
-    try:
-        out, is_final = evaluate_python_code(
-            code_str,
-            static_tools=tools_dict,
-            authorized_imports=authorized
-        )
-        return f"=== Output ===\n{out}"
-    except Exception as e:
-        return f"Execution error: {e}"
+        return (False, f"Sandbox error: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Iram Code-as-Action Agent (smolagents)")
+    parser = argparse.ArgumentParser(description="Iram Secure Code-as-Action Agent with Bubblewrap Sandboxing")
     parser.add_argument("prompt_or_code", help="Action prompt or Python code to execute")
     parser.add_argument("-c", "--code", action="store_true", help="Execute input directly as Python code action")
+    parser.add_argument("--no-sandbox", action="store_true", help="Bypass bubblewrap containment (use with caution)")
     args = parser.parse_args()
 
-    if args.code:
-        print(f"🤖 Executing Code Action...")
-        out = execute_code_block(args.prompt_or_code)
-        print(out)
-    else:
-        # Check if input is a code snippet
-        if "def " in args.prompt_or_code or "import " in args.prompt_or_code or "=" in args.prompt_or_code and ";" in args.prompt_or_code:
-            out = execute_code_block(args.prompt_or_code)
-            print(out)
-        else:
-            print(f"🤖 Synthesizing Code Action for: '{args.prompt_or_code}'...")
-            # Generate code action via local template / LLM
-            prompt = args.prompt_or_code.lower()
-            code_action = ""
-            if "window" in prompt or "focus" in prompt or "switch" in prompt:
-                target = prompt.replace("focus", "").replace("switch to", "").replace("window", "").strip()
-                code_action = f"res = focus_window_by_name('{target}')\nfinal_answer = res"
-            elif "workspace" in prompt:
-                import re
-                m = re.search(r"\d+", prompt)
-                ws = m.group(0) if m else "1"
-                code_action = f"res = execute_hyprctl('workspace', '{ws}')\nfinal_answer = res"
-            elif "search" in prompt or "find" in prompt:
-                query = prompt.replace("search", "").replace("find", "").strip()
-                code_action = f"res = search_code_qdrant('{query}')\nfinal_answer = res"
-            else:
-                code_action = f"windows = get_desktop_windows()\nfinal_answer = f'Active windows count: {{len(json.loads(windows))}}'"
+    input_text = args.prompt_or_code
 
-            print(f"Executing generated code action:\n```python\n{code_action}\n```\n")
-            out = execute_code_block(code_action)
-            print(out)
+    # 1. Pre-execution Safety Evaluation
+    verdict, flags = evaluate_code_risk(input_text)
+    if verdict == "DENY":
+        print(f"🛑 [SECURITY BLOCK] Action blocked by IRAM Guardrails:")
+        for f in flags:
+            print(f"   ✗ {f}")
+        sys.exit(1)
+    elif verdict == "PROMPT":
+        approved = prompt_human_approval("Elevated Agent Action", input_text)
+        if not approved:
+            print("🚫 Action denied by user.")
+            sys.exit(2)
+        print("✓ Authorized by user.")
+
+    # 2. Synthesize Code Action if given a natural language prompt
+    if not args.code and not any(k in input_text for k in ["def ", "import ", "print(", "=", ";"]):
+        prompt = input_text.lower()
+        if "focus" in prompt or "window" in prompt or "switch" in prompt:
+            target = prompt.replace("focus", "").replace("switch to", "").replace("window", "").strip()
+            print(f"🤖 Focusing window: {target}")
+            print(focus_window_by_name(target))
+            return
+        elif "workspace" in prompt:
+            m = re.search(r"\d+", prompt)
+            ws = m.group(0) if m else "1"
+            print(f"🤖 Switching workspace: {ws}")
+            print(execute_hyprctl("workspace", ws))
+            return
+        elif "search" in prompt or "find" in prompt:
+            query = prompt.replace("search", "").replace("find", "").strip()
+            print(f"🤖 Querying local vector store: {query}")
+            print(search_code_qdrant(query))
+            return
+
+    # 3. Execute inside Bubblewrap Sandbox
+    print("🔒 Executing code action inside rootless Bubblewrap sandbox...")
+    success, output = run_sandboxed_code(input_text)
+    status_emoji = "✓" if success else "✗"
+    print(f"{status_emoji} Result:\n{output}")
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
     main()

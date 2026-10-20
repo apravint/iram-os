@@ -130,6 +130,14 @@ case "$cmd" in
         fi
         ;;
 
+    welcome)
+        exec "${LOCAL_BIN:-$HOME/.local/bin}/iram-welcome" "$@"
+        ;;
+
+    layout)
+        exec "${LOCAL_BIN:-$HOME/.local/bin}/iram-layout-switch" "$@"
+        ;;
+
     # --- AI AGENT SUBSYSTEM ---
     agent)
         sub="${1:-}"
@@ -220,6 +228,12 @@ case "$cmd" in
             echo -e "${RED}OpenRig repository not found.${NC} Checked ~/.local/share/iram/openrig."
             exit 1
         fi
+        ;;
+    pre-push|prepush)
+        exec "$LOCAL_BIN/iram-pre-push" "$@"
+        ;;
+    lock)
+        exec "$LOCAL_BIN/iram-lock" "$@"
         ;;
     workflow)
         exec "$LOCAL_BIN/iram-workflow" "$@"

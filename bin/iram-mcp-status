@@ -11,7 +11,7 @@ import os
 def main():
     hub_url = "http://127.0.0.1:8990/api/status"
     mcp_active = False
-    tools_count = 21
+    tools_count = 23
     cpu = 0
     ram_gb = 0
 
@@ -24,6 +24,16 @@ def main():
                     mcp_active = True
                     cpu = data.get("cpu_percent", 0)
                     ram_gb = data.get("memory", {}).get("used_gb", 0)
+    except Exception:
+        pass
+
+    try:
+        req_mcp = urllib.request.Request("http://127.0.0.1:8990/api/mcp", headers={"User-Agent": "Waybar-MCP"})
+        with urllib.request.urlopen(req_mcp, timeout=0.5) as r:
+            mcp_data = json.loads(r.read().decode())
+            tools_list = mcp_data.get("tools", [])
+            if tools_list:
+                tools_count = len(tools_list)
     except Exception:
         pass
 

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Unified Theme-Synced Lock Screen
+# Prefers hyprlock with blurred wallpaper, falls back cleanly to swaylock
+# ==============================================================================
+set -euo pipefail
+
+BG_PATH="$HOME/.local/state/iram/current/background"
+
+if command -v hyprlock >/dev/null 2>&1; then
+    exec hyprlock "$@"
+elif command -v swaylock >/dev/null 2>&1; then
+    if [ -f "$BG_PATH" ]; then
+        exec swaylock -i "$BG_PATH" -f -s fill "$@"
+    else
+        exec swaylock -c 080a10 -f "$@"
+    fi
+else
+    echo "No Wayland lockscreen utility found (hyprlock or swaylock)." >&2
+    exit 1
+fi

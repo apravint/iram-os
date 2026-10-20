@@ -73,16 +73,31 @@ def get_fast_embedding(text: str, dim: int = VECTOR_DIM) -> list:
         vec /= norm
     return vec.tolist()
 
-def get_client() -> QdrantClient:
+def get_client():
     os.makedirs(DB_DIR, exist_ok=True)
-    client = QdrantClient(path=DB_DIR)
-    for col in [CODE_COLLECTION, MEMORY_COLLECTION]:
-        if not client.collection_exists(col):
-            client.create_collection(
-                collection_name=col,
-                vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE)
-            )
-    return client
+    try:
+        client = QdrantClient(path=DB_DIR)
+        for col in [CODE_COLLECTION, MEMORY_COLLECTION]:
+            if not client.collection_exists(col):
+                client.create_collection(
+                    collection_name=col,
+                    vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE)
+                )
+        return client
+    except Exception as e:
+        # Graceful degradation - Safe mode fallback
+        print(f"⚠️ [Qdrant Safe Mode] Database lock or initialization error ({e}). Operating in memory fallback.", file=sys.stderr)
+        try:
+            # Fallback to pure in-memory client
+            client = QdrantClient(":memory:")
+            for col in [CODE_COLLECTION, MEMORY_COLLECTION]:
+                client.create_collection(
+                    collection_name=col,
+                    vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE)
+                )
+            return client
+        except Exception:
+            return None
 
 def chunk_file(filepath: str, chunk_lines: int = 50, overlap: int = 10):
     try:
@@ -230,6 +245,9 @@ def main():
 
     args = parser.parse_args()
     client = get_client()
+    if client is None:
+        print("⚠️ [Qdrant Safe Mode] Vector store offline. Returning empty result set.", file=sys.stderr)
+        sys.exit(0)
 
     if args.command == "index":
         index_path(client, args.path)

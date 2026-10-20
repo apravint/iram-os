@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# iram:summary=Switch between Sovereign 0px Tiling and Traditional Floating Desktop mode
+# iram:tags=desktop,hyprland,layout,theme
+
+set -euo pipefail
+
+LAYOUT_CONF="$HOME/.config/hypr/layout.conf"
+STATE_FILE="$HOME/.local/state/iram/current_layout"
+mkdir -p "$(dirname "$LAYOUT_CONF")" "$(dirname "$STATE_FILE")"
+
+target="${1:-}"
+
+if [ -z "$target" ]; then
+    # Toggle or prompt via wofi / dmenu
+    current="tiling"
+    [ -f "$STATE_FILE" ] && current=$(cat "$STATE_FILE")
+    
+    if [ "$current" = "tiling" ]; then
+        target="traditional"
+    else
+        target="tiling"
+    fi
+fi
+
+case "$target" in
+    traditional|floating|classic)
+        cat << 'EOF' > "$LAYOUT_CONF"
+# --- Traditional Floating Desktop Layout ---
+general {
+    gaps_in = 4
+    gaps_out = 8
+    border_size = 2
+}
+
+decoration {
+    rounding = 8
+    dim_inactive = false
+}
+
+# Spawn windows floating by default with standard dimensions
+windowrulev2 = float, class:^(.*)$
+windowrulev2 = size 70% 70%, class:^(.*)$
+windowrulev2 = center, class:^(.*)$
+EOF
+        echo "traditional" > "$STATE_FILE"
+        hyprctl reload >/dev/null 2>&1 || true
+        notify-send -a "IRAM OS" "Desktop Layout" "Switched to Traditional Floating Mode (8px rounding, floating windows)"
+        echo "✓ Switched to Traditional Floating Desktop Mode"
+        ;;
+
+    tiling|sovereign|sharp)
+        cat << 'EOF' > "$LAYOUT_CONF"
+# --- Sovereign Geometric Tiling Layout ---
+general {
+    gaps_in = 2
+    gaps_out = 4
+    border_size = 2
+}
+
+decoration {
+    rounding = 0
+    dim_inactive = true
+}
+
+# Standard tiling behavior
+EOF
+        echo "tiling" > "$STATE_FILE"
+        hyprctl reload >/dev/null 2>&1 || true
+        notify-send -a "IRAM OS" "Desktop Layout" "Switched to Sovereign Tiling Mode (0px sharp geometric tiling)"
+        echo "✓ Switched to Sovereign Geometric Tiling Mode"
+        ;;
+
+    status)
+        current="tiling"
+        [ -f "$STATE_FILE" ] && current=$(cat "$STATE_FILE")
+        echo "$current"
+        ;;
+
+    *)
+        echo "Usage: iram-layout-switch [tiling|traditional|status]"
+        exit 1
+        ;;
+esac

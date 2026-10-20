@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""
+IRAM OS First-Boot Onboarding Guide & Welcome Dashboard (iram-welcome)
+GUI-driven interactive onboarding guide introducing:
+- Core Hyprland keybindings & window management
+- Hardware diagnostics & Wayland acceleration
+- Gemini / Local LLM configuration
+- Desktop styling & layout options
+https://github.com/apravint/iram-os
+"""
+
+import sys
+import os
+import json
+import shutil
+import subprocess
+import gi
+
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk, Gdk, GLib
+
+ONBOARDED_FLAG = os.path.expanduser("~/.local/state/iram/.onboarded")
+ENV_DIR = os.path.expanduser("~/.config/environment.d")
+GEMINI_CONF = os.path.join(ENV_DIR, "20-gemini.conf")
+
+CSS = b"""
+* {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+window {
+    background-color: #0b0d13;
+}
+
+.header-title {
+    font-size: 26px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.header-sub {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 12px;
+}
+
+.badge {
+    background-color: rgba(0, 240, 255, 0.15);
+    color: #00f0ff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.card {
+    background-color: #131722;
+    border: 1px solid #1e2538;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 6px;
+}
+
+.shortcut-key {
+    background-color: #1e293b;
+    color: #00f0ff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+}
+
+.shortcut-desc {
+    font-size: 13px;
+    color: #e2e8f0;
+    font-weight: 500;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00f0ff 0%, #0080ff 100%);
+    color: #000000;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 6px;
+    border: none;
+    padding: 10px 24px;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #33f3ff 0%, #3399ff 100%);
+}
+
+.btn-secondary {
+    background-color: #1e2538;
+    color: #e2e8f0;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    padding: 8px 16px;
+}
+
+entry {
+    background-color: #0f121a;
+    color: #ffffff;
+    border: 1px solid #2a3449;
+    border-radius: 6px;
+    padding: 8px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+entry:focus {
+    border-color: #00f0ff;
+}
+"""
+
+class IramWelcomeApp(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="Welcome to IRAM OS")
+        self.set_default_size(780, 540)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_resizable(False)
+
+        # Main Box
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.add(main_box)
+
+        # Header Section
+        header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        header.set_margin_top(24)
+        header.set_margin_bottom(12)
+        header.set_margin_start(28)
+        header.set_margin_end(28)
+
+        badge_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        badge = Gtk.Label(label="SOVEREIGN AGENTIC OPERATING SYSTEM")
+        badge.get_style_context().add_class("badge")
+        badge_box.pack_start(badge, False, False, 0)
+        header.pack_start(badge_box, False, False, 0)
+
+        title = Gtk.Label(label="Welcome to IRAM OS")
+        title.get_style_context().add_class("header-title")
+        title.set_xalign(0)
+        header.pack_start(title, False, False, 0)
+
+        sub = Gtk.Label(label="Ubuntu 26.10 + Hyprland 0.56 with Autonomous AI Toolchain")
+        sub.get_style_context().add_class("header-sub")
+        sub.set_xalign(0)
+        header.pack_start(sub, False, False, 0)
+
+        main_box.pack_start(header, False, False, 0)
+
+        # Notebook Tabs
+        self.notebook = Gtk.Notebook()
+        self.notebook.set_margin_start(24)
+        self.notebook.set_margin_end(24)
+        self.notebook.set_margin_bottom(16)
+        main_box.pack_start(self.notebook, True, True, 0)
+
+        # Tab 1: Keybindings & Workflow
+        self.notebook.append_page(self.create_shortcuts_tab(), Gtk.Label(label="⌨️ Shortcuts"))
+
+        # Tab 2: System Diagnostics
+        self.notebook.append_page(self.create_diagnostics_tab(), Gtk.Label(label="⚡ Diagnostics"))
+
+        # Tab 3: Cloud & AI Setup
+        self.notebook.append_page(self.create_ai_setup_tab(), Gtk.Label(label="🤖 AI Setup"))
+
+        # Footer Actions
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        footer.set_margin_start(28)
+        footer.set_margin_end(28)
+        footer.set_margin_bottom(20)
+
+        self.status_label = Gtk.Label(label="")
+        self.status_label.set_xalign(0)
+        footer.pack_start(self.status_label, True, True, 0)
+
+        btn_finish = Gtk.Button(label="Launch Desktop & Complete Setup")
+        btn_finish.get_style_context().add_class("btn-primary")
+        btn_finish.connect("clicked", self.on_finish_clicked)
+        footer.pack_end(btn_finish, False, False, 0)
+
+        main_box.pack_start(footer, False, False, 0)
+
+    def create_shortcuts_tab(self):
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        vbox.set_margin_top(12)
+        vbox.set_margin_bottom(12)
+        vbox.set_margin_start(8)
+        vbox.set_margin_end(8)
+
+        shortcuts = [
+            ("Super + Enter", "Open Terminal (Kitty / Alacritty)"),
+            ("Super + Space", "Open App Launcher (Wofi)"),
+            ("Super + A", "Invoke Autonomous AI Agent Prompt"),
+            ("Super + T", "Open 18-Theme Switcher Studio"),
+            ("Super + Q", "Close Focused Window"),
+            ("Super + F", "Toggle Window Fullscreen"),
+            ("Super + V", "Toggle Floating Window Mode"),
+            ("Super + 1..9", "Switch to Workspace 1 through 9"),
+            ("Super + Shift + S", "Interactive Screen OCR & Snip"),
+            ("Super + Shift + R", "Restart Waybar & Desktop Styles"),
+        ]
+
+        for key, desc in shortcuts:
+            card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+            card.get_style_context().add_class("card")
+            
+            k_lbl = Gtk.Label(label=key)
+            k_lbl.get_style_context().add_class("shortcut-key")
+            card.pack_start(k_lbl, False, False, 0)
+
+            d_lbl = Gtk.Label(label=desc)
+            d_lbl.get_style_context().add_class("shortcut-desc")
+            d_lbl.set_xalign(0)
+            card.pack_start(d_lbl, True, True, 0)
+
+            vbox.pack_start(card, False, False, 0)
+
+        scroller.add(vbox)
+        return scroller
+
+    def create_diagnostics_tab(self):
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_top(16)
+        vbox.set_margin_start(12)
+        vbox.set_margin_end(12)
+
+        def get_diag(cmd):
+            try:
+                return subprocess.check_output(cmd, shell=True, text=True).strip()
+            except Exception:
+                return "Unavailable"
+
+        cpu = get_diag("lscpu | grep 'Model name' | cut -d: -f2 | xargs") or "x86_64 CPU"
+        gpu = get_diag("lspci | grep -E 'VGA|3D' | cut -d: -f3 | xargs") or "Integrated Graphics"
+        mem = get_diag("free -h | awk '/^Mem:/ {print $2 \" Total / \" $7 \" Available\"}'")
+        displays = get_diag("hyprctl monitors -j | grep -c '\"id\"'") or "1"
+        pipewire = "Active & Running" if subprocess.run(["pgrep", "-x", "pipewire"], capture_output=True).returncode == 0 else "Inactive"
+
+        diag_items = [
+            ("Processor", cpu),
+            ("Graphics Acceleration", gpu),
+            ("Memory Capacity", mem),
+            ("Connected Displays", f"{displays} Active Monitor(s)"),
+            ("PipeWire Audio DSP", pipewire),
+            ("Wayland Compositor", "Hyprland 0.56.0-git (Native Wayland)"),
+        ]
+
+        for label, val in diag_items:
+            card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            card.get_style_context().add_class("card")
+
+            lbl = Gtk.Label(label=label)
+            lbl.get_style_context().add_class("shortcut-key")
+            card.pack_start(lbl, False, False, 0)
+
+            v_lbl = Gtk.Label(label=val)
+            v_lbl.get_style_context().add_class("shortcut-desc")
+            v_lbl.set_xalign(0)
+            card.pack_start(v_lbl, True, True, 0)
+
+            vbox.pack_start(card, False, False, 0)
+
+        return vbox
+
+    def create_ai_setup_tab(self):
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        vbox.set_margin_top(16)
+        vbox.set_margin_start(12)
+        vbox.set_margin_end(12)
+
+        info_lbl = Gtk.Label(label="IRAM OS utilizes Gemini Cloud Reasoning with zero CPU footprint, or local Ollama when offline. Configure your API key below:")
+        info_lbl.set_line_wrap(True)
+        info_lbl.set_xalign(0)
+        info_lbl.get_style_context().add_class("shortcut-desc")
+        vbox.pack_start(info_lbl, False, False, 0)
+
+        # API Key Entry
+        entry_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        entry_lbl = Gtk.Label(label="Google Gemini API Key:")
+        entry_lbl.set_xalign(0)
+        entry_box.pack_start(entry_lbl, False, False, 0)
+
+        self.key_entry = Gtk.Entry()
+        self.key_entry.set_placeholder_text("AIzaSy...")
+        self.key_entry.set_visibility(False)
+
+        # Prepopulate if exists
+        existing_key = os.environ.get("GEMINI_API_KEY", "")
+        if not existing_key and os.path.exists(GEMINI_CONF):
+            try:
+                with open(GEMINI_CONF, "r") as f:
+                    for line in f:
+                        if line.startswith("GEMINI_API_KEY="):
+                            existing_key = line.split("=", 1)[1].strip().strip('"')
+            except Exception:
+                pass
+        if existing_key:
+            self.key_entry.set_text(existing_key)
+
+        entry_box.pack_start(self.key_entry, False, False, 0)
+        vbox.pack_start(entry_box, False, False, 0)
+
+        # Buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_save = Gtk.Button(label="Save API Key")
+        btn_save.get_style_context().add_class("btn-secondary")
+        btn_save.connect("clicked", self.on_save_key)
+        btn_box.pack_start(btn_save, False, False, 0)
+
+        self.ai_status = Gtk.Label(label="Ready")
+        self.ai_status.set_xalign(0)
+        btn_box.pack_start(self.ai_status, True, True, 0)
+
+        vbox.pack_start(btn_box, False, False, 0)
+        return vbox
+
+    def on_save_key(self, widget):
+        key = self.key_entry.get_text().strip()
+        if not key:
+            self.ai_status.set_text("⚠️ Key cannot be empty.")
+            return
+
+        os.makedirs(ENV_DIR, exist_ok=True)
+        try:
+            with open(GEMINI_CONF, "w") as f:
+                f.write(f'GEMINI_API_KEY="{key}"\n')
+                f.write('GEMINI_MODEL="gemini-3.5-flash-lite"\n')
+            self.ai_status.set_text("✓ Key saved to environment.d/20-gemini.conf")
+        except Exception as e:
+            self.ai_status.set_text(f"Error: {e}")
+
+    def on_finish_clicked(self, widget):
+        # Save onboarding state
+        os.makedirs(os.path.dirname(ONBOARDED_FLAG), exist_ok=True)
+        with open(ONBOARDED_FLAG, "w") as f:
+            f.write("1\n")
+        self.destroy()
+
+def main():
+    css_provider = Gtk.CssProvider()
+    css_provider.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(),
+        css_provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+
+    app = IramWelcomeApp()
+    app.connect("destroy", Gtk.main_quit)
+    app.show_all()
+    Gtk.main()
+
+if __name__ == "__main__":
+    main()
