@@ -23,7 +23,7 @@ def generate_digest():
     failed_services = run_cmd("systemctl --failed --no-legend") or "None"
     free_mem = run_cmd("free -h | grep Mem | awk '{print $3 \" used of \" $2}'")
     uptime = run_cmd("uptime -p")
-    git_recent = run_cmd("cd /home/apravint/iram-os && git log -n 3 --oneline")
+    git_recent = run_cmd("cd \"$HOME/iram-os\" 2>/dev/null && git log -n 3 --oneline || git log -n 3 --oneline")
     market_head = run_cmd("~/.local/bin/iram-stock-briefing | tail -n 2")
     
     context = (

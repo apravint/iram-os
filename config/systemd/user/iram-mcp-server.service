@@ -1,11 +1,10 @@
 [Unit]
 Description=IRAM OS Sovereign FastMCP Desktop & Diagnostic Server
-PartOf=graphical-session.target
-After=graphical-session.target
+After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/iram mcp
+ExecStart=%h/.local/bin/iram mcp --sse
 Restart=on-failure
 RestartSec=3
 

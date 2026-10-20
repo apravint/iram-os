@@ -108,16 +108,17 @@ enable_balance() {
 }
 
 keepalive() {
-    IP2=$(get_ip "$IF_USB")
-    GW2=$(get_gw "$IF_USB")
-    if [ -z "$IP2" ] || [ -z "$GW2" ]; then
-        echo -e "${YELLOW}Waiting for USB adapter to connect...${NC}"
-        exit 0
-    fi
-    echo -e "${CYAN}Starting background keepalive heartbeat for ${IF_USB}...${NC}"
+    echo -e "${CYAN}IRAM OS Dual Wi-Fi Keepalive Daemon started for ${IF_USB}...${NC}"
     while true; do
-        ping -c 1 -W 2 -I "$IP2" "$GW2" >/dev/null 2>&1 || true
-        sleep 5
+        IP2=$(get_ip "$IF_USB")
+        GW2=$(get_gw "$IF_USB")
+        if [ -n "$IP2" ] && [ -n "$GW2" ]; then
+            ping -c 1 -W 2 -I "$IP2" "$GW2" >/dev/null 2>&1 || true
+            sleep 5
+        else
+            # Adapter disconnected or awaiting DHCP; sleep calmly without crash-looping
+            sleep 15
+        fi
     done
 }
 

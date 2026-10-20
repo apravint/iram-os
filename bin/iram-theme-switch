@@ -22,8 +22,10 @@ if [[ -n "${1:-}" && "${1:-}" != "--dmenu" && "${1:-}" != "--wofi" && "${1:-}" !
     target="$1"
     [[ "$target" == "set" ]] && target="${2:-}"
     if [[ -n "$target" ]]; then
-        /usr/local/bin/omarchy-theme-set "$target"
-        "$HOME/.local/bin/iram-theme-sync-all" 2>/dev/null || true
+        if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
+            /usr/local/bin/omarchy-theme-set "$target" 2>/dev/null || true
+        fi
+        iram theme set "$target"
         notify-send -a "Iram" "Theme Changed" "Applied theme: $target" 2>/dev/null || true
         exit 0
     fi

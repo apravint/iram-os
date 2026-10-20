@@ -303,7 +303,14 @@ def run_harness_workflow(task: str) -> str:
         return f"Harness² error: {e}"
 
 def main():
-    mcp.run()
+    if "--sse" in sys.argv or os.environ.get("IRAM_MCP_TRANSPORT") == "sse":
+        port = int(os.environ.get("IRAM_MCP_PORT", 8991))
+        mcp.run(transport="sse", host="127.0.0.1", port=port)
+    elif "--http" in sys.argv or os.environ.get("IRAM_MCP_TRANSPORT") == "http":
+        port = int(os.environ.get("IRAM_MCP_PORT", 8991))
+        mcp.run(transport="http", host="127.0.0.1", port=port)
+    else:
+        mcp.run()
 
 if __name__ == "__main__":
     main()

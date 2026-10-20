@@ -1,0 +1,12 @@
+[Unit]
+Description=IRAM OS Dual Wi-Fi Keepalive Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/iram-dual-wifi keepalive
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

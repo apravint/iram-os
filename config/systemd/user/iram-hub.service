@@ -1,7 +1,6 @@
 [Unit]
 Description=IRAM OS Sovereign Command Hub Micro-Server
-PartOf=graphical-session.target
-After=graphical-session.target
+After=network.target
 
 [Service]
 Type=simple

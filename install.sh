@@ -222,9 +222,12 @@ fi
 
 iram theme set "Cyberpunk Neon" || iram theme set "Tokyo Storm" || true
 "$HOME/.local/bin/iram-theme-sync-all" || true
+systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now iram-agentd.service 2>/dev/null || true
 systemctl --user enable --now iram-cliphist.service 2>/dev/null || true
 systemctl --user enable --now iram-hub.service 2>/dev/null || true
+systemctl --user enable --now iram-mcp-server.service 2>/dev/null || true
+systemctl --user enable --now iram-dual-wifi-keepalive.service 2>/dev/null || true
 systemctl --user enable --now iram-healthd.timer 2>/dev/null || true
 systemctl --user enable --now iram-security.timer 2>/dev/null || true
 systemctl --user enable --now iram-organizer.timer 2>/dev/null || true

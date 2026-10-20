@@ -29,6 +29,16 @@ try:
 except Exception:
     TOOLGATE_AVAILABLE = False
 
+def resolve_bin(name: str) -> str:
+    """Resolve executable from ~/.local/bin or system PATH."""
+    home_bin = os.path.expanduser(f"~/.local/bin/{name}")
+    if os.path.isfile(home_bin) and os.access(home_bin, os.X_OK):
+        return home_bin
+    found = shutil.which(name)
+    if found:
+        return found
+    return home_bin
+
 PORT = int(os.environ.get("IRAM_HUB_PORT", 8990))
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "assets", "hub"))
 
@@ -190,12 +200,12 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
 
     def handle_launch(self, app):
         routes = {
-            "iram-3d": ["/home/apravint/.local/bin/iram-3d"],
-            "iram-agent-graph": ["/home/apravint/.local/bin/iram-agent-graph"],
-            "iram-theme-3d": ["/home/apravint/.local/bin/iram-theme-3d"],
-            "iram-video-3d": ["/home/apravint/.local/bin/iram-video-3d"],
-            "iram-sidecar": ["/home/apravint/.local/bin/iram-agent-sidecar"],
-            "terminal": ["alacritty"]
+            "iram-3d": [resolve_bin("iram-3d")],
+            "iram-agent-graph": [resolve_bin("iram-agent-graph")],
+            "iram-theme-3d": [resolve_bin("iram-theme-3d")],
+            "iram-video-3d": [resolve_bin("iram-video-3d")],
+            "iram-sidecar": [resolve_bin("iram-agent-sidecar")],
+            "terminal": [shutil.which("alacritty") or "foot"]
         }
         if app in routes:
             subprocess.Popen(routes[app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -206,14 +216,14 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         if not name:
             return {"ok": False, "error": "No theme name specified"}
         # Execute theme change
-        cmd = ["/home/apravint/.local/bin/iram", "theme", "set", name]
+        cmd = [resolve_bin("iram"), "theme", "set", name]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "theme": name, "message": f"Theme set to {name}"}
 
     def handle_voice(self, text, voice):
         if not text:
             return {"ok": False, "error": "No text provided for speech"}
-        cmd = ["/home/apravint/.local/bin/iram", "voice", "speak", text, "--voice", voice]
+        cmd = [resolve_bin("iram"), "voice", "speak", text, "--voice", voice]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "voice": voice, "text": text}
 
@@ -239,7 +249,7 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "models": models}
 
     def handle_harness(self, task):
-        cmd = ["/home/apravint/.local/bin/iram", "workflow", "run", task]
+        cmd = [resolve_bin("iram"), "workflow", "run", task]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "task": task, "message": "Harness cyclic loop dispatched"}
 

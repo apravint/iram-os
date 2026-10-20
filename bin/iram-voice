@@ -8,7 +8,7 @@ set -euo pipefail
 
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 IRAM_DIR="$(cd "$(dirname "$REAL_PATH")/.." && pwd)"
-export PYTHONPATH="${IRAM_DIR}:/home/apravint/iram-voice:${PYTHONPATH:-}"
+export PYTHONPATH="${IRAM_DIR}:${HOME}/iram-voice:${PYTHONPATH:-}"
 
 if [ "${1:-}" = "mcp" ]; then
     shift

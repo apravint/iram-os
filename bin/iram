@@ -267,6 +267,48 @@ case "$cmd" in
             exec "$LOCAL_BIN/iram-theme-3d"
         fi
         shift 2>/dev/null || true
+
+        apply_iram_theme() {
+            local target="$1"
+            if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
+                /usr/local/bin/omarchy-theme-set "$target" 2>/dev/null || true
+            fi
+
+            # Native IRAM Theme Application
+            local themes_dir="${IRAM_PATH:-$HOME/iram-os}/themes"
+            local match=""
+            local slug=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+            if [ -d "$themes_dir/$target" ]; then
+                match="$themes_dir/$target"
+            elif [ -d "$themes_dir/$slug" ]; then
+                match="$themes_dir/$slug"
+            elif [ -d "$HOME/.config/iram/themes/$target" ]; then
+                match="$HOME/.config/iram/themes/$target"
+            fi
+
+            if [ -n "$match" ]; then
+                mkdir -p "$HOME/.local/state/iram/current"
+                echo "$target" > "$HOME/.local/state/iram/current/theme.name"
+                rm -rf "$HOME/.local/state/iram/current/theme"
+                cp -r "$match" "$HOME/.local/state/iram/current/theme"
+
+                # Link background if present
+                local bg_file=$(find "$match" -maxdepth 2 -type f \( -iname "*.jpg" -o -iname "*.png" -o -iname "*.webp" \) | head -n 1)
+                if [ -n "$bg_file" ]; then
+                    ln -sf "$bg_file" "$HOME/.local/state/iram/current/background"
+                fi
+
+                # If theme has colors.toml, run template generator
+                if [ -f "$match/colors.toml" ] && [ -x "$LOCAL_BIN/iram-theme-set-templates" ]; then
+                    mkdir -p "$HOME/.local/state/iram/current/next-theme"
+                    cp -r "$match/"* "$HOME/.local/state/iram/current/next-theme/"
+                    "$LOCAL_BIN/iram-theme-set-templates" 2>/dev/null || true
+                fi
+            fi
+
+            "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
+        }
+
         case "$sub" in
             list)
                 if [ -x "/usr/local/bin/omarchy-theme-list" ]; then
@@ -276,15 +318,12 @@ case "$cmd" in
                 fi
                 ;;
             current)
-                cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "Default"
+                cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || echo "Default"
                 ;;
             set)
                 target="${1:-}"
                 if [ -n "$target" ]; then
-                    if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
-                        /usr/local/bin/omarchy-theme-set "$target"
-                    fi
-                    "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
+                    apply_iram_theme "$target"
                     echo -e "${GREEN}✓ Theme switched to:${NC} ${BOLD}$target${NC}"
                 else
                     exec "$LOCAL_BIN/iram-theme-switch"
@@ -311,10 +350,7 @@ case "$cmd" in
                 ;;
             *)
                 # If invoked directly as: iram theme "Tokyo Storm"
-                if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
-                    /usr/local/bin/omarchy-theme-set "$sub"
-                fi
-                "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
+                apply_iram_theme "$sub"
                 echo -e "${GREEN}✓ Theme applied:${NC} ${BOLD}$sub${NC}"
                 ;;
         esac
