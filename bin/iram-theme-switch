@@ -2,6 +2,11 @@
 # Iram Visual Theme Switcher (with full previews)
 set -euo pipefail
 
+# If random explicitly requested
+if [[ "${1:-}" == "--random" || "${1:-}" == "-r" ]]; then
+    exec iram theme random
+fi
+
 # If text/dmenu mode explicitly requested, use wofi
 if [[ "${1:-}" == "--dmenu" || "${1:-}" == "--wofi" || "${1:-}" == "--text" ]]; then
     THEMES=$(iram theme list)

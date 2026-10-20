@@ -419,6 +419,13 @@ case "$cmd" in
             current)
                 cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || echo "Default"
                 ;;
+            random)
+                rand_theme=$(ls -1 "$HOME/iram-os/themes" 2>/dev/null | shuf -n 1)
+                if [ -n "$rand_theme" ]; then
+                    apply_iram_theme "$rand_theme"
+                    echo -e "${GREEN}✓ Random theme applied:${NC} ${BOLD}$rand_theme${NC}"
+                fi
+                ;;
             set)
                 target="${1:-}"
                 if [ -n "$target" ]; then

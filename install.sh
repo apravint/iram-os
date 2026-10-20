@@ -208,6 +208,13 @@ alias 'repo-traffic'='iram-repo-traffic'
 alias hub='iram hub'
 alias 'ai-ask'='iram-ai-ask'
 alias 'vision-ask'='iram-vision-ask'
+alias radar='iram-worldmonitor'
+alias finance='iram-finance'
+alias audit='iram-audit'
+alias reverse='iram-reverse'
+alias arch='iram-arch'
+alias condense='iram-context-condenser'
+alias hindsight='iram-hindsight'
 EOF
 fi
 
