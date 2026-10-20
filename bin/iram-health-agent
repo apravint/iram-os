@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Iram Self-Healing OS Agent (iram-health-agent)
-Powered by Antigravity AI Engine logic & systemd integration.
-Diagnoses Linux system failures, failed services, audio sinks, and auto-restarts broken components.
+Powered by Local-First AI Engine & systemd/PipeWire integration.
+Diagnoses Linux system failures, failed services, audio sinks, and auto-restarts broken components
+with memory logging in IRAM Hindsight.
 https://github.com/apravint/iram-os
 """
 
@@ -11,7 +12,13 @@ import os
 import subprocess
 import json
 import time
-import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import query_llm, condense_context, hindsight_retain
+except ImportError:
+    from iram_os.bin.iram_ai_core import query_llm, condense_context, hindsight_retain
+
 
 def run_cmd(cmd):
     try:
@@ -20,53 +27,24 @@ def run_cmd(cmd):
     except Exception as e:
         return f"Error: {str(e)}"
 
+
 def notify(title, message, urgency="normal"):
     print(f"[{urgency.upper()}] {title}: {message}")
     subprocess.run(["notify-send", "-u", urgency, "-a", "Iram Self-Healing OS", title, message])
 
-def get_api_key():
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    env_file = os.path.expanduser("~/.config/environment.d/20-gemini.conf")
-    if os.path.exists(env_file):
-        try:
-            with open(env_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        if val:
-                            return val
-        except Exception:
-            pass
-    return ""
 
-def ask_gemini_diagnosis(service_name, log_snippet):
-    api_key = get_api_key()
-    if not api_key:
-        return ""
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+def ask_ai_diagnosis(service_name, log_snippet):
+    if not log_snippet:
+        return "No recent journal logs available."
+    condensed = condense_context(log_snippet, query="error fail failed fatal crash", max_lines=20)
     prompt = (
         f"A systemd service '{service_name}' failed on IRAM OS.\n"
-        f"Recent journal log:\n```\n{log_snippet[:1500]}\n```\n"
+        f"Recent journal log (condensed):\n```\n{condensed}\n```\n"
         f"In 1 concise sentence, what is the root cause and recommended action?"
     )
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        return ""
+    res, provider = query_llm(prompt, num_predict=128)
+    return res.strip() if res else "Unknown failure"
+
 
 def check_failed_services():
     """Diagnose failed systemd units across user and system scopes."""
@@ -96,12 +74,14 @@ def check_failed_services():
 
     return failed
 
+
 def check_audio_subsystem():
     """Diagnose PipeWire / WirePlumber audio sinks."""
     out = run_cmd("pactl list sinks short")
     if not out or "error" in out.lower():
         return False
     return True
+
 
 def check_memory_usage():
     """Check system RAM usage percentage."""
@@ -111,6 +91,7 @@ def check_memory_usage():
     except Exception:
         return 0.0
 
+
 def check_disk_usage():
     """Check root filesystem disk usage percentage."""
     out = run_cmd("df / --output=pcent | tail -n 1 | tr -d ' %'")
@@ -118,6 +99,7 @@ def check_disk_usage():
         return float(out)
     except Exception:
         return 0.0
+
 
 def diagnose_and_heal():
     print("🔍 Starting Iram Self-Healing OS Inspection...")
@@ -138,13 +120,15 @@ def diagnose_and_heal():
             # Verify if still failing
             current_failed = [s[0] for s in check_failed_services()]
             if service in current_failed:
-                log_cmd = f"journalctl --user -u {service} -n 10 --no-pager" if is_user else f"journalctl -u {service} -n 10 --no-pager"
+                log_cmd = f"journalctl --user -u {service} -n 15 --no-pager" if is_user else f"journalctl -u {service} -n 15 --no-pager"
                 log_snippet = run_cmd(log_cmd)
-                ai_diagnosis = ask_gemini_diagnosis(service, log_snippet)
+                ai_diagnosis = ask_ai_diagnosis(service, log_snippet)
                 diag_msg = f" ({ai_diagnosis})" if ai_diagnosis else ""
                 actions_taken.append(f"❌ {service} restart failed{diag_msg}")
+                hindsight_retain(f"Self-Healing: service {service} failed restart: {ai_diagnosis}", category="health", importance=5)
             else:
                 actions_taken.append(f"✅ Restored failed service: {service}")
+                hindsight_retain(f"Self-Healing: restored service {service}", category="health", importance=3)
 
     # 2. Check Audio Subsystem
     if not check_audio_subsystem():
@@ -153,6 +137,7 @@ def diagnose_and_heal():
         time.sleep(1)
         if check_audio_subsystem():
             actions_taken.append("✅ Restored PipeWire & WirePlumber audio subsystem.")
+            hindsight_retain("Self-Healing: restarted PipeWire & WirePlumber audio subsystem", category="health", importance=3)
         else:
             actions_taken.append("⚠️ Audio subsystem recovery required manual check.")
 
@@ -177,6 +162,7 @@ def diagnose_and_heal():
         notify("🛡️ Self-Healing OS Action Summary", summary_msg, urgency="critical")
     else:
         print("✨ All system components, services, audio, and memory are healthy!")
+
 
 if __name__ == "__main__":
     diagnose_and_heal()

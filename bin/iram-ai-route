@@ -3,9 +3,11 @@
 IRAM OS Intelligent Model Router & Response Cache (iram-ai-route)
 Inspired by RouteLLM, LiteLLM, and GPTCache:
 - Evaluates task complexity dynamically
-- Routes cheap/fast queries to local Ollama / Flash-Lite ($0)
-- Routes hard architectural tasks to Frontier models
+- Routes fast queries to local Ollama qwen2.5:1.5b ($0, 1.2s)
+- Routes intermediate queries to local qwen2.5:7b
+- Routes complex reasoning tasks to local deepseek-r1:8b or Gemini
 - Caches frequent responses locally in ~/.local/state/iram/ai_cache/
+- Logs high-impact solutions to IRAM Hindsight
 https://github.com/apravint/iram-os
 """
 
@@ -19,10 +21,22 @@ import urllib.request
 import argparse
 from typing import Dict, Any, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import (
+        query_llm,
+        is_gemini_healthy,
+        hindsight_retain,
+        hindsight_recall
+    )
+except ImportError:
+    from iram_os.bin.iram_ai_core import (
+        query_llm, is_gemini_healthy, hindsight_retain, hindsight_recall
+    )
+
 CACHE_DIR = os.path.expanduser("~/.local/state/iram/ai_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# ANSI Colors
 CYAN = "\033[0;36m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
@@ -34,7 +48,7 @@ NC = "\033[0m"
 COMPLEX_KEYWORDS = [
     "architect", "refactor", "security", "concurrency", "deadlock",
     "algorithm", "optimize memory", "race condition", "protocol",
-    "design pattern", "verification", "self-heal", "distributed"
+    "design pattern", "verification", "self-heal", "distributed", "prove"
 ]
 
 SIMPLE_KEYWORDS = [
@@ -42,24 +56,12 @@ SIMPLE_KEYWORDS = [
     "git status", "kill", "find", "grep", "time", "date"
 ]
 
-def get_api_key() -> str:
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if key:
-        return key
-    conf_path = os.path.expanduser("~/.config/environment.d/20-gemini.conf")
-    if os.path.exists(conf_path):
-        with open(conf_path, "r") as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    return line.strip().split("=", 1)[1].strip('"').strip("'")
-    return ""
 
 def score_prompt_complexity(prompt: str) -> Tuple[int, str]:
     """Score prompt difficulty from 1 (simple) to 10 (frontier reasoning)."""
     score = 3  # baseline
     lower = prompt.lower()
-    
-    # Keyword checks
+
     for kw in COMPLEX_KEYWORDS:
         if kw in lower:
             score += 2
@@ -67,27 +69,26 @@ def score_prompt_complexity(prompt: str) -> Tuple[int, str]:
         if kw in lower:
             score -= 1
 
-    # Length heuristics
     words = len(prompt.split())
     if words > 150:
         score += 2
     elif words < 15:
         score -= 1
 
-    # Code blocks or backticks
     if "```" in prompt or "def " in prompt or "class " in prompt:
         score += 2
 
     score = max(1, min(10, score))
-    
+
     if score <= 3:
-        tier = "Tier 3: Local / Low-Compute ($0)"
-    elif score <= 7:
-        tier = "Tier 2: Balanced Standard"
+        tier = "Tier 3: Local Fast Sovereign (qwen2.5:1.5b)"
+    elif score <= 6:
+        tier = "Tier 2: Balanced Local Standard (qwen2.5:7b)"
     else:
-        tier = "Tier 1: High-Reasoning Frontier"
+        tier = "Tier 1: High-Reasoning Local Frontier (deepseek-r1:8b)"
 
     return score, tier
+
 
 def get_cached_response(prompt: str) -> str:
     h = hashlib.sha256(prompt.strip().encode("utf-8")).hexdigest()
@@ -100,6 +101,7 @@ def get_cached_response(prompt: str) -> str:
         except Exception:
             pass
     return ""
+
 
 def save_cache_response(prompt: str, response: str, model_used: str):
     h = hashlib.sha256(prompt.strip().encode("utf-8")).hexdigest()
@@ -115,8 +117,9 @@ def save_cache_response(prompt: str, response: str, model_used: str):
     except Exception:
         pass
 
+
 def route_and_execute(prompt: str, force_tier: int = 0) -> Tuple[str, str]:
-    # Check cache first (GPTCache pattern)
+    # 1. Check local response cache (GPTCache pattern)
     cached = get_cached_response(prompt)
     if cached:
         return cached, "Local Response Cache (0ms latency, $0 compute)"
@@ -125,50 +128,24 @@ def route_and_execute(prompt: str, force_tier: int = 0) -> Tuple[str, str]:
     if force_tier > 0:
         score = force_tier * 3
 
-    api_key = get_api_key()
-
+    # Dynamic local model selection based on complexity
     if score <= 3:
-        # Tier 3: Local Ollama or Flash-Lite
-        model = "gemini-3.5-flash-lite" if api_key else "qwen2.5:1.5b"
-    elif score <= 7:
-        # Tier 2: Balanced Flash
-        model = "gemini-2.5-flash" if api_key else "qwen2.5:1.5b"
+        target_model = "qwen2.5:1.5b"
+    elif score <= 6:
+        target_model = "qwen2.5:7b"
     else:
-        # Tier 1: Frontier Pro
-        model = "gemini-2.5-pro" if api_key else "qwen2.5:1.5b"
+        target_model = "deepseek-r1:8b"
 
-    # Execute
-    if api_key and "gemini" in model:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
-            )
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                output = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                save_cache_response(prompt, output, model)
-                return output, f"{model} ({tier_desc}, Complexity: {score}/10)"
-        except Exception:
-            pass
+    output, provider = query_llm(prompt, model=target_model, num_predict=512)
 
-    # Local fallback
-    try:
-        req = urllib.request.Request(
-            "http://localhost:11434/api/generate",
-            data=json.dumps({"model": "qwen2.5:1.5b", "prompt": prompt, "stream": False}).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            output = data.get("response", "").strip()
-            save_cache_response(prompt, output, "ollama:qwen2.5")
-            return output, f"Local Ollama (qwen2.5:1.5b, Complexity: {score}/10)"
-    except Exception as e:
-        return f"[Routing Error: {e}]", "None"
+    if output:
+        save_cache_response(prompt, output, target_model)
+        if score >= 7:
+            hindsight_retain(f"Complex solution ({prompt[:40]}): {output[:150]}", category="knowledge", importance=4)
+        return output, f"{provider} ({tier_desc}, Complexity: {score}/10)"
+
+    return "[All local and cloud AI providers offline]", "None"
+
 
 def main():
     parser = argparse.ArgumentParser(description="IRAM OS RouteLLM & GPTCache Intelligent Model Router")
@@ -178,33 +155,29 @@ def main():
     args = parser.parse_args()
 
     if args.clear_cache:
-        import shutil
-        count = len(os.listdir(CACHE_DIR))
-        shutil.rmtree(CACHE_DIR)
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        print(f"{GREEN}✓ Purged {count} cached AI responses.{NC}")
-        return
+        for f in os.listdir(CACHE_DIR):
+            if f.endswith(".json"):
+                os.remove(os.path.join(CACHE_DIR, f))
+        print(f"{GREEN}✓ Model response cache cleared.{NC}")
+        sys.exit(0)
 
-    if not args.prompt:
-        print("Usage: iram-ai-route '<query_or_prompt>'")
-        print("Example: iram-ai-route 'Format this date into ISO-8601'")
-        print("Example: iram-ai-route 'Architect a low-latency audio multiplexer for PipeWire'")
-        return
-
-    prompt_str = " ".join(args.prompt)
-    score, tier_desc = score_prompt_complexity(prompt_str)
+    raw_prompt = " ".join(args.prompt).strip()
+    if not raw_prompt:
+        parser.print_help()
+        sys.exit(1)
 
     if args.score_only:
-        print(f"{BOLD}Prompt Complexity Score:{NC} {score}/10")
-        print(f"{BOLD}Selected Execution Tier:{NC} {tier_desc}")
-        return
+        score, tier = score_prompt_complexity(raw_prompt)
+        print(f"{BOLD}Prompt:{NC} \"{raw_prompt}\"")
+        print(f"{BOLD}Complexity Score:{NC} {score}/10")
+        print(f"{BOLD}Assigned Tier:{NC} {tier}")
+        sys.exit(0)
 
-    t0 = time.time()
-    resp, route_info = route_and_execute(prompt_str)
-    dt = time.time() - t0
+    print(f"\n{BOLD}⚡ Smart Routing Task:{NC} \"{raw_prompt}\"")
+    output, route_info = route_and_execute(raw_prompt)
+    print(f"{BOLD}🎯 Routed to:{NC} {CYAN}{route_info}{NC}\n")
+    print(output)
 
-    print(f"\n{resp}\n")
-    print(f"{BLUE}⚡ Routed to: {route_info} | Latency: {dt:.2f}s{NC}")
 
 if __name__ == "__main__":
     main()

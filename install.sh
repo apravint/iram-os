@@ -21,8 +21,12 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}======================================================${NC}"
-echo -e "${GREEN}            IRAM OS - Setup & Installation${NC}"
+echo -e "${GREEN}            IRAM OS - Modular Distribution Setup${NC}"
 echo -e "${BLUE}======================================================${NC}"
+
+INSTALL_TARGET="${1:-all}"
+echo -e "${YELLOW}Target Profile: ${GREEN}${INSTALL_TARGET^^}${NC} (options: core | ai | craft | all)"
+echo -e "${BLUE}------------------------------------------------------${NC}"
 
 # Check for sudo/root
 if ! sudo -v &>/dev/null; then
@@ -30,7 +34,7 @@ if ! sudo -v &>/dev/null; then
     exit 1
 fi
 
-echo -e "\n${YELLOW}[1/6] Installing required Wayland & Hyprland packages...${NC}"
+echo -e "\n${YELLOW}[1/6] Installing desktop foundation & system dependencies...${NC}"
 sudo apt update
 sudo apt install -y \
     hyprland \
@@ -74,18 +78,22 @@ sudo apt install -y \
     git \
     socat
 
-# Install Ollama & OpenClaw Agentic Stack
-if ! command -v ollama >/dev/null 2>&1; then
-    echo "Installing Ollama Local LLM Engine..."
-    curl -fsSL https://ollama.com/install.sh | sh || true
-fi
-if command -v pip3 >/dev/null 2>&1; then
-    echo "Installing Iram Agentic Stack (FastMCP, Qdrant, Crawl4AI, Docling, Graphiti, smolagents, LangGraph, Phoenix)..."
-    pip3 install --break-system-packages fastmcp qdrant-client crawl4ai docling graphiti-core smolagents langgraph arize-phoenix openclaw edge-tts ddgs 2>/dev/null || true
-fi
-if command -v npm >/dev/null 2>&1; then
-    echo "Installing Repomix AI context bundler..."
-    npm install -g repomix 2>/dev/null || true
+# Install Ollama & OpenClaw Agentic Stack (if profile is 'all' or 'ai')
+if [ "$INSTALL_TARGET" = "all" ] || [ "$INSTALL_TARGET" = "ai" ]; then
+    if ! command -v ollama >/dev/null 2>&1; then
+        echo "Installing Ollama Local LLM Engine..."
+        curl -fsSL https://ollama.com/install.sh | sh || true
+    fi
+    if command -v pip3 >/dev/null 2>&1; then
+        echo "Installing IRAM Agentic Stack (FastMCP, Qdrant, Crawl4AI, Docling, Graphiti, smolagents, LangGraph)..."
+        pip3 install --break-system-packages fastmcp qdrant-client crawl4ai docling graphiti-core smolagents langgraph openclaw edge-tts ddgs 2>/dev/null || true
+    fi
+    if command -v npm >/dev/null 2>&1; then
+        echo "Installing Repomix AI context bundler..."
+        npm install -g repomix 2>/dev/null || true
+    fi
+else
+    echo "Skipping AI daemon dependencies (iram-desktop-core mode active)."
 fi
 
 echo -e "\n${YELLOW}[2/6] Installing IRAM OS core system files & theme suite...${NC}"
@@ -233,7 +241,10 @@ fi
 iram theme set "Cyberpunk Neon" || iram theme set "Tokyo Storm" || true
 "$HOME/.local/bin/iram-theme-sync-all" || true
 systemctl --user daemon-reload 2>/dev/null || true
-systemctl --user enable --now iram-agentd.service 2>/dev/null || true
+if [ "$INSTALL_TARGET" = "all" ] || [ "$INSTALL_TARGET" = "ai" ]; then
+    # Socket-activation for AI daemon (Zero idle RAM)
+    systemctl --user enable --now iram-agentd.socket 2>/dev/null || true
+fi
 systemctl --user enable --now iram-cliphist.service 2>/dev/null || true
 systemctl --user enable --now iram-hub.service 2>/dev/null || true
 systemctl --user enable --now iram-mcp-server.service 2>/dev/null || true
