@@ -175,7 +175,51 @@ case "$cmd" in
         exec "$LOCAL_BIN/iram-models" "$@"
         ;;
     memory|qdrant)
+        sub="${1:-}"
+        if [ "$sub" = "retain" ] || [ "$sub" = "recall" ] || [ "$sub" = "reflect" ]; then
+            exec "$LOCAL_BIN/iram-hindsight" "$@"
+        fi
         exec "$LOCAL_BIN/iram-memory" "$@"
+        ;;
+    condense|context)
+        exec "$LOCAL_BIN/iram-context-condenser" "$@"
+        ;;
+    audit|security-audit)
+        exec "$LOCAL_BIN/iram-audit" "$@"
+        ;;
+    reverse|dissect)
+        exec "$LOCAL_BIN/iram-reverse" "$@"
+        ;;
+    arch|architecture)
+        exec "$LOCAL_BIN/iram-arch" "$@"
+        ;;
+    finance)
+        exec "$LOCAL_BIN/iram-finance" "$@"
+        ;;
+    worldmonitor|radar)
+        exec "$LOCAL_BIN/iram-worldmonitor" "$@"
+        ;;
+    swarm)
+        if command -v ruflo >/dev/null 2>&1; then
+            exec ruflo "$@"
+        elif [ -x "$HOME/.local/bin/ruflo" ]; then
+            exec "$HOME/.local/bin/ruflo" "$@"
+        else
+            exec npx -y ruflo "$@"
+        fi
+        ;;
+    openrig|team)
+        sub="${1:-}"
+        if [ "$sub" = "board" ] || [ "$sub" = "paperclip" ]; then
+            xdg-open "http://localhost:3100" 2>/dev/null || chromium --app="http://localhost:3100" 2>/dev/null &
+            exit 0
+        fi
+        if [ -d "$HOME/.local/share/iram/openrig" ]; then
+            cd "$HOME/.local/share/iram/openrig" && exec node packages/cli/bin/run.mjs "$@"
+        else
+            echo -e "${RED}OpenRig repository not found.${NC} Checked ~/.local/share/iram/openrig."
+            exit 1
+        fi
         ;;
     workflow)
         exec "$LOCAL_BIN/iram-workflow" "$@"

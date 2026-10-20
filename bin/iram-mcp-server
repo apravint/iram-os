@@ -302,6 +302,97 @@ def run_harness_workflow(task: str) -> str:
     except Exception as e:
         return f"Harness² error: {e}"
 
+# --- CONTEXT CONDENSER (98% BM25 COMPRESSION) ---
+@mcp.tool()
+def condense_context(raw_text: str, query: str = "") -> str:
+    """Compresses massive tool outputs (logs, git diffs, file dumps) up to 98% using local SQLite FTS5 BM25 ranking."""
+    try:
+        res = subprocess.run(["iram-context-condenser", "-q", query], input=raw_text, capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Condenser error: {e}"
+
+# --- HINDSIGHT LONG-TERM AGENT MEMORY ---
+@mcp.tool()
+def memory_retain(fact: str, category: str = "general", importance: int = 5) -> str:
+    """Retains a critical project or system fact into persistent long-term memory with temporal decay."""
+    try:
+        res = subprocess.run(["iram-hindsight", "retain", fact, "-c", category, "-i", str(importance)], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Memory retain error: {e}"
+
+@mcp.tool()
+def memory_recall(query: str = "", category: str = "", limit: int = 5) -> str:
+    """Recalls relevant long-term memory facts ranked by BM25 relevance and recency decay."""
+    try:
+        cmd = ["iram-hindsight", "recall", query, "-n", str(limit)]
+        if category:
+            cmd.extend(["-c", category])
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Memory recall error: {e}"
+
+@mcp.tool()
+def memory_reflect() -> str:
+    """Synthesizes memory statistics, top themes, and long-term knowledge anchors."""
+    try:
+        res = subprocess.run(["iram-hindsight", "reflect"], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Memory reflect error: {e}"
+
+# --- ADVERSARIAL SECURITY AUDITING ---
+@mcp.tool()
+def security_audit_repo(repo_path: str = ".") -> str:
+    """Executes a 6-phase adversarial vulnerability audit (Hunter vs Verifier) across a repository."""
+    try:
+        res = subprocess.run(["iram-audit", repo_path], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Security audit error: {e}"
+
+# --- REVERSE ENGINEERING (REA) ---
+@mcp.tool()
+def reverse_engineer_target(target_path: str) -> str:
+    """Disassembles and inspects binary headers, exported symbols, linked libraries, and strings."""
+    try:
+        res = subprocess.run(["iram-reverse", target_path], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Reverse engineering error: {e}"
+
+# --- QUANTITATIVE VALUATION & DCF ---
+@mcp.tool()
+def financial_dcf(ticker: str, fcf: float, growth: float = 0.12, wacc: float = 0.09) -> str:
+    """Calculates multi-stage Discounted Cash Flow (DCF) enterprise valuation and terminal value."""
+    try:
+        res = subprocess.run(["iram-finance", "dcf", ticker, "--fcf", str(fcf), "--growth", str(growth), "--wacc", str(wacc)], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Financial DCF error: {e}"
+
+# --- GLOBAL RADAR & SITUATIONAL AWARENESS ---
+@mcp.tool()
+def get_world_radar() -> str:
+    """Queries live global situational awareness telemetry (maritime chokepoints, GPS jamming, subsea cables)."""
+    try:
+        res = subprocess.run(["iram-worldmonitor"], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"World radar error: {e}"
+
+# --- ARCHITECTURE MAP GENERATOR ---
+@mcp.tool()
+def generate_architecture_map(repo_path: str = ".") -> str:
+    """Generates an explorable interactive HTML/SVG architecture and component hierarchy map."""
+    try:
+        res = subprocess.run(["iram-arch", repo_path], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Architecture map error: {e}"
+
 def main():
     if "--sse" in sys.argv or os.environ.get("IRAM_MCP_TRANSPORT") == "sse":
         port = int(os.environ.get("IRAM_MCP_PORT", 8991))

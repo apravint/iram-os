@@ -149,6 +149,25 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
                 dispatcher = params.get("cmd", [""])[0]
                 args = params.get("args", [""])[0]
                 response_data = self.handle_hypr(dispatcher, args)
+            elif path == "/api/finance":
+                ticker = params.get("ticker", ["NVDA"])[0]
+                fcf = float(params.get("fcf", [50000.0])[0])
+                growth = float(params.get("growth", [0.15])[0])
+                wacc = float(params.get("wacc", [0.09])[0])
+                cmd = [resolve_bin("iram-finance"), "dcf", ticker, "--fcf", str(fcf), "--growth", str(growth), "--wacc", str(wacc)]
+                out = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+                response_data = {"ok": True, "ticker": ticker, "report": out}
+            elif path == "/api/worldmonitor":
+                cmd = [resolve_bin("iram-worldmonitor"), "--json"]
+                out = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+                try:
+                    response_data = json.loads(out)
+                except Exception:
+                    response_data = {"ok": True, "raw": out}
+            elif path == "/api/arch":
+                cmd = [resolve_bin("iram-arch"), "."]
+                out = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+                response_data = {"ok": True, "result": out, "url": "/arch"}
             elif path == "/api/mcp":
                 response_data = {
                     "ok": True,
@@ -157,7 +176,10 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
                         "get_windows", "focus_window", "dispatch_hyprland", "get_monitors",
                         "get_system_health", "qdrant_search_code", "run_harness_workflow",
                         "voice_speak", "voice_clone", "voice_design", "list_voices",
-                        "open_3d_inspector", "open_agent_swarm_graph", "open_3d_theme_studio"
+                        "open_3d_inspector", "open_agent_swarm_graph", "open_3d_theme_studio",
+                        "condense_context", "memory_retain", "memory_recall", "memory_reflect",
+                        "security_audit_repo", "reverse_engineer_target", "financial_dcf",
+                        "get_world_radar", "generate_architecture_map"
                     ]
                 }
             else:
