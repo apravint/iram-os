@@ -405,7 +405,7 @@ class ThemeSwitcherApp(Gtk.Window):
             background-color: #1a1e2d;
             color: #ffffff;
             border: 1px solid #2e354d;
-            border-radius: 8px;
+            border-radius: 0px;
             padding: 8px 14px;
             font-size: 14px;
         }
@@ -417,7 +417,7 @@ class ThemeSwitcherApp(Gtk.Window):
             background-color: #1a1e2d;
             color: #8f98ba;
             border: 1px solid #282f45;
-            border-radius: 20px;
+            border-radius: 0px;
             padding: 6px 16px;
             font-size: 12px;
             font-weight: 700;
@@ -438,7 +438,7 @@ class ThemeSwitcherApp(Gtk.Window):
             background-color: #1a1e2d;
             color: #cdd6f4;
             border: 1px solid #2e354d;
-            border-radius: 8px;
+            border-radius: 0px;
             padding: 6px 14px;
             font-size: 12px;
             font-weight: 600;
@@ -464,7 +464,7 @@ class ThemeSwitcherApp(Gtk.Window):
         .theme-card {
             background-color: #161824;
             border: 2px solid #24293d;
-            border-radius: 10px;
+            border-radius: 0px;
             padding: 8px;
             transition: all 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
         }
@@ -489,7 +489,7 @@ class ThemeSwitcherApp(Gtk.Window):
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 4px;
+            border-radius: 0px;
         }
         .cyber-badge {
             background-color: rgba(255, 0, 128, 0.2);
@@ -497,7 +497,7 @@ class ThemeSwitcherApp(Gtk.Window):
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 4px;
+            border-radius: 0px;
         }
         .light-badge {
             background-color: rgba(255, 193, 7, 0.2);
@@ -505,7 +505,7 @@ class ThemeSwitcherApp(Gtk.Window):
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 4px;
+            border-radius: 0px;
         }
         .generic-badge {
             background-color: rgba(140, 150, 180, 0.18);
@@ -513,7 +513,7 @@ class ThemeSwitcherApp(Gtk.Window):
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 4px;
+            border-radius: 0px;
         }
         .active-badge {
             background-color: #05ffa1;
@@ -521,7 +521,7 @@ class ThemeSwitcherApp(Gtk.Window):
             font-size: 10px;
             font-weight: 800;
             padding: 2px 8px;
-            border-radius: 4px;
+            border-radius: 0px;
         }
         .wp-badge {
             font-size: 11px;
@@ -531,7 +531,7 @@ class ThemeSwitcherApp(Gtk.Window):
             background-color: #00f0ff;
             color: #06080e;
             font-weight: 800;
-            border-radius: 8px;
+            border-radius: 0px;
             padding: 10px 24px;
             font-size: 14px;
             border: none;
@@ -544,7 +544,7 @@ class ThemeSwitcherApp(Gtk.Window):
             background-color: #1a1e2d;
             color: #cdd6f4;
             border: 1px solid #2e354d;
-            border-radius: 8px;
+            border-radius: 0px;
             padding: 10px 20px;
             font-size: 14px;
         }

@@ -178,11 +178,18 @@ case "$ACTION" in
     off)
         cmd_off
         ;;
+    toggle)
+        if pgrep -f "pipewire.*iram-speaker-tuning.conf" >/dev/null 2>&1 || [ "$(get_default_sink)" = "iram_speaker_tuning" ]; then
+            cmd_off
+        else
+            cmd_on
+        fi
+        ;;
     match)
         detect_tuning
         ;;
     help|--help|-h)
-        echo "Usage: iram audio tuning [status|on|off|match]"
+        echo "Usage: iram audio tuning [status|on|off|toggle|match]"
         ;;
     *)
         cmd_status

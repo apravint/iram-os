@@ -37,6 +37,30 @@ if [ -n "$TEXT" ]; then
         notify-send -a "IRAM OCR" "📝 Text Extracted to Clipboard" "$PREVIEW" -t 4000
     fi
     echo "$TEXT"
+
+    # Interactive Action Chips
+    if [[ "${1:-}" == "--chips" || "${1:-}" == "--action" ]]; then
+        CHIP=$(printf "📋 Copied to Clipboard\n🧠 Ask Agent to Explain / Fix\n🌐 Search Google / Web\n🔊 Read Aloud (TTS)\n📝 Open in Editor Scratchpad" | wofi --dmenu --prompt "OCR Action:" --width 360 --height 220 2>/dev/null || true)
+        case "$CHIP" in
+            *"Ask Agent"*)
+                TMP_PROMPT=$(mktemp --suffix=.txt)
+                echo "$TEXT" > "$TMP_PROMPT"
+                alacritty --title "IRAM AI Agent" -e iram agent "Explain and diagnose this screen snippet:\n\n$(cat "$TMP_PROMPT")" 2>/dev/null &
+                ;;
+            *"Search"*)
+                QUERY=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.stdin.read()[:150].strip()))" <<< "$TEXT")
+                xdg-open "https://www.google.com/search?q=$QUERY" 2>/dev/null &
+                ;;
+            *"Read Aloud"*)
+                if command -v iram-tts >/dev/null 2>&1; then
+                    iram-tts "$TEXT" 2>/dev/null &
+                fi
+                ;;
+            *"Open in Editor"*)
+                alacritty -e nvim -c "put =@+" 2>/dev/null &
+                ;;
+        esac
+    fi
 else
     if command -v notify-send >/dev/null 2>&1; then
         notify-send -u low -a "IRAM OCR" "No Text Found" "Could not detect readable text in selected region." -t 3000
