@@ -470,14 +470,16 @@ class ThemeSwitcherApp(Gtk.Window):
         self.info_label.set_text(f"⏳ Applying {disp_name}...")
 
         def worker():
-            subprocess.run(['iram', 'theme', 'set', theme_name], check=False)
+            iram_bin = shutil.which('iram') or os.path.expanduser('~/.local/bin/iram')
+            subprocess.run([iram_bin, 'theme', 'set', theme_name], check=False)
 
             def on_done():
                 self.apply_btn.set_sensitive(True)
+                theme_slug = theme_name.lower().replace(' ', '-')
                 for name, card in self.cards.items():
-                    card.set_active_state(name == theme_name)
+                    card.set_active_state(name.lower().replace(' ', '-') == theme_slug)
 
-                self.current_theme = theme_name
+                self.current_theme = theme_slug
                 self.sub_label.set_text(f"Active theme: {disp_name}")
                 self.info_label.set_text(f"✅ Applied {disp_name} successfully!")
 
