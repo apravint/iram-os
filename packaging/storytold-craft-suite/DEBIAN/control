@@ -1,0 +1,10 @@
+Package: storytold-craft-suite
+Version: 26.10.1
+Section: graphics
+Priority: optional
+Architecture: all
+Depends: iram-desktop-core, ffmpeg, imagemagick
+Maintainer: Ayyappa Pravin <apravint@users.noreply.github.com>
+Description: Storytold Creative Craft Suite & Spatial Studio
+ Creative suite featuring PhotoCraft, VectorCraft, FilmCraft, SoundCraft,
+ CADCraft, 3D WebGL spatial viewer, and VoiceStudio local voice cloning.

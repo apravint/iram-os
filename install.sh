@@ -38,6 +38,8 @@ sudo apt install -y \
     wofi \
     swaybg \
     swaylock \
+    hyprlock \
+    hypridle \
     mako-notifier \
     grim \
     slurp \
@@ -152,8 +154,9 @@ for dir in hypr waybar wofi mako; do
 done
 
 # Copy configurations & MCP servers
-mkdir -p "$HOME/.config/mcp"
+mkdir -p "$HOME/.config/mcp" "$HOME/.config/hypr"
 cp -r "$REPO_DIR/config/"* "$HOME/.config/"
+touch "$HOME/.config/hypr/monitors.conf"
 
 # Copy scripts & make executable
 cp -a "$REPO_DIR/bin/"* "$HOME/.local/bin/"

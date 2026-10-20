@@ -2,14 +2,26 @@
 """
 Iram AI Smart Clipboard & Code Assistant (iram-ai-clipboard)
 Provides 1-click AI transformations on copied text: Summarize, Refactor Code, Translate, Extract Actions.
+Fast, local-first inference powered by Ollama and Gemini with context condensing and Hindsight.
 https://github.com/apravint/iram-os
 """
 
 import sys
 import os
 import subprocess
-import json
-import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import (
+        query_llm,
+        condense_context,
+        hindsight_retain
+    )
+except ImportError:
+    from iram_os.bin.iram_ai_core import (
+        query_llm, condense_context, hindsight_retain
+    )
+
 
 def get_clipboard_text():
     try:
@@ -17,73 +29,6 @@ def get_clipboard_text():
     except Exception:
         return ""
 
-def get_api_key():
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    env_file = os.path.expanduser("~/.config/environment.d/20-gemini.conf")
-    if os.path.exists(env_file):
-        try:
-            with open(env_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        if val:
-                            return val
-        except Exception:
-            pass
-    zshrc = os.path.expanduser("~/.zshrc")
-    if os.path.exists(zshrc):
-        try:
-            with open(zshrc, "r") as f:
-                for line in f:
-                    if "GEMINI_API_KEY=" in line and not line.strip().startswith("#"):
-                        return line.split("GEMINI_API_KEY=", 1)[1].strip().strip('"').strip("'")
-        except Exception:
-            pass
-    return ""
-
-def ask_gemini(prompt, content):
-    api_key = get_api_key()
-    if not api_key:
-        return ""
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    payload = {
-        "contents": [{"parts": [{"text": f"{prompt}:\n\n```\n{content}\n```\n\nOutput clean, concise result:"}]}]
-    }
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        return ""
-
-def ask_ollama(prompt, content):
-    url = "http://localhost:11434/api/generate"
-    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
-    payload = {
-        "model": model,
-        "prompt": f"{prompt}:\n\n```\n{content}\n```\n\nOutput clean, concise result:",
-        "stream": False,
-        "options": {
-            "num_ctx": 4096,
-            "num_predict": 256
-        }
-    }
-    try:
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data.get("response", "No response received.")
-    except Exception as e:
-        return f"Error: {e}"
 
 def show_wofi_actions(clip_text):
     if not clip_text:
@@ -110,23 +55,42 @@ def show_wofi_actions(clip_text):
 
         subprocess.run(['notify-send', '-a', 'Iram AI Clipboard', '🤖 Processing AI Action...', selected_action], check=False)
 
-        prompt_type = "Summarize text"
-        if "Refactor" in selected_action:
-            prompt_type = "Refactor this code, fix bugs, optimize, and explain changes"
-        elif "Translate" in selected_action:
-            prompt_type = "Translate this text accurately into Tamil and English"
-        elif "Action Items" in selected_action:
-            prompt_type = "Extract bullet point key action items and takeaways"
+        # Condense large clipboard text (e.g. huge logs or stack traces)
+        processed_content = clip_text
+        if len(clip_text.splitlines()) > 35:
+            processed_content = condense_context(clip_text, query="error exception warning func def", max_lines=35)
 
-        result = ask_gemini(prompt_type, clip_text) or ask_ollama(prompt_type, clip_text)
+        system_instruction = "You are an intelligent desktop assistant. Format the response clearly and concisely."
+        if "Refactor" in selected_action:
+            system_instruction = "You are an expert software engineer. Refactor this code, fix bugs, optimize performance, and output clean code."
+            task_prompt = f"Refactor and optimize this code:\n\n```\n{processed_content}\n```"
+        elif "Translate" in selected_action:
+            system_instruction = "You are a professional translator fluent in English and Tamil."
+            task_prompt = f"Translate the following text accurately into Tamil and clean English:\n\n{processed_content}"
+        elif "Action Items" in selected_action:
+            system_instruction = "You are an executive assistant. Extract actionable items."
+            task_prompt = f"Extract bullet point key action items and takeaways from this text:\n\n{processed_content}"
+        else:
+            task_prompt = f"Summarize this text concisely into 3 punchy bullet points:\n\n{processed_content}"
+
+        result, provider = query_llm(task_prompt, system_prompt=system_instruction, num_predict=512)
+
+        if not result:
+            subprocess.run(['notify-send', '-a', 'Iram AI Clipboard', '⚠️ AI Error', 'Could not process clipboard text.'])
+            sys.exit(1)
 
         # Copy back to clipboard
         subprocess.run(["wl-copy"], input=result.encode("utf-8"))
 
+        # Save to Hindsight memory if action items or summary
+        if "Action Items" in selected_action or "Summarize" in selected_action:
+            hindsight_retain(f"Clipboard action '{selected_action[:30]}': {result[:180]}", category="clipboard", importance=3)
+
         summary = result[:200] + ("..." if len(result) > 200 else "")
-        subprocess.run(['notify-send', '-a', 'Iram AI Clipboard', '✅ AI Result Copied to Clipboard!', summary])
+        subprocess.run(['notify-send', '-a', 'Iram AI Clipboard', f'✅ Result Copied! [{provider}]', summary])
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     clip = get_clipboard_text()

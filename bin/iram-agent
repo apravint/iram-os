@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Iram Agentic OS Assistant (Super + A)
-# Powered by Harness² Modular Architecture & K-Dense Skills
+# Powered by Harness² Modular Architecture, Local-First AI & Hindsight Memory
 # Prompt-driven autonomous actions and window management
 # ==============================================================================
 
@@ -26,10 +26,21 @@ fi
 python3 - "$PROMPT" << 'EOF'
 import sys
 import json
-import urllib.request
 import subprocess
 import os
 import datetime
+
+# Import AI Core & Hindsight
+SCRIPT_DIR = os.path.expanduser("~/iram-os/bin")
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+from iram_ai_core import (
+    query_llm,
+    hindsight_recall,
+    hindsight_retain,
+    clean_bash_command
+)
 
 prompt = sys.argv[1]
 print(f"🤖 Iram Agent executing: {prompt}")
@@ -59,6 +70,14 @@ sys_prompt_content = read_file_safe(SYSTEM_PROMPT_FILE, "You are the Iram Agenti
 guardrails_content = read_file_safe(GUARDRAILS_FILE, "")
 tool_guidance_content = read_file_safe(TOOL_GUIDANCE_FILE, "")
 
+# Recall relevant Hindsight long-term memory
+recalled_memories = hindsight_recall(prompt, limit=3)
+memory_context = ""
+if recalled_memories:
+    mem_lines = [f"• {m['fact']}" for m in recalled_memories if m.get("score", 0) > 0.5]
+    if mem_lines:
+        memory_context = "## Prior Learned System Memory (Hindsight)\n" + "\n".join(mem_lines) + "\n"
+
 # Build composite prompt from Harness components
 composite_system_prompt = f"""{sys_prompt_content}
 
@@ -68,80 +87,22 @@ composite_system_prompt = f"""{sys_prompt_content}
 ## Tool Guidance
 {tool_guidance_content}
 
+{memory_context}
 When replying, provide an explanation and list executable bash commands on separate lines starting with hyprctl, iram, wpctl, pactl, craft-, or notify-send.
 """
 
 # ------------------------------------------------------------------------------
-# 2. Model Dispatch (Gemini API / Local Ollama fallback)
+# 2. Model Dispatch (Instant Local-First via AI Core)
 # ------------------------------------------------------------------------------
-def get_api_key():
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    env_file = os.path.expanduser("~/.config/environment.d/20-gemini.conf")
-    if os.path.exists(env_file):
-        try:
-            with open(env_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        if val:
-                            return val
-        except Exception:
-            pass
-    zshrc = os.path.expanduser("~/.zshrc")
-    if os.path.exists(zshrc):
-        try:
-            with open(zshrc, "r") as f:
-                for line in f:
-                    if "GEMINI_API_KEY=" in line and not line.strip().startswith("#"):
-                        return line.split("GEMINI_API_KEY=", 1)[1].strip().strip('"').strip("'")
-        except Exception:
-            pass
-    return ""
-
-answer = ""
-api_key = get_api_key()
-
-if api_key:
-    try:
-        gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
-        payload = {
-            "contents": [{"parts": [{"text": f"{composite_system_prompt}\nUser Request: {prompt}\nResponse:"}]}]
-        }
-        req = urllib.request.Request(
-            gemini_url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            answer = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception as e:
-        print(f"Gemini API request note: {e}")
+user_task = f"User Request: {prompt}\nResponse:"
+answer, provider = query_llm(user_task, system_prompt=composite_system_prompt, num_predict=384)
 
 if not answer:
-    url = "http://localhost:11434/api/generate"
-    ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
-    data = json.dumps({
-        "model": ollama_model,
-        "prompt": f"{composite_system_prompt}\nUser Request: {prompt}\nResponse:",
-        "stream": False
-    }).encode("utf-8")
+    print("Error: Could not reach agent model (Ollama offline).")
+    subprocess.run(["notify-send", "-a", "Iram Agent", "⚠️ Model Unavailable", "Please ensure Ollama is running."])
+    sys.exit(1)
 
-    try:
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            res = json.loads(resp.read().decode("utf-8"))
-            answer = res.get("response", "").strip()
-    except Exception as e:
-        print(f"Error contacting agent model: {e}")
-        subprocess.run(["notify-send", "-a", "Iram Agent", "⚠️ Model Unavailable", "Please ensure GEMINI_API_KEY or Ollama is running."])
-        sys.exit(1)
-
-print("► Agent Response:\n", answer)
+print(f"► Agent Response [{provider}]:\n{answer}")
 
 # ------------------------------------------------------------------------------
 # 3. Guardrails & Propose-Probe-Compose Execution
@@ -172,9 +133,21 @@ for raw_line in answer.split("\n"):
             failed_commands.append({"cmd": clean_line, "code": res.returncode, "err": res.stderr.strip()})
 
 # ------------------------------------------------------------------------------
-# 4. Harnessing-Level Reflection Persistence
+# 4. Hindsight Memory & Reflection Persistence
 # ------------------------------------------------------------------------------
+if executed_commands:
+    hindsight_retain(
+        f"Agent task '{prompt}' executed: {', '.join(executed_commands)}",
+        category="agent",
+        importance=4
+    )
+
 if failed_commands:
+    hindsight_retain(
+        f"Agent task '{prompt}' failed command(s): {json.dumps(failed_commands)}",
+        category="reflection",
+        importance=5
+    )
     reflection_record = {
         "timestamp": datetime.datetime.now().isoformat(),
         "prompt": prompt,
@@ -188,5 +161,5 @@ if failed_commands:
         pass
 
 msg = f"Executed {len(executed_commands)} action(s)." if executed_commands else "Processed query."
-subprocess.run(["notify-send", "-a", "Iram Agent", "✓ Action Completed", f"{msg}\n{prompt[:60]}"])
+subprocess.run(["notify-send", "-a", "Iram Agent", f"✓ Completed [{provider}]", f"{msg}\n{prompt[:60]}"])
 EOF

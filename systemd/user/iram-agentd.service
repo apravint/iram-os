@@ -1,0 +1,14 @@
+[Unit]
+Description=IRAM OS Agentic Service Daemon (On-Demand Activation)
+Requires=iram-agentd.socket
+After=network.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/.local/bin/iram-agent-daemon --idle-timeout 900
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

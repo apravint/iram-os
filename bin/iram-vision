@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Iram Visual AI Analyst & OCR Extractor (iram-vision)
-Captures screen regions and uses multimodal Vision AI (Google Gemini / Qwen2-VL / LLaVA)
+Captures screen regions and uses Multimodal Vision AI / Tesseract OCR / Qwen
 to analyze code errors, tables, and UI layouts, or extract text directly to clipboard (--ocr).
 https://github.com/apravint/iram-os
 """
@@ -13,34 +13,21 @@ import json
 import base64
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import (
+        is_gemini_healthy,
+        get_gemini_api_key,
+        mark_gemini_failed,
+        query_llm
+    )
+except ImportError:
+    from iram_os.bin.iram_ai_core import (
+        is_gemini_healthy, get_gemini_api_key, mark_gemini_failed, query_llm
+    )
+
 IMG_PATH = "/tmp/iram_vision.png"
 
-def get_api_key():
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    env_file = os.path.expanduser("~/.config/environment.d/20-gemini.conf")
-    if os.path.exists(env_file):
-        try:
-            with open(env_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        if val:
-                            return val
-        except Exception:
-            pass
-    zshrc = os.path.expanduser("~/.zshrc")
-    if os.path.exists(zshrc):
-        try:
-            with open(zshrc, "r") as f:
-                for line in f:
-                    if "GEMINI_API_KEY=" in line and not line.strip().startswith("#"):
-                        return line.split("GEMINI_API_KEY=", 1)[1].strip().strip('"').strip("'")
-        except Exception:
-            pass
-    return ""
 
 def capture_region():
     try:
@@ -48,6 +35,7 @@ def capture_region():
         return True
     except Exception:
         return False
+
 
 def get_wofi_prompt():
     try:
@@ -59,14 +47,28 @@ def get_wofi_prompt():
     except Exception:
         return "Analyze and explain what is visible in this image in detail."
 
+
+def run_tesseract_ocr(img_path):
+    """Instant local OCR fallback using Tesseract."""
+    try:
+        res = subprocess.run(["tesseract", img_path, "stdout"], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return ""
+
+
 def analyze_image_gemini(img_path, prompt):
-    api_key = get_api_key()
-    if not api_key or not os.path.exists(img_path):
+    if not is_gemini_healthy() or not os.path.exists(img_path):
+        return ""
+    api_key = get_gemini_api_key()
+    if not api_key:
         return ""
     try:
         with open(img_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode("utf-8")
-        model = os.environ.get("GEMINI_VISION_MODEL", os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"))
+        model = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-flash")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         payload = {
             "contents": [{
@@ -81,22 +83,42 @@ def analyze_image_gemini(img_path, prompt):
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
         )
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
+    except Exception as e:
+        mark_gemini_failed(str(e))
         return ""
+
 
 def analyze_image_ollama(img_path, prompt):
     if not os.path.exists(img_path):
-        return "Error: Screen capture failed."
+        return ""
+
+    # Check if an Ollama vision model exists
+    vision_model = os.environ.get("OLLAMA_VISION_MODEL", "")
+    if not vision_model:
+        try:
+            req = urllib.request.Request("http://localhost:11434/api/tags")
+            with urllib.request.urlopen(req, timeout=0.5) as r:
+                tags = json.loads(r.read())
+                models = [m.get("name", "") for m in tags.get("models", [])]
+                for m in models:
+                    if any(v in m.lower() for v in ["vl", "vision", "llava", "moondream", "minicpm"]):
+                        vision_model = m
+                        break
+        except Exception:
+            pass
+
+    if not vision_model:
+        return ""
 
     with open(img_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode("utf-8")
 
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": os.environ.get("OLLAMA_VISION_MODEL", "qwen2-vl"),
+        "model": vision_model,
         "prompt": prompt,
         "images": [img_b64],
         "stream": False
@@ -104,43 +126,60 @@ def analyze_image_ollama(img_path, prompt):
 
     try:
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data.get("response", "No vision response received.")
-    except Exception as e:
-        try:
-            ocr_text = subprocess.check_output(f"tesseract {img_path} stdout 2>/dev/null", shell=True, text=True)
-            return f"👁️ OCR Extracted Text:\n{ocr_text.strip()}"
-        except Exception:
-            return f"Error contacting Ollama vision model: {e}"
+            return data.get("response", "").strip()
+    except Exception:
+        return ""
+
 
 def main():
     is_ocr = "--ocr" in sys.argv
 
     if is_ocr:
-        subprocess.run("notify-send -a 'Iram Vision' '📝 Select Text to Extract' 'Drag a box over any text, code, or image.' -t 2000", shell=True)
+        subprocess.run("notify-send -a 'Iram Vision' '📝 Select Text to Extract' 'Drag a box over text, code, or terminal.' -t 2000", shell=True)
     else:
         subprocess.run("notify-send -a 'Iram Vision' '👁️ Select Screen Region' 'Drag a box over the region you want to analyze.' -t 2000", shell=True)
 
     if not capture_region():
         sys.exit(0)
 
+    analysis = ""
+    provider = "Local Tesseract OCR"
+
     if is_ocr:
-        prompt = (
-            "Perform optical character recognition (OCR) on this image. "
-            "Extract all text exactly as written, preserving original layout and line breaks where appropriate. "
-            "Return ONLY the extracted text. Do not wrap in markdown code blocks unless the image contains code. "
-            "Do not include conversational preamble or commentary."
-        )
-        subprocess.run("notify-send -a 'Iram Vision' '⚡ Extracting Text with Gemini...' 'Reading characters...' -t 2000", shell=True)
+        # For pure OCR: Tesseract is instant (0.1s) and 100% offline
+        analysis = run_tesseract_ocr(IMG_PATH)
+        if not analysis:
+            # Fallback to Gemini if tesseract failed
+            prompt = "Extract all text from this image accurately. Return only the extracted text."
+            analysis = analyze_image_gemini(IMG_PATH, prompt)
+            provider = "Gemini OCR"
     else:
         prompt = get_wofi_prompt()
-        subprocess.run("notify-send -a 'Iram Vision' '🤖 Analyzing Image...' 'Processing visual model analysis...' -t 3000", shell=True)
+        subprocess.run("notify-send -a 'Iram Vision' '🤖 Analyzing Image...' 'Processing visual model analysis...' -t 2000", shell=True)
 
-    analysis = analyze_image_gemini(IMG_PATH, prompt) or analyze_image_ollama(IMG_PATH, prompt)
+        # 1. Try Gemini Vision if healthy
+        analysis = analyze_image_gemini(IMG_PATH, prompt)
+        provider = "Gemini Vision"
+
+        # 2. Try Ollama Vision if available
+        if not analysis:
+            analysis = analyze_image_ollama(IMG_PATH, prompt)
+            provider = "Ollama Vision"
+
+        # 3. Hybrid Fallback: Tesseract OCR + Local Qwen Reasoning
+        if not analysis:
+            ocr_text = run_tesseract_ocr(IMG_PATH)
+            if ocr_text:
+                hybrid_prompt = f"The user asked: '{prompt}' about a screen region containing this text:\n\n```\n{ocr_text}\n```\nProvide a clear and helpful explanation:"
+                reasoning, p_name = query_llm(hybrid_prompt)
+                if reasoning:
+                    analysis = f"{reasoning}\n\n[Extracted Screen Text]:\n{ocr_text[:300]}"
+                    provider = f"Hybrid ({p_name} + OCR)"
 
     if not analysis:
-        subprocess.run('notify-send -a "Iram Vision AI" "⚠️ Extraction Failed" "Could not extract or analyze image."', shell=True)
+        subprocess.run('notify-send -a "Iram Vision AI" "⚠️ Extraction Failed" "No text or visual content could be analyzed."', shell=True)
         sys.exit(1)
 
     # Copy analysis result to clipboard
@@ -148,8 +187,9 @@ def main():
 
     # Display desktop alert summary
     short_summary = analysis[:250] + ("..." if len(analysis) > 250 else "")
-    title = "✨ Text Copied to Clipboard!" if is_ocr else "👁️ Vision Analysis Result (Copied to Clipboard)"
+    title = f"✨ Text Copied! [{provider}]" if is_ocr else f"👁️ Vision Analysis [{provider}]"
     subprocess.run(["notify-send", "-a", "Iram Vision AI", title, short_summary])
+
 
 if __name__ == "__main__":
     main()

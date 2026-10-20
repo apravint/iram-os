@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
-Iram Agentic OS Daemon (iram-agent-daemon)
+IRAM OS Agentic Daemon (iram-agent-daemon)
 Background service managing agent state, Waybar status reporting, and REST trigger API.
+Supports:
+- Systemd socket activation (ListenStream=127.0.0.1:9090)
+- Lazy on-demand lifecycle & idle auto-stop to conserve RAM and battery
+https://github.com/apravint/iram-os
 """
 
 import sys
 import os
 import json
 import time
+import socket
+import select
 import subprocess
+import argparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
 
 def get_api_key():
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -58,8 +64,12 @@ AGENT_STATE = {
     "updated_at": time.time()
 }
 
+LAST_ACTIVITY = time.time()
+
 class AgentRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        global LAST_ACTIVITY
+        LAST_ACTIVITY = time.time()
         if self.path == "/api/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -70,13 +80,15 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        global LAST_ACTIVITY
+        LAST_ACTIVITY = time.time()
         if self.path == "/api/execute":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
             try:
                 data = json.loads(body.decode("utf-8"))
                 prompt = data.get("prompt", "")
-                
+
                 AGENT_STATE["status"] = "Executing..."
                 AGENT_STATE["last_task"] = prompt
                 AGENT_STATE["updated_at"] = time.time()
@@ -99,11 +111,50 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-def run_server(port=9090):
-    server_address = ("127.0.0.1", port)
-    httpd = HTTPServer(server_address, AgentRequestHandler)
-    print(f"🤖 Iram Agentic OS Daemon listening on http://127.0.0.1:{port}")
-    httpd.serve_forever()
+class ActivatedHTTPServer(HTTPServer):
+    def __init__(self, RequestHandlerClass, fd=None, port=9090):
+        self.address_family = socket.AF_INET
+        if fd is not None:
+            super().__init__(("127.0.0.1", 0), RequestHandlerClass, bind_and_activate=False)
+            self.socket = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            super().__init__(("127.0.0.1", port), RequestHandlerClass, bind_and_activate=True)
+
+def run_server(port=9090, idle_timeout=900):
+    global LAST_ACTIVITY
+    # Check for Systemd Socket Activation (LISTEN_FDS)
+    listen_fds = int(os.environ.get("LISTEN_FDS", 0))
+    if listen_fds > 0:
+        print(f"🤖 IRAM Agent Daemon launched via systemd socket activation (FD 3)")
+        httpd = ActivatedHTTPServer(AgentRequestHandler, fd=3)
+    else:
+        print(f"🤖 IRAM Agent Daemon listening directly on http://127.0.0.1:{port}")
+        httpd = ActivatedHTTPServer(AgentRequestHandler, port=port)
+
+    # Set non-blocking timeout on socket so we can periodically check idle state
+    httpd.timeout = 5.0
+    LAST_ACTIVITY = time.time()
+
+    print(f"⚡ Idle timeout active: {idle_timeout}s. Process will hibernate when dormant.")
+
+    try:
+        while True:
+            httpd.handle_request()
+            if idle_timeout > 0 and (time.time() - LAST_ACTIVITY > idle_timeout):
+                print(f"💤 IRAM Agent Daemon idle for {idle_timeout}s. Exiting cleanly to conserve RAM.")
+                break
+    except KeyboardInterrupt:
+        print("\nShutdown requested.")
+    finally:
+        httpd.server_close()
+
+def main():
+    parser = argparse.ArgumentParser(description="IRAM OS Agent Daemon with Socket Activation & Idle Hibernation")
+    parser.add_argument("-p", "--port", type=int, default=9090, help="Port to listen on (default: 9090)")
+    parser.add_argument("--idle-timeout", type=int, default=900, help="Idle seconds before exit to conserve RAM (0 to disable, default: 900)")
+    args = parser.parse_args()
+
+    run_server(port=args.port, idle_timeout=args.idle_timeout)
 
 if __name__ == "__main__":
-    run_server()
+    main()

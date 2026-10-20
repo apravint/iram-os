@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Iram AI Dynamic Ambient Wallpaper & Theme Palette Generator (iram-ai-wallpaper)
-Dynamically switches wallpapers and auto-extracts color palettes to re-tint Hyprland, Waybar & Wofi.
+Dynamically cycles wallpapers, extracts dominant color palettes via Pillow quantization,
+and re-tints Hyprland window borders (sharp edges) and Waybar dynamically with Hindsight retention.
 https://github.com/apravint/iram-os
 """
 
@@ -9,24 +10,137 @@ import sys
 import os
 import subprocess
 import json
+import colorsys
+from typing import Dict, List, Tuple
 
-def get_current_background():
-    bg_file = os.path.expanduser("~/.local/state/iram/current/background")
-    if os.path.exists(bg_file):
-        return bg_file
-    return None
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import hindsight_retain
+except ImportError:
+    from iram_os.bin.iram_ai_core import hindsight_retain
+
+CURRENT_BG = os.path.expanduser("~/.local/state/iram/current/background")
+PALETTE_JSON = os.path.expanduser("~/.local/state/iram/current/ai_palette.json")
+PALETTE_CSS = os.path.expanduser("~/.local/state/iram/current/ai_palette.css")
+
+
+def get_active_wallpaper() -> str:
+    if os.path.exists(CURRENT_BG):
+        return os.path.realpath(CURRENT_BG)
+    return ""
+
+
+def extract_palette(image_path: str) -> Dict[str, str]:
+    """Extracts a cohesive 5-color palette from an image using Pillow quantization."""
+    from PIL import Image
+
+    img = Image.open(image_path).convert("RGB")
+    img.thumbnail((150, 150))
+    paletted = img.quantize(colors=16)
+    raw_palette = paletted.getpalette()[:48]
+    raw_colors = [(raw_palette[i], raw_palette[i+1], raw_palette[i+2]) for i in range(0, 48, 3)]
+
+    parsed = []
+    for rgb in raw_colors:
+        r, g, b = [x / 255.0 for x in rgb]
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        hex_code = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+        parsed.append({"hex": hex_code, "rgb": rgb, "h": h, "l": l, "s": s})
+
+    # Sort by luminance
+    by_lum = sorted(parsed, key=lambda x: x["l"])
+    bg = by_lum[0]["hex"]
+    surface = by_lum[min(2, len(by_lum)-1)]["hex"]
+
+    # Candidate accents (must have noticeable contrast)
+    bright = [c for c in parsed if c["l"] >= 0.15]
+    if bright:
+        bright_sat = sorted(bright, key=lambda x: (x["s"] * 2.0 + x["l"]), reverse=True)
+        primary = bright_sat[0]["hex"]
+        secondary = bright_sat[min(1, len(bright_sat)-1)]["hex"] if len(bright_sat) > 1 else primary
+    else:
+        primary = "#00e5ff"
+        secondary = "#7aa2f7"
+
+    # Border highlight
+    border_hex = primary.lstrip("#")
+    sec_hex = secondary.lstrip("#")
+    surf_hex = surface.lstrip("#")
+
+    return {
+        "bg": bg,
+        "surface": surface,
+        "primary": primary,
+        "secondary": secondary,
+        "active_border": f"rgba({border_hex}ee) rgba({sec_hex}ee) 45deg",
+        "inactive_border": f"rgba({surf_hex}aa)"
+    }
+
+
+def apply_hyprland_borders(palette: Dict[str, str]):
+    """Applies dynamic palette to Hyprland window borders with strictly sharp edges."""
+    active_b = palette["active_border"]
+    inactive_b = palette["inactive_border"]
+    
+    # Strictly enforce sharp brutalist edges
+    subprocess.run(["hyprctl", "keyword", "decoration:rounding", "0"], check=False)
+    subprocess.run(["hyprctl", "keyword", "general:col.active_border", active_b], check=False)
+    subprocess.run(["hyprctl", "keyword", "general:col.inactive_border", inactive_b], check=False)
+
+
+def save_palette_files(palette: Dict[str, str]):
+    os.makedirs(os.path.dirname(PALETTE_JSON), exist_ok=True)
+    with open(PALETTE_JSON, "w") as f:
+        json.dump(palette, f, indent=2)
+
+    css_content = f"""/* IRAM AI Generated Ambient Desktop Palette */
+@define-color ai_bg {palette['bg']};
+@define-color ai_surface {palette['surface']};
+@define-color ai_primary {palette['primary']};
+@define-color ai_secondary {palette['secondary']};
+"""
+    with open(PALETTE_CSS, "w") as f:
+        f.write(css_content)
+
 
 def trigger_ai_wallpaper_theme():
-    print("🎨 Generating / Syncing AI Ambient Desktop Palette...")
-    subprocess.run("notify-send -a 'Iram AI Wallpaper' '🎨 Syncing Dynamic Palette...' 'Extracting color palette and applying to Hyprland, Waybar & Wofi' -t 2000", shell=True)
+    # 1. Cycle to next wallpaper if requested
+    if "--next" in sys.argv or "-n" in sys.argv:
+        print("🖼️ Cycling wallpaper to next in theme...")
+        subprocess.run(["iram", "theme", "bg", "next"], check=False)
 
-    # Cycle next background in active Iram theme
-    subprocess.run("iram theme bg next", shell=True)
+    bg_path = get_active_wallpaper()
+    if not bg_path or not os.path.exists(bg_path):
+        print("⚠️ No valid active wallpaper found.")
+        return
 
-    # Sync all UI components
-    subprocess.run("~/.local/bin/iram-theme-sync-all", shell=True)
+    print(f"🎨 Quantizing image palette: {os.path.basename(bg_path)}...")
+    palette = extract_palette(bg_path)
 
-    subprocess.run("notify-send -a 'Iram AI Wallpaper' '✨ Palette Synchronized!' 'Hyprland borders, status bar, and dialogs updated.'", shell=True)
+    # 2. Save palette files
+    save_palette_files(palette)
+
+    # 3. Apply to Hyprland live
+    apply_hyprland_borders(palette)
+
+    # 4. Retain in Hindsight
+    hindsight_retain(
+        f"AI Wallpaper sync: primary={palette['primary']}, secondary={palette['secondary']}, bg={palette['bg']}",
+        category="theme",
+        importance=3
+    )
+
+    summary = (
+        f"Primary: {palette['primary']} | Secondary: {palette['secondary']}\n"
+        f"Window borders and dynamic CSS updated (Sharp 0px rounding)."
+    )
+    subprocess.run([
+        "notify-send", "-a", "Iram AI Wallpaper",
+        f"🎨 Ambient Palette Synced [{os.path.basename(bg_path)}]",
+        summary
+    ])
+    print(f"✨ Palette Applied:\n{json.dumps(palette, indent=2)}")
+
 
 if __name__ == "__main__":
     trigger_ai_wallpaper_theme()

@@ -1,0 +1,10 @@
+[Unit]
+Description=IRAM OS Agent Daemon Activation Socket
+PartOf=iram-agentd.service
+
+[Socket]
+ListenStream=127.0.0.1:9090
+Accept=no
+
+[Install]
+WantedBy=sockets.target

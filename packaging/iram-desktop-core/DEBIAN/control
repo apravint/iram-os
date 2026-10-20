@@ -1,0 +1,10 @@
+Package: iram-desktop-core
+Version: 26.10.1
+Section: x11
+Priority: optional
+Architecture: all
+Depends: hyprland, waybar, wofi, swaybg, mako-notifier, grim, slurp, wl-clipboard, cliphist, playerctl, alacritty, btop, gawk, fonts-jetbrains-mono, python3-gi, gir1.2-gtk-3.0, pavucontrol, polkit-kde-agent-1, bwrap
+Maintainer: Ayyappa Pravin <apravint@users.noreply.github.com>
+Description: IRAM OS Core Desktop Environment
+ Sovereign Wayland desktop environment with Hyprland 0.56, 18 curated themes,
+ Waybar theme sync, first-boot welcome onboarding dashboard, and layout switch.

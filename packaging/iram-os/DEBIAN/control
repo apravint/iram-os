@@ -1,0 +1,10 @@
+Package: iram-os
+Version: 26.10.1
+Section: metapackages
+Priority: optional
+Architecture: all
+Depends: iram-desktop-core, iram-agentic-stack, storytold-craft-suite
+Maintainer: Ayyappa Pravin <apravint@users.noreply.github.com>
+Description: Complete Sovereign IRAM OS Distribution
+ Turnkey Sovereign Agentic Operating System featuring desktop core,
+ autonomous AI toolchain, and creative craft suite.

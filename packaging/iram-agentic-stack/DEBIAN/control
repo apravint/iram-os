@@ -1,0 +1,10 @@
+Package: iram-agentic-stack
+Version: 26.10.1
+Section: science
+Priority: optional
+Architecture: all
+Depends: iram-desktop-core, bwrap, curl, jq, python3-pip, python3-pydantic, python3-yaml, zenity
+Maintainer: Ayyappa Pravin <apravint@users.noreply.github.com>
+Description: IRAM OS Autonomous AI Agentic Runtime & Guardrails
+ Sandboxed Code-as-Action agent, ToolGate firewall, Canny Evidence Ledger,
+ Qdrant episodic vector retrieval, and on-demand socket-activated daemon.

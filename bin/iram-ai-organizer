@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 """
 Iram AI Workspace & Downloads Curator (iram-ai-organizer)
-Auto-categorizes Downloads/Desktop files into organized subfolders and renames cryptic filenames.
+Auto-categorizes Downloads/Desktop files into organized subfolders and renames cryptic filenames
+using local semantic AI (Ollama qwen2.5) and retains organization logs in IRAM Hindsight.
 https://github.com/apravint/iram-os
 """
 
 import os
+import sys
 import shutil
+import re
 import subprocess
+from typing import Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import query_llm, hindsight_retain
+except ImportError:
+    from iram_os.bin.iram_ai_core import query_llm, hindsight_retain
 
 TARGET_DIR = os.path.expanduser("~/Downloads")
 
@@ -19,12 +29,64 @@ CATEGORIES = {
     "Media": [".mp4", ".mkv", ".mp3", ".wav", ".flac"]
 }
 
+CRYPTIC_PATTERNS = [
+    r"^screenshot", r"^screen shot", r"^pasted", r"^img[_\-\d]",
+    r"^download", r"^unnamed", r"^temp", r"^tmp", r"^[a-f0-9]{8,32}$"
+]
+
+
+def is_cryptic_filename(name: str) -> bool:
+    base = os.path.splitext(name)[0].lower()
+    return any(re.search(pat, base) for pat in CRYPTIC_PATTERNS)
+
+
+def extract_file_sample(filepath: str, ext: str) -> str:
+    """Reads a small snippet from text, code, or image for AI renaming."""
+    if ext in [".txt", ".md", ".py", ".sh", ".json", ".csv", ".html"]:
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read(400).strip()
+        except Exception:
+            pass
+    elif ext in [".png", ".jpg", ".jpeg", ".webp"]:
+        try:
+            # Fast tesseract peek for titles/headers
+            res = subprocess.run(["tesseract", filepath, "stdout"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()[:200]
+        except Exception:
+            pass
+    return ""
+
+
+def suggest_semantic_filename(original_name: str, sample_text: str, category: str) -> Optional[str]:
+    """Asks local AI to suggest a clean, snake_case descriptive name."""
+    if not sample_text:
+        return None
+
+    prompt = (
+        f"You are a file naming assistant on IRAM OS.\n"
+        f"A user downloaded a file with the generic name '{original_name}' ({category}).\n"
+        f"Snippet of file contents:\n\"\"\"\n{sample_text}\n\"\"\"\n"
+        f"Suggest a concise, lowercase snake_case filename without extension (max 3-4 words, e.g. 'quarterly_revenue_chart' or 'aws_billing_invoice').\n"
+        f"OUTPUT ONLY the filename slug, nothing else."
+    )
+
+    slug, _ = query_llm(prompt, num_predict=32)
+    clean_slug = re.sub(r'[^a-zA-Z0-9_-]', '_', slug.strip()).strip('_').lower()
+    if clean_slug and len(clean_slug) >= 3 and clean_slug != "none":
+        return clean_slug[:40]
+    return None
+
+
 def organize_downloads():
     if not os.path.exists(TARGET_DIR):
+        print(f"Target directory {TARGET_DIR} does not exist.")
         return
 
     moved_count = 0
-    moved_summary = []
+    renamed_count = 0
+    summary_lines = []
 
     for filename in os.listdir(TARGET_DIR):
         filepath = os.path.join(TARGET_DIR, filename)
@@ -39,18 +101,55 @@ def organize_downloads():
                 matched_cat = cat
                 break
 
-        if matched_cat:
-            cat_dir = os.path.join(TARGET_DIR, matched_cat)
-            os.makedirs(cat_dir, exist_ok=True)
-            shutil.move(filepath, os.path.join(cat_dir, filename))
-            moved_count += 1
-            moved_summary.append(f"• {filename} ➔ {matched_cat}/")
+        if not matched_cat:
+            continue
+
+        cat_dir = os.path.join(TARGET_DIR, matched_cat)
+        os.makedirs(cat_dir, exist_ok=True)
+
+        final_filename = filename
+
+        # AI semantic rename pass for cryptic filenames
+        if is_cryptic_filename(filename):
+            sample = extract_file_sample(filepath, ext)
+            if sample:
+                slug = suggest_semantic_filename(filename, sample, matched_cat)
+                if slug:
+                    new_candidate = f"{slug}{ext}"
+                    dest_path = os.path.join(cat_dir, new_candidate)
+                    if not os.path.exists(dest_path):
+                        final_filename = new_candidate
+                        renamed_count += 1
+
+        dest_filepath = os.path.join(cat_dir, final_filename)
+        # Avoid clobbering existing files
+        if os.path.exists(dest_filepath) and dest_filepath != filepath:
+            base, extension = os.path.splitext(final_filename)
+            final_filename = f"{base}_{int(os.path.getmtime(filepath))}{extension}"
+            dest_filepath = os.path.join(cat_dir, final_filename)
+
+        shutil.move(filepath, dest_filepath)
+        moved_count += 1
+
+        if final_filename != filename:
+            summary_lines.append(f"• {filename} ➔ {matched_cat}/{final_filename} ✨")
+        else:
+            summary_lines.append(f"• {filename} ➔ {matched_cat}/")
+
+        # Retain action into Hindsight
+        hindsight_retain(
+            f"File curated: '{filename}' ➔ '{matched_cat}/{final_filename}'",
+            category="organizer",
+            importance=2
+        )
 
     if moved_count > 0:
-        summary_msg = f"Organized {moved_count} files into clean subfolders:\n" + "\n".join(moved_summary[:4])
-        subprocess.run(f'notify-send -a "Iram AI File Curator" "📂 Downloads Organized!" "{summary_msg}"', shell=True)
+        summary_msg = f"Organized {moved_count} file(s) ({renamed_count} AI renamed):\n" + "\n".join(summary_lines[:5])
+        subprocess.run(["notify-send", "-a", "Iram AI File Curator", "📂 Workspace Curated!", summary_msg])
+        print(summary_msg)
     else:
         print("✨ Downloads directory is already clean and organized!")
+
 
 if __name__ == "__main__":
     organize_downloads()

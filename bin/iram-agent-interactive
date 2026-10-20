@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Iram Interactive Agent Sidecar (iram-agent-interactive)
-Real-time, streaming conversational AI terminal interface powered by Google Gemini (Cloud · 0% CPU)
-with automatic Local Ollama offline fallback, Internet Web Search, and Desktop System Control.
+Real-time, streaming conversational AI terminal interface powered by Sovereign Local Ollama & Google Gemini,
+with Hindsight Long-Term Memory, Internet Web Search, and Desktop System Control.
 https://github.com/apravint/iram-os
 """
 
@@ -13,6 +13,23 @@ import urllib.request
 import urllib.error
 import subprocess
 import re
+
+# AI Core & Hindsight Integration
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import (
+        is_ollama_available,
+        is_gemini_healthy,
+        prefer_local_first,
+        hindsight_recall,
+        hindsight_retain,
+        mark_gemini_failed
+    )
+except ImportError:
+    from iram_os.bin.iram_ai_core import (
+        is_ollama_available, is_gemini_healthy, prefer_local_first,
+        hindsight_recall, hindsight_retain, mark_gemini_failed
+    )
 
 CYAN = "\033[0;36m"
 GREEN = "\033[0;32m"
@@ -25,9 +42,9 @@ NC = "\033[0m"
 
 SYSTEM_PROMPT = """You are the Iram Agentic OS Desktop Assistant running natively on IRAM OS with Hyprland.
 You help the user control their desktop, windows, workspaces, themes, audio, and Linux system tasks.
-You also have live internet search access. When web search results are provided in your context, summarize and cite them clearly.
+You also have live internet search and long-term memory access.
 Be concise, practical, and conversational.
-If a user request can be accomplished with a command, provide the exact bash or hyprctl command in a code block or specify it clearly.
+If a user request can be accomplished with a command, provide the exact bash or hyprctl command on a clear single line.
 Common dispatches:
 - hyprctl dispatch workspace <N>
 - hyprctl dispatch focuswindow <class>
@@ -51,35 +68,25 @@ def get_api_key():
                             return val
         except Exception:
             pass
-    zshrc = os.path.expanduser("~/.zshrc")
-    if os.path.exists(zshrc):
-        try:
-            with open(zshrc, "r") as f:
-                for line in f:
-                    if "GEMINI_API_KEY=" in line and not line.strip().startswith("#"):
-                        return line.split("GEMINI_API_KEY=", 1)[1].strip().strip('"').strip("'")
-        except Exception:
-            pass
     return ""
 
 def get_gemini_model():
-    return os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    return os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 def get_ollama_model():
     return os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
 
 def print_header():
-    api_key = get_api_key()
-    if api_key:
-        engine_str = f"{CYAN}✨ Google Gemini ({get_gemini_model()}){NC} {GREEN}[0% CPU · Cloud TPU]{NC}"
+    if not prefer_local_first() and is_gemini_healthy():
+        engine_str = f"{CYAN}✨ Google Gemini ({get_gemini_model()}){NC} {GREEN}[Cloud TPU]{NC}"
     else:
-        engine_str = f"{YELLOW}🖥️ Local Ollama ({get_ollama_model()}){NC} {DIM}[Local CPU]{NC}"
+        engine_str = f"{YELLOW}🖥️ Local Ollama ({get_ollama_model()}){NC} {GREEN}[Sovereign · 0ms Latency]{NC}"
 
     print(f"{BLUE}╔════════════════════════════════════════════════════════════════════╗{NC}")
     print(f"{BLUE}║{GREEN}{BOLD}               🤖 IRAM AGENTIC OS SIDECAR CHAT                  {BLUE}║{NC}")
     print(f"{BLUE}╠════════════════════════════════════════════════════════════════════╣{NC}")
     print(f"{BLUE}║{NC}  ► Engine: {engine_str:<66}{BLUE}║{NC}")
-    print(f"{BLUE}║{NC}  ► Capabilities: {MAGENTA}Live Web Search • Hyprland • Waybar • Audio{NC}    {BLUE}║{NC}")
+    print(f"{BLUE}║{NC}  ► Capabilities: {MAGENTA}Hindsight Memory • Web Search • Hyprland • Audio{NC}   {BLUE}║{NC}")
     print(f"{BLUE}║{NC}  ► Commands: {YELLOW}/search <query>{NC} • {YELLOW}/model <name>{NC} • {GREEN}exit{NC}                   {BLUE}║{NC}")
     print(f"{BLUE}╚════════════════════════════════════════════════════════════════════╝{NC}\n")
 
@@ -111,6 +118,8 @@ def should_trigger_web_search(user_text: str) -> bool:
 
 def stream_gemini(conversation_turns):
     api_key = get_api_key()
+    if not api_key:
+        return None
     model = get_gemini_model()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
 
@@ -132,7 +141,7 @@ def stream_gemini(conversation_turns):
 
     full_response = []
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
             for line in resp:
                 line = line.decode("utf-8").strip()
                 if line.startswith("data: "):
@@ -149,6 +158,7 @@ def stream_gemini(conversation_turns):
         print()
         return "".join(full_response)
     except Exception as e:
+        mark_gemini_failed(str(e))
         return None
 
 def stream_ollama(conversation_turns):
@@ -186,11 +196,17 @@ def stream_ollama(conversation_turns):
         return f"Error: {e}"
 
 def chat_stream(conversation_turns):
-    if get_api_key():
+    # Local-first sovereign inference check
+    if prefer_local_first() or not is_gemini_healthy():
+        if is_ollama_available():
+            return stream_ollama(conversation_turns)
+
+    # Cloud attempt
+    if is_gemini_healthy():
         res = stream_gemini(conversation_turns)
         if res:
             return res
-        print(f"\n{YELLOW}ℹ️ Failing over to local Ollama...{NC}\n")
+        print(f"\n{YELLOW}ℹ️ Cloud unavailable; routing to local Ollama...{NC}\n")
 
     return stream_ollama(conversation_turns)
 
@@ -212,12 +228,19 @@ def main():
                 parts = user_input.split(maxsplit=1)
                 if len(parts) > 1:
                     new_model = parts[1].strip()
-                    os.environ["GEMINI_MODEL"] = new_model
-                    print(f"{GREEN}✓ Switched active model to: {new_model}{NC}\n")
+                    os.environ["OLLAMA_MODEL"] = new_model
+                    print(f"{GREEN}✓ Switched active local model to: {new_model}{NC}\n")
                 else:
                     print(f"{CYAN}Active Gemini Model: {get_gemini_model()}{NC}")
                     print(f"{CYAN}Active Ollama Model: {get_ollama_model()}{NC}\n")
                 continue
+
+            # Query Hindsight memory
+            memories = hindsight_recall(user_input, limit=2)
+            if memories:
+                for m in memories:
+                    if m.get("score", 0) > 0.8:
+                        print(f"{DIM}🧠 [Hindsight Recall]: {m['fact']}{NC}")
 
             # Handle manual /search command or automatic live search heuristic
             search_query = None
@@ -246,7 +269,7 @@ User Question:
             lines = [l.strip().strip("`") for l in assistant_reply.split("\n")]
             exec_candidate = None
             for l in lines:
-                if any(l.startswith(prefix) for prefix in ["hyprctl dispatch", "iram theme", "pactl set-sink", "systemctl"]):
+                if any(l.startswith(prefix) for prefix in ["hyprctl dispatch", "iram theme", "pactl set-sink", "systemctl", "wpctl"]):
                     exec_candidate = l
                     break
 
@@ -254,6 +277,7 @@ User Question:
                 confirm = input(f"\n{YELLOW}⚡ Execute suggested action: `{exec_candidate}`? [Y/n]: {NC}").strip().lower()
                 if confirm in ["", "y", "yes"]:
                     subprocess.run(exec_candidate, shell=True)
+                    hindsight_retain(f"Interactive user executed '{exec_candidate}' for '{user_input}'", category="agent", importance=4)
                     print(f"{GREEN}✓ Executed successfully.{NC}\n")
                 else:
                     print(f"{DIM}Skipped execution.{NC}\n")

@@ -2,9 +2,11 @@
 """
 Iram Code-as-Action Agent (iram-code-agent)
 Executes autonomous desktop actions and complex workflows with:
+- Dynamic Local LLM Code Synthesis (qwen2.5 / DeepSeek-R1)
 - Rootless Bubblewrap (bwrap) sandboxing for code execution
 - Human-in-the-Loop elevated action gates via zenity / ToolGate
 - Deterministic execution limits and failure isolation
+- IRAM Hindsight memory logging
 https://github.com/apravint/iram-os
 """
 
@@ -16,6 +18,12 @@ import time
 import subprocess
 import argparse
 from typing import Tuple, List, Dict, Any
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from iram_ai_core import query_llm, hindsight_retain
+except ImportError:
+    from iram_os.bin.iram_ai_core import query_llm, hindsight_retain
 
 # ToolGate Risk Evaluation Rules
 CRITICAL_DENY_PATTERNS = [
@@ -36,11 +44,9 @@ PROMPT_PATTERNS = [
     r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+",
 ]
 
+
 def evaluate_code_risk(code_or_cmd: str) -> Tuple[str, List[str]]:
-    """
-    Evaluates safety risk before executing code or actions.
-    Returns: ('ALLOW' | 'PROMPT' | 'DENY', flags)
-    """
+    """Evaluates safety risk before executing code or actions."""
     flags = []
     for p in CRITICAL_DENY_PATTERNS:
         if re.search(p, code_or_cmd):
@@ -54,10 +60,9 @@ def evaluate_code_risk(code_or_cmd: str) -> Tuple[str, List[str]]:
 
     return "ALLOW", ["Passes baseline safety filters"]
 
+
 def prompt_human_approval(action_summary: str, details: str = "") -> bool:
-    """
-    Displays an unskippable modal confirmation via zenity (or terminal fallback).
-    """
+    """Displays an unskippable modal confirmation via zenity or terminal."""
     has_display = bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
     if has_display and subprocess.run(["which", "zenity"], capture_output=True).returncode == 0:
         try:
@@ -89,7 +94,7 @@ def prompt_human_approval(action_summary: str, details: str = "") -> bool:
     except Exception:
         return False
 
-# Desktop & System Tools
+
 def get_desktop_windows() -> str:
     try:
         out = subprocess.check_output(["hyprctl", "clients", "-j"], text=True)
@@ -98,6 +103,7 @@ def get_desktop_windows() -> str:
         return json.dumps(summary)
     except Exception as e:
         return f"Error: {e}"
+
 
 def focus_window_by_name(target: str) -> str:
     try:
@@ -112,6 +118,7 @@ def focus_window_by_name(target: str) -> str:
     except Exception as e:
         return f"Error: {e}"
 
+
 def execute_hyprctl(dispatcher: str, args: str = "") -> str:
     try:
         cmd = ["hyprctl", "dispatch", dispatcher]
@@ -122,6 +129,7 @@ def execute_hyprctl(dispatcher: str, args: str = "") -> str:
     except Exception as e:
         return f"Error: {e}"
 
+
 def search_code_qdrant(query: str, limit: int = 3) -> str:
     try:
         res = subprocess.run(["iram-qdrant", "search", query, "-n", str(limit)], capture_output=True, text=True, timeout=5)
@@ -129,11 +137,9 @@ def search_code_qdrant(query: str, limit: int = 3) -> str:
     except Exception as e:
         return f"Vector search fallback (offline/safe mode): {e}"
 
+
 def run_sandboxed_code(code_str: str, timeout_sec: int = 15) -> Tuple[bool, str]:
-    """
-    Executes Python code inside an immutable, rootless bubblewrap sandbox.
-    Prevents modifying system directories, protects credentials, and limits runtime.
-    """
+    """Executes Python code inside an immutable, rootless bubblewrap sandbox."""
     has_bwrap = (subprocess.run(["which", "bwrap"], capture_output=True).returncode == 0)
     home = os.path.expanduser("~")
 
@@ -141,13 +147,11 @@ def run_sandboxed_code(code_str: str, timeout_sec: int = 15) -> Tuple[bool, str]
 import sys
 import os
 import json
+import subprocess
 
-# Preloaded helper primitives
 def get_desktop_windows():
-    import subprocess
     try:
-        out = subprocess.check_output(["hyprctl", "clients", "-j"], text=True)
-        return out
+        return subprocess.check_output(["hyprctl", "clients", "-j"], text=True)
     except Exception as e:
         return str(e)
 
@@ -171,7 +175,6 @@ except Exception as e:
             "python3", "-c", wrapper_script
         ]
     else:
-        # Fallback without bwrap
         cmd = ["python3", "-c", wrapper_script]
 
     try:
@@ -183,6 +186,22 @@ except Exception as e:
     except Exception as e:
         return (False, f"Sandbox error: {e}")
 
+
+def synthesize_code_action(prompt: str) -> str:
+    """Uses local AI to synthesize executable Python code from plain language."""
+    system_prompt = (
+        "You are an expert Python systems programmer on IRAM OS with Hyprland.\n"
+        "Convert the user's intent into a concise, valid Python 3 script.\n"
+        "Available helper functions: get_desktop_windows(), subprocess.run(...)\n"
+        "OUTPUT RULES: Output ONLY the python script inside ```python ... ``` fences. No explanations."
+    )
+    res, _ = query_llm(prompt, system_prompt=system_prompt, num_predict=256)
+    match = re.search(r"```(?:python)?\s*\n(.*?)\n```", res, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return res.strip()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Iram Secure Code-as-Action Agent with Bubblewrap Sandboxing")
     parser.add_argument("prompt_or_code", help="Action prompt or Python code to execute")
@@ -192,46 +211,62 @@ def main():
 
     input_text = args.prompt_or_code
 
-    # 1. Pre-execution Safety Evaluation
-    verdict, flags = evaluate_code_risk(input_text)
+    # 1. Direct code vs Natural Language Synthesis
+    is_direct_code = args.code or any(k in input_text for k in ["def ", "import ", "print(", "=", ";"])
+    if not is_direct_code:
+        prompt_lower = input_text.lower()
+        if "focus" in prompt_lower or ("switch" in prompt_lower and "window" in prompt_lower):
+            target = prompt_lower.replace("focus", "").replace("switch to", "").replace("window", "").strip()
+            print(f"🤖 Focusing window: {target}")
+            print(focus_window_by_name(target))
+            return
+        elif "workspace" in prompt_lower:
+            m = re.search(r"\d+", prompt_lower)
+            ws = m.group(0) if m else "1"
+            print(f"🤖 Switching workspace: {ws}")
+            print(execute_hyprctl("workspace", ws))
+            return
+        elif "search" in prompt_lower or "find" in prompt_lower:
+            query = prompt_lower.replace("search", "").replace("find", "").strip()
+            print(f"🤖 Querying local vector store: {query}")
+            print(search_code_qdrant(query))
+            return
+
+        print(f"🤖 Synthesizing Python action for: '{input_text}'...")
+        code_to_run = synthesize_code_action(input_text)
+        print(f"Generated Code:\n```python\n{code_to_run}\n```\n")
+    else:
+        code_to_run = input_text
+
+    # 2. Pre-execution Safety Evaluation
+    verdict, flags = evaluate_code_risk(code_to_run)
     if verdict == "DENY":
         print(f"🛑 [SECURITY BLOCK] Action blocked by IRAM Guardrails:")
         for f in flags:
             print(f"   ✗ {f}")
         sys.exit(1)
     elif verdict == "PROMPT":
-        approved = prompt_human_approval("Elevated Agent Action", input_text)
+        approved = prompt_human_approval("Elevated Agent Action", code_to_run)
         if not approved:
             print("🚫 Action denied by user.")
             sys.exit(2)
         print("✓ Authorized by user.")
 
-    # 2. Synthesize Code Action if given a natural language prompt
-    if not args.code and not any(k in input_text for k in ["def ", "import ", "print(", "=", ";"]):
-        prompt = input_text.lower()
-        if "focus" in prompt or "window" in prompt or "switch" in prompt:
-            target = prompt.replace("focus", "").replace("switch to", "").replace("window", "").strip()
-            print(f"🤖 Focusing window: {target}")
-            print(focus_window_by_name(target))
-            return
-        elif "workspace" in prompt:
-            m = re.search(r"\d+", prompt)
-            ws = m.group(0) if m else "1"
-            print(f"🤖 Switching workspace: {ws}")
-            print(execute_hyprctl("workspace", ws))
-            return
-        elif "search" in prompt or "find" in prompt:
-            query = prompt.replace("search", "").replace("find", "").strip()
-            print(f"🤖 Querying local vector store: {query}")
-            print(search_code_qdrant(query))
-            return
-
     # 3. Execute inside Bubblewrap Sandbox
     print("🔒 Executing code action inside rootless Bubblewrap sandbox...")
-    success, output = run_sandboxed_code(input_text)
+    success, output = run_sandboxed_code(code_to_run)
     status_emoji = "✓" if success else "✗"
     print(f"{status_emoji} Result:\n{output}")
+
+    # 4. Retain in Hindsight
+    hindsight_retain(
+        f"Code Agent action '{input_text[:50]}': success={success}, output={output[:100]}",
+        category="code_agent",
+        importance=3
+    )
+
     sys.exit(0 if success else 1)
+
 
 if __name__ == "__main__":
     main()
