@@ -26,6 +26,8 @@ fi
 python3 - "$PROMPT" << 'EOF'
 import sys
 import json
+import re
+import shlex
 import subprocess
 import os
 import datetime
@@ -113,8 +115,32 @@ failed_commands = []
 ALLOWED_PREFIXES = ["hyprctl", "iram", "notify-send", "pactl", "wpctl", "craft-"]
 FORBIDDEN_PATTERNS = ["rm -rf", "mkfs", "dd if=", ":(){ :|:& };:", "chmod -R 777 /"]
 
+candidates = []
+
+# Try parsing structured JSON actions first
+try:
+    json_match = re.search(r"(\[.*\]|\{.*\})", answer, re.DOTALL)
+    if json_match:
+        parsed_json = json.loads(json_match.group(1))
+        if isinstance(parsed_json, list):
+            for item in parsed_json:
+                if isinstance(item, dict) and "action" in item:
+                    act = item["action"]
+                    if isinstance(act, list):
+                        import shlex
+                        candidates.append(" ".join(shlex.quote(str(x)) for x in act))
+                    elif isinstance(act, str):
+                        candidates.append(act)
+except Exception:
+    pass
+
+# Also extract plain lines
 for raw_line in answer.split("\n"):
     clean_line = raw_line.strip().strip("`").strip()
+    if clean_line:
+        candidates.append(clean_line)
+
+for clean_line in candidates:
     if not clean_line:
         continue
 
