@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Window Gaps Toggle
+# Toggles between tiled fullbleed (0 gaps) and spaced window margins
+# ==============================================================================
+set -euo pipefail
+
+CURRENT_GAPS=$(hyprctl getoption general:gaps_out 2>/dev/null | awk '/custom type:/ {print $3}')
+
+if [ -z "$CURRENT_GAPS" ]; then
+    CURRENT_GAPS="4"
+fi
+
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/iram_gaps_saved"
+
+if [ "$CURRENT_GAPS" != "0" ]; then
+    # Save current gaps and set to 0
+    echo "$CURRENT_GAPS" > "$STATE_FILE"
+    hyprctl keyword general:gaps_in 0 >/dev/null 2>&1
+    hyprctl keyword general:gaps_out 0 >/dev/null 2>&1
+    notify-send -a "IRAM OS" "Window Gaps" "Gaps Disabled (Full-bleed tiled layout)" -i "view-fullscreen"
+else
+    RESTORE_OUT="4"
+    if [ -f "$STATE_FILE" ]; then
+        RESTORE_OUT=$(cat "$STATE_FILE" 2>/dev/null || echo "4")
+        if [ "$RESTORE_OUT" = "0" ] || [ -z "$RESTORE_OUT" ]; then
+            RESTORE_OUT="4"
+        fi
+    fi
+    RESTORE_IN=$(( RESTORE_OUT / 2 ))
+    if [ "$RESTORE_IN" -lt 1 ]; then RESTORE_IN=2; fi
+
+    hyprctl keyword general:gaps_in "$RESTORE_IN" >/dev/null 2>&1
+    hyprctl keyword general:gaps_out "$RESTORE_OUT" >/dev/null 2>&1
+    notify-send -a "IRAM OS" "Window Gaps" "Gaps Restored (${RESTORE_IN}px in / ${RESTORE_OUT}px out)" -i "view-restore"
+fi

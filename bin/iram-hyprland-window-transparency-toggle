@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Window Transparency Toggle
+# Toggles between opaque (1.0) and glass translucent (0.85/0.75) aesthetics
+# ==============================================================================
+set -euo pipefail
+
+CURRENT_OPACITY=$(hyprctl getoption decoration:active_opacity 2>/dev/null | awk '/float:/ {print $2}')
+
+if [ -z "$CURRENT_OPACITY" ]; then
+    CURRENT_OPACITY="1.000000"
+fi
+
+# Compare using awk
+IS_OPAQUE=$(awk -v op="$CURRENT_OPACITY" 'BEGIN { if (op >= 0.98) print "1"; else print "0"; }')
+
+if [ "$IS_OPAQUE" = "1" ]; then
+    hyprctl keyword decoration:active_opacity 0.85 >/dev/null 2>&1
+    hyprctl keyword decoration:inactive_opacity 0.75 >/dev/null 2>&1
+    notify-send -a "IRAM OS" "Window Transparency" "Translucency Enabled (Active: 85%, Inactive: 75%)" -i "preferences-desktop-display"
+else
+    hyprctl keyword decoration:active_opacity 1.0 >/dev/null 2>&1
+    hyprctl keyword decoration:inactive_opacity 1.0 >/dev/null 2>&1
+    notify-send -a "IRAM OS" "Window Transparency" "Translucency Disabled (Full Opacity 100%)" -i "preferences-desktop-display"
+fi

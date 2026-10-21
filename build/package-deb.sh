@@ -39,6 +39,7 @@ mkdir -p "${STAGE_DIR}/usr/bin" \
          "${STAGE_DIR}/usr/share/wayland-sessions" \
          "${STAGE_DIR}/usr/share/applications" \
          "${STAGE_DIR}/usr/share/icons/hicolor/128x128/apps" \
+         "${STAGE_DIR}/usr/lib/systemd/user" \
          "${STAGE_DIR}/etc/profile.d" \
          "${STAGE_DIR}/etc/sudoers.d"
 
@@ -94,6 +95,12 @@ if [ -d "${REPO_ROOT}/applications" ]; then
     fi
 fi
 
+# 5b. Systemd User Services and Daemons
+if [ -d "${REPO_ROOT}/systemd/user" ]; then
+    echo "Installing systemd user unit definitions..."
+    cp -a "${REPO_ROOT}/systemd/user/"* "${STAGE_DIR}/usr/lib/systemd/user/"
+fi
+
 # 6. Generate DEBIAN/control
 echo "Writing package control manifest..."
 cat << EOF > "${STAGE_DIR}/DEBIAN/control"
@@ -135,6 +142,11 @@ fi
 # Run baseline migrations if user is active
 if [ -x "/usr/bin/iram-migrate" ]; then
     /usr/bin/iram-migrate run 2>/dev/null || true
+fi
+
+# Reload systemd user daemon definitions if available
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --global daemon-reload 2>/dev/null || true
 fi
 
 exit 0

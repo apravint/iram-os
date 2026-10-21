@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Battery & Power Status Notification
+# Checks hardware power supply nodes and reports charging/capacity status
+# ==============================================================================
+set -euo pipefail
+
+BAT_PATH=$(find /sys/class/power_supply/ -maxdepth 1 -name "BAT*" 2>/dev/null | head -n 1 || true)
+
+if [ -n "$BAT_PATH" ] && [ -d "$BAT_PATH" ]; then
+    CAPACITY=$(cat "$BAT_PATH/capacity" 2>/dev/null || echo "Unknown")
+    STATUS=$(cat "$BAT_PATH/status" 2>/dev/null || echo "Unknown")
+    
+    ICON="battery"
+    if [ "$STATUS" = "Charging" ]; then
+        ICON="battery-charging"
+    elif [ "$STATUS" = "Full" ]; then
+        ICON="battery-full-charged"
+    elif [ "$CAPACITY" != "Unknown" ] && [ "$CAPACITY" -lt 20 ]; then
+        ICON="battery-caution"
+    fi
+    
+    notify-send -a "IRAM OS" "⚡ Battery Status: ${CAPACITY}%" "Status: ${STATUS}\nPower Source: Battery" -i "$ICON"
+else
+    # Check AC / Line power
+    AC_ONLINE=0
+    for ac in /sys/class/power_supply/AC* /sys/class/power_supply/ADP*; do
+        if [ -f "$ac/online" ] && [ "$(cat "$ac/online" 2>/dev/null)" = "1" ]; then
+            AC_ONLINE=1
+            break
+        fi
+    done
+    
+    notify-send -a "IRAM OS" "🔌 AC Direct Power" "System running on direct AC grid power.\nNo internal battery hardware present (Desktop workstation)." -i "ac-adapter"
+fi

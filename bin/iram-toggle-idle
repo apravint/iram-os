@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Idle & Lock Screen Inhibitor Toggle
+# Toggles hypridle daemon and notifies desktop
+# ==============================================================================
+set -euo pipefail
+
+ACTION="${1:-toggle}"
+
+case "$ACTION" in
+    off|disable|stop)
+        if pgrep -x hypridle >/dev/null; then
+            killall hypridle 2>/dev/null || true
+        fi
+        notify-send -a "IRAM OS" "Idle Inhibitor" "Screen idle & lock temporarily DISABLED" -i "dialog-warning"
+        ;;
+    on|enable|start)
+        if ! pgrep -x hypridle >/dev/null; then
+            hypridle >/dev/null 2>&1 &
+        fi
+        notify-send -a "IRAM OS" "Idle Inhibitor" "Screen idle & lock ACTIVE" -i "dialog-information"
+        ;;
+    toggle|*)
+        if pgrep -x hypridle >/dev/null; then
+            killall hypridle 2>/dev/null || true
+            notify-send -a "IRAM OS" "Idle Inhibitor" "Screen idle & lock temporarily DISABLED" -i "dialog-warning"
+        else
+            hypridle >/dev/null 2>&1 &
+            notify-send -a "IRAM OS" "Idle Inhibitor" "Screen idle & lock ACTIVE" -i "dialog-information"
+        fi
+        ;;
+esac

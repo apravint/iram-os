@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Monitor Dynamic Scaling Controller
+# Increments or decrements Hyprland output scaling factor
+# ==============================================================================
+set -euo pipefail
+
+DIRECTION="${1:-up}"
+
+# Query active/focused monitor name and scale
+read -r MON_NAME CURRENT_SCALE < <(python3 -c "
+import json, subprocess
+try:
+    data = json.loads(subprocess.check_output(['hyprctl', 'monitors', '-j']))
+    focused = next((m for m in data if m.get('focused')), data[0] if data else None)
+    if focused:
+        print(f\"{focused.get('name')} {focused.get('scale', 1.0)}\")
+    else:
+        print('DVI-I-1 1.0')
+except Exception:
+    print('DVI-I-1 1.0')
+")
+
+if [ -z "$MON_NAME" ]; then
+    MON_NAME="DVI-I-1"
+    CURRENT_SCALE="1.0"
+fi
+
+NEW_SCALE=$(python3 -c "
+scale = float('$CURRENT_SCALE')
+dir = '$DIRECTION'.lower()
+if dir == 'up':
+    scale = min(2.5, round(scale + 0.125, 3))
+elif dir == 'down':
+    scale = max(0.75, round(scale - 0.125, 3))
+elif dir == 'reset':
+    scale = 1.0
+else:
+    try:
+        scale = float(dir)
+    except ValueError:
+        pass
+print(f'{scale:.3f}'.rstrip('0').rstrip('.'))
+")
+
+hyprctl keyword monitor "$MON_NAME,preferred,auto,$NEW_SCALE" >/dev/null 2>&1
+
+notify-send -a "IRAM OS" "Display Scaling" "Output: $MON_NAME\nScale Factor: ${NEW_SCALE}x" -i "preferences-desktop-display"

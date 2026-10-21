@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - System Time & Calendar Notification
+# ==============================================================================
+set -euo pipefail
+
+TIME_STR="$(date '+%I:%M:%S %p')"
+DATE_STR="$(date '+%A, %d %B %Y (%Z)')"
+CAL_HEADER="$(cal 2>/dev/null | head -n 2 | paste -sd ' ' - || date '+%B %Y')"
+
+notify-send -a "IRAM OS" "🕒 $TIME_STR" "$DATE_STR\n$CAL_HEADER" -i "appointment-soon"

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Voxtype Push-to-Talk & Dictation Handler
+# Bridges Hyprland keybindings (F9, Mod+Ctrl+X) with PipeWire audio capture
+# ==============================================================================
+set -euo pipefail
+
+PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/voxtype.pid"
+AUDIO_FILE="${XDG_RUNTIME_DIR:-/tmp}/voxtype_recording.wav"
+
+cmd="${1:-toggle}"
+if [ "$cmd" = "record" ]; then
+    cmd="${2:-toggle}"
+fi
+
+start_recording() {
+    if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+        return 0
+    fi
+
+    rm -f "$AUDIO_FILE"
+    # Capture PipeWire audio in background
+    if command -v pw-record >/dev/null 2>&1; then
+        pw-record "$AUDIO_FILE" >/dev/null 2>&1 &
+        echo $! > "$PID_FILE"
+    elif command -v parec >/dev/null 2>&1; then
+        parec --file-format=wav "$AUDIO_FILE" >/dev/null 2>&1 &
+        echo $! > "$PID_FILE"
+    else
+        ffmpeg -f alsa -i default "$AUDIO_FILE" >/dev/null 2>&1 &
+        echo $! > "$PID_FILE"
+    fi
+
+    notify-send -a "IRAM OS" "🎙️ Voxtype Dictation" "Listening... (Release F9 or press Mod+Ctrl+X to finish)" -i "audio-input-microphone" -t 2000
+}
+
+stop_recording() {
+    if [ -f "$PID_FILE" ]; then
+        PID=$(cat "$PID_FILE" 2>/dev/null || true)
+        if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+            kill -2 "$PID" 2>/dev/null || kill -15 "$PID" 2>/dev/null || true
+            wait "$PID" 2>/dev/null || true
+        fi
+        rm -f "$PID_FILE"
+    fi
+
+    if [ -f "$AUDIO_FILE" ] && [ -s "$AUDIO_FILE" ]; then
+        notify-send -a "IRAM OS" "🎙️ Voxtype Dictation" "Audio captured successfully." -i "audio-ready" -t 3000
+    fi
+}
+
+case "$cmd" in
+    start)
+        start_recording
+        ;;
+    stop)
+        stop_recording
+        ;;
+    toggle)
+        if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            stop_recording
+        else
+            start_recording
+        fi
+        ;;
+    status)
+        if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            echo "recording"
+        else
+            echo "idle"
+        fi
+        ;;
+    *)
+        echo "Usage: voxtype [record] {start|stop|toggle|status}"
+        exit 1
+        ;;
+esac
