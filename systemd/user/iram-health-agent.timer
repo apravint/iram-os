@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodic IRAM OS Autonomous Self-Healing Diagnostic Timer (15min)
+Documentation=https://github.com/apravint/iram-os
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

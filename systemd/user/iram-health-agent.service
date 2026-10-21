@@ -1,0 +1,11 @@
+[Unit]
+Description=IRAM OS Autonomous Self-Healing Diagnostic Agent
+Documentation=https://github.com/apravint/iram-os
+After=network.target
+
+[Service]
+Type=oneshot
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/.local/bin/iram-health-agent
+StandardOutput=journal
+StandardError=journal

@@ -178,6 +178,34 @@ window#waybar {
     padding: 0 10px;
 }
 
+#custom-audio-sink {
+    color: #bd93f9;
+    font-weight: 700;
+    padding: 0 10px;
+    border-bottom: 2px solid rgba(189, 147, 249, 0.4);
+    transition: all 0.15s ease-in-out;
+}
+
+#custom-audio-sink:hover {
+    background: rgba(189, 147, 249, 0.15);
+    border-bottom: 2px solid #bd93f9;
+}
+
+#custom-audio-sink.combined {
+    color: #ff79c6;
+    border-bottom: 2px solid rgba(255, 121, 198, 0.5);
+}
+
+#custom-audio-sink.bluetooth {
+    color: #8be9fd;
+    border-bottom: 2px solid rgba(139, 233, 253, 0.5);
+}
+
+#custom-audio-sink.tv {
+    color: #50fa7b;
+    border-bottom: 2px solid rgba(80, 250, 123, 0.5);
+}
+
 #pulseaudio {
     color: @accent;
 }

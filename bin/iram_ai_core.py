@@ -19,7 +19,16 @@ import urllib.error
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 
-CIRCUIT_BREAKER_FILE = "/tmp/iram_gemini_down"
+def _get_circuit_breaker_file() -> str:
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir and os.path.isdir(runtime_dir):
+        target_dir = os.path.join(runtime_dir, "iram")
+    else:
+        target_dir = os.path.expanduser("~/.local/state/iram")
+    os.makedirs(target_dir, mode=0o700, exist_ok=True)
+    return os.path.join(target_dir, "circuit_breaker_gemini_down")
+
+CIRCUIT_BREAKER_FILE = _get_circuit_breaker_file()
 CIRCUIT_COOLDOWN_SEC = 300  # 5 minutes before re-testing broken cloud endpoint
 
 DB_DIR = os.path.expanduser("~/.local/share/iram/hindsight")

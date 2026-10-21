@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Interactive Waybar Studio Audio Sink Module
+Outputs active PipeWire output name and icon in Waybar JSON format.
+Clicking triggers iram-audio-toggle to cycle outputs smoothly.
+https://github.com/apravint/iram-os
+"""
+
+import subprocess
+import json
+import sys
+
+def get_default_sink():
+    try:
+        return subprocess.check_output(["pactl", "get-default-sink"], text=True).strip()
+    except Exception:
+        return ""
+
+def get_sinks():
+    try:
+        out = subprocess.check_output(["pactl", "-f", "json", "list", "sinks"], text=True)
+        return json.loads(out)
+    except Exception:
+        return []
+
+def main():
+    default_sink = get_default_sink()
+    sinks = get_sinks()
+
+    current_desc = "Audio"
+    for s in sinks:
+        if s.get("name") == default_sink:
+            current_desc = s.get("description", "Audio")
+            break
+
+    # Determine icon and clean short label
+    desc_lower = current_desc.lower()
+    if "blue" in desc_lower or "jbl" in desc_lower or "flip" in desc_lower or "buds" in desc_lower:
+        icon = "󰓃"
+        short_name = "Bluetooth"
+        css_class = "bluetooth"
+    elif "combined" in desc_lower or "all" in desc_lower:
+        icon = "󰓃󰍹"
+        short_name = "Dual Cast"
+        css_class = "combined"
+    elif "sony" in desc_lower or "tv" in desc_lower:
+        icon = "󰽟"
+        short_name = "Sony TV"
+        css_class = "tv"
+    elif "samsung" in desc_lower or "monitor" in desc_lower or "dvi" in desc_lower or "hdmi" in desc_lower:
+        icon = "󰍹"
+        short_name = "Monitor"
+        css_class = "monitor"
+    elif "headphone" in desc_lower or "pro" in desc_lower or "built-in" in desc_lower:
+        icon = "󰋋"
+        short_name = "Headphones"
+        css_class = "headphones"
+    else:
+        icon = "󰕾"
+        short_name = current_desc[:12]
+        css_class = "default"
+
+    tooltip = (
+        f"🎧 Active Studio Audio Output: {current_desc}\n"
+        f"• PipeWire Sink: {default_sink}\n\n"
+        f"🖱️ Left-Click: Cycle next audio output\n"
+        f"🖱️ Right-Click: Open Volume Mixer (Pavucontrol)"
+    )
+
+    data = {
+        "text": f"{icon} {short_name}",
+        "tooltip": tooltip,
+        "class": css_class
+    }
+    print(json.dumps(data))
+
+if __name__ == "__main__":
+    main()

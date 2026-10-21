@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Post-Upgrade Service Sanitizer (Ubuntu 26.10 Non-LTS)
+# ==============================================================================
+set -euo pipefail
+
+echo "==> Sanitizing services for Ubuntu 26.10..."
+
+# 1. Disable Canonical Livepatch (Strictly unsupported on non-LTS releases)
+if command -v snap >/dev/null 2>&1 && snap list canonical-livepatch >/dev/null 2>&1; then
+    echo "Disabling non-LTS canonical-livepatch snap service..."
+    sudo snap disable canonical-livepatch 2>/dev/null || true
+    sudo systemctl stop snap.canonical-livepatch.canonical-livepatchd.service 2>/dev/null || true
+fi
+
+# 2. Fix thermald for Haswell CPUs without INT340X ACPI DPTF tables
+if [ -f /etc/default/thermald ]; then
+    echo "Configuring thermald for desktop Intel CPU..."
+    sudo sed -i 's/--adaptive//g' /etc/default/thermald 2>/dev/null || true
+    sudo systemctl restart thermald.service 2>/dev/null || true
+fi
+
+echo "✓ System services sanitized successfully."

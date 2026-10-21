@@ -1,0 +1,17 @@
+[Unit]
+Description=IRAM OS FastMCP 2.0 Desktop Integration Gateway
+Documentation=https://github.com/apravint/iram-os
+PartOf=graphical-session.target
+After=graphical-session.target network.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="IRAM_MCP_TRANSPORT=sse"
+Environment="IRAM_MCP_PORT=8991"
+ExecStart=%h/.local/bin/iram-mcp-server
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=graphical-session.target

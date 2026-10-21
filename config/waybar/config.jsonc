@@ -24,6 +24,7 @@
         "custom/theme",
         "cpu",
         "memory",
+        "custom/audio-sink",
         "pulseaudio",
         "network",
         "tray",
@@ -117,6 +118,15 @@
         "format": "󰘚 {percentage}%",
         "interval": 5,
         "on-click": "alacritty -e btop"
+    },
+
+    "custom/audio-sink": {
+        "format": "{}",
+        "return-type": "json",
+        "interval": 2,
+        "exec": "~/.local/bin/iram-waybar-audio-sink",
+        "on-click": "~/.local/bin/iram-audio-toggle",
+        "on-click-right": "pavucontrol"
     },
 
     "pulseaudio": {
