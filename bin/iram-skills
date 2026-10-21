@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 USER_SKILLS_DIR = os.path.expanduser("~/.config/iram/skills")
 AGENTS_SKILLS_DIR = os.path.expanduser("~/.agents/skills")
 SCI_REPO_SKILLS_DIR = os.path.expanduser("~/.local/share/iram/scientific-agent-skills/skills")
+ANDROID_REPO_SKILLS_DIR = os.path.expanduser("~/.local/share/iram/android-skills")
 
 os.makedirs(USER_SKILLS_DIR, exist_ok=True)
 os.makedirs(AGENTS_SKILLS_DIR, exist_ok=True)
@@ -96,6 +97,59 @@ SUITES = {
         "pennylane",
         "qutip",
         "cirq"
+    ],
+    "android": [
+        "edge-to-edge",
+        "jetpack-compose-performance",
+        "adaptive",
+        "litert-runtime",
+        "r8-analyzer",
+        "android-permissions-security",
+        "testing-setup"
+    ],
+    "android-ai": [
+        "litert-runtime",
+        "appfunctions",
+        "ml-kit-genai-prompt-api"
+    ],
+    "android-compose": [
+        "edge-to-edge",
+        "jetpack-compose-performance",
+        "adaptive",
+        "migrate-xml-views-to-jetpack-compose",
+        "styles"
+    ],
+    "android-all": [
+        "agp-9-upgrade",
+        "camerax",
+        "android-for-cars-parked-apps",
+        "appfunctions",
+        "litert-runtime",
+        "ml-kit-genai-prompt-api",
+        "android-cli",
+        "restore-credentials",
+        "verified-email",
+        "adaptive",
+        "jetpack-compose-performance",
+        "migrate-xml-views-to-jetpack-compose",
+        "styles",
+        "media3-cast-integration",
+        "navigation-3",
+        "navigation-event",
+        "r8-analyzer",
+        "engage-sdk-integration",
+        "play-billing-library-version-upgrade",
+        "play-policy-insights",
+        "android-profiler",
+        "android-intent-security",
+        "android-permissions-security",
+        "edge-to-edge",
+        "glance-canonical-layouts",
+        "testing-setup",
+        "leanback-to-compose-tv-migration",
+        "wear-compose-m3",
+        "wear-widgets",
+        "display-glasses-with-jetpack-compose-glimmer"
     ]
 }
 
@@ -153,22 +207,55 @@ def get_installed_skills() -> Dict[str, str]:
     return installed
 
 
+def get_catalog_skills() -> Dict[str, Tuple[str, str]]:
+    """
+    Returns mapping of skill_name -> (category_label, directory_path)
+    from all configured catalogs (Scientific and Android skills).
+    """
+    catalog = {}
+
+    # 1. Scientific Agent Skills
+    if os.path.isdir(SCI_REPO_SKILLS_DIR):
+        for s in sorted(os.listdir(SCI_REPO_SKILLS_DIR)):
+            p = os.path.join(SCI_REPO_SKILLS_DIR, s)
+            if os.path.isdir(p) and os.path.isfile(os.path.join(p, "SKILL.md")):
+                catalog[s] = ("scientific", p)
+
+    # 2. Android Agent Skills (Google official)
+    if os.path.isdir(ANDROID_REPO_SKILLS_DIR):
+        for root, _, files in os.walk(ANDROID_REPO_SKILLS_DIR):
+            if "SKILL.md" in files:
+                skill_name = os.path.basename(root)
+                catalog[skill_name] = ("android", root)
+
+    return catalog
+
+
 def list_skills(show_all: bool = False):
     installed = get_installed_skills()
     print(f"{BOLD}{CYAN}⚡ IRAM OS Active Modular Skills ({len(installed)}):{NC}")
     for name, (src, desc) in installed.items():
         tag = f"{GREEN}[active]{NC}" if src == "installed" else f"{CYAN}[{src}]{NC}"
-        print(f"  • {BOLD}{name:<24}{NC} {tag} {desc}")
+        print(f"  • {BOLD}{name:<28}{NC} {tag} {desc}")
 
-    if show_all and os.path.isdir(SCI_REPO_SKILLS_DIR):
-        all_sci = sorted(os.listdir(SCI_REPO_SKILLS_DIR))
-        uninstalled = [s for s in all_sci if s not in installed and os.path.isdir(os.path.join(SCI_REPO_SKILLS_DIR, s))]
-        print(f"\n{BOLD}{YELLOW}📚 Available Scientific Skills in Catalog ({len(uninstalled)} uninstalled):{NC}")
-        for s in uninstalled[:25]:
-            desc = extract_skill_description(os.path.join(SCI_REPO_SKILLS_DIR, s))
-            print(f"  ○ {BOLD}{s:<24}{NC} {desc}")
-        if len(uninstalled) > 25:
-            print(f"  ... and {len(uninstalled) - 25} more. Run {BOLD}iram-skills search <term>{NC} to explore.")
+    if show_all:
+        catalog = get_catalog_skills()
+        uninstalled_android = [(k, p) for k, (cat, p) in catalog.items() if cat == "android" and k not in installed]
+        uninstalled_sci = [(k, p) for k, (cat, p) in catalog.items() if cat == "scientific" and k not in installed]
+
+        if uninstalled_android:
+            print(f"\n{BOLD}{GREEN}🤖 Available Android Skills in Catalog ({len(uninstalled_android)} uninstalled):{NC}")
+            for s, path in sorted(uninstalled_android):
+                desc = extract_skill_description(path)
+                print(f"  ○ {BOLD}{s:<28}{NC} {desc}")
+
+        if uninstalled_sci:
+            print(f"\n{BOLD}{YELLOW}📚 Available Scientific Skills in Catalog ({len(uninstalled_sci)} uninstalled):{NC}")
+            for s, path in sorted(uninstalled_sci)[:25]:
+                desc = extract_skill_description(path)
+                print(f"  ○ {BOLD}{s:<28}{NC} {desc}")
+            if len(uninstalled_sci) > 25:
+                print(f"  ... and {len(uninstalled_sci) - 25} more scientific skills. Run {BOLD}iram-skills search <term>{NC} to explore.")
 
 
 def search_skills(query: str):
@@ -180,20 +267,19 @@ def search_skills(query: str):
     # Search installed
     for name, (src, desc) in installed.items():
         if q in name.lower() or q in desc.lower():
-            print(f"  • {BOLD}{name:<24}{NC} {GREEN}[installed]{NC} {desc}")
+            print(f"  • {BOLD}{name:<28}{NC} {GREEN}[installed]{NC} {desc}")
             found += 1
 
-    # Search repo catalog
-    if os.path.isdir(SCI_REPO_SKILLS_DIR):
-        for s in sorted(os.listdir(SCI_REPO_SKILLS_DIR)):
-            if s in installed:
-                continue
-            full = os.path.join(SCI_REPO_SKILLS_DIR, s)
-            if os.path.isdir(full):
-                desc = extract_skill_description(full)
-                if q in s.lower() or q in desc.lower():
-                    print(f"  ○ {BOLD}{s:<24}{NC} {YELLOW}[available]{NC} {desc}")
-                    found += 1
+    # Search catalogs
+    catalog = get_catalog_skills()
+    for s, (cat, full) in sorted(catalog.items()):
+        if s in installed:
+            continue
+        desc = extract_skill_description(full)
+        if q in s.lower() or q in desc.lower():
+            tag = f"{GREEN}[android]{NC}" if cat == "android" else f"{YELLOW}[scientific]{NC}"
+            print(f"  ○ {BOLD}{s:<28}{NC} {tag} {desc}")
+            found += 1
 
     if found == 0:
         print(f"{RED}No skills matched '{query}'.{NC}")
@@ -202,10 +288,13 @@ def search_skills(query: str):
 
 
 def install_skill(skill_name: str) -> bool:
-    source_dir = os.path.join(SCI_REPO_SKILLS_DIR, skill_name)
-    if not os.path.isdir(source_dir):
-        print(f"{RED}Error: Skill '{skill_name}' not found in catalog ({SCI_REPO_SKILLS_DIR}).{NC}")
+    catalog = get_catalog_skills()
+    if skill_name not in catalog:
+        print(f"{RED}Error: Skill '{skill_name}' not found in any registered catalog.{NC}")
+        print(f"Searched: {SCI_REPO_SKILLS_DIR} and {ANDROID_REPO_SKILLS_DIR}")
         return False
+
+    cat, source_dir = catalog[skill_name]
 
     # Link to USER_SKILLS_DIR and AGENTS_SKILLS_DIR
     for target_dir in [USER_SKILLS_DIR, AGENTS_SKILLS_DIR]:
@@ -219,7 +308,7 @@ def install_skill(skill_name: str) -> bool:
         os.symlink(source_dir, dest)
 
     desc = extract_skill_description(source_dir)
-    print(f"{GREEN}✓ Installed skill:{NC} {BOLD}{skill_name}{NC} — {desc}")
+    print(f"{GREEN}✓ Installed {cat} skill:{NC} {BOLD}{skill_name}{NC} — {desc}")
     print(f"  Active in: {USER_SKILLS_DIR}/{skill_name}")
     print(f"  Active in: {AGENTS_SKILLS_DIR}/{skill_name}")
     return True
@@ -249,16 +338,22 @@ def view_skill(skill_name: str):
         print(BUILTIN_SKILLS[skill_name]["instructions"])
         return
 
-    # Check installed or catalog
-    paths = [
-        os.path.join(USER_SKILLS_DIR, skill_name, "SKILL.md"),
-        os.path.join(AGENTS_SKILLS_DIR, skill_name, "SKILL.md"),
-        os.path.join(SCI_REPO_SKILLS_DIR, skill_name, "SKILL.md"),
-        os.path.join(USER_SKILLS_DIR, f"{skill_name}.md")
-    ]
-    for p in paths:
+    # Check installed
+    for target_dir in [USER_SKILLS_DIR, AGENTS_SKILLS_DIR]:
+        p = os.path.join(target_dir, skill_name, "SKILL.md")
         if os.path.isfile(p):
-            print(f"{BOLD}Skill: {skill_name} ({p}){NC}\n")
+            print(f"{BOLD}Active Skill: {skill_name} ({p}){NC}\n")
+            with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                print(f.read())
+            return
+
+    # Check catalog
+    catalog = get_catalog_skills()
+    if skill_name in catalog:
+        cat, source_dir = catalog[skill_name]
+        p = os.path.join(source_dir, "SKILL.md")
+        if os.path.isfile(p):
+            print(f"{BOLD}Catalog Skill [{cat}]: {skill_name} ({p}){NC}\n")
             with open(p, "r", encoding="utf-8", errors="ignore") as f:
                 print(f.read())
             return
