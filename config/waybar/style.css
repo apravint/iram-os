@@ -120,9 +120,11 @@ window#waybar {
 }
 
 #custom-ai-agent,
+#custom-mcp-status,
 #custom-theme,
 #cpu,
 #memory,
+#custom-audio-sink,
 #pulseaudio,
 #network,
 #battery {
@@ -153,19 +155,13 @@ window#waybar {
 }
 
 #custom-mcp-status {
-    color: #05ffa1;
+    color: @accent;
     font-weight: 700;
     padding: 0 10px;
-    border-bottom: 2px solid rgba(5, 255, 161, 0.4);
-}
-
-#custom-mcp-status:hover {
-    background: rgba(5, 255, 161, 0.15);
-    border-bottom: 2px solid #05ffa1;
 }
 
 #custom-mcp-status.active {
-    color: #05ffa1;
+    color: @accent;
 }
 
 #custom-mcp-status.idle {
@@ -179,37 +175,18 @@ window#waybar {
 }
 
 #custom-audio-sink {
-    color: #bd93f9;
+    color: @accent;
     font-weight: 700;
     padding: 0 10px;
-    border-bottom: 2px solid rgba(189, 147, 249, 0.4);
     transition: all 0.15s ease-in-out;
-}
-
-#custom-audio-sink:hover {
-    background: rgba(189, 147, 249, 0.15);
-    border-bottom: 2px solid #bd93f9;
-}
-
-#custom-audio-sink.combined {
-    color: #ff79c6;
-    border-bottom: 2px solid rgba(255, 121, 198, 0.5);
-}
-
-#custom-audio-sink.bluetooth {
-    color: #8be9fd;
-    border-bottom: 2px solid rgba(139, 233, 253, 0.5);
-}
-
-#custom-audio-sink.tv {
-    color: #50fa7b;
-    border-bottom: 2px solid rgba(80, 250, 123, 0.5);
 }
 
 #pulseaudio {
     color: @accent;
 }
 
+#custom-mcp-status:hover,
+#custom-audio-sink:hover,
 #cpu:hover,
 #memory:hover,
 #pulseaudio:hover,
