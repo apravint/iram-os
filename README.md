@@ -274,6 +274,8 @@ IRAM OS is architected into standalone, independently maintainable open-source p
 
 | Repository | Focus & Role |
 | :--- | :--- |
+| [**`hypr-doctor`**](https://github.com/apravint/hypr-doctor) | Static analysis linter, duplicate keybinding detector & autostart auditor for Hyprland |
+| [**`hypr-agentic-config`**](https://github.com/apravint/hypr-agentic-config) | Turnkey, conflict-free Hyprland 0.56 + Waybar dotfiles & systemd autostart suite |
 | [**`context-condenser`**](https://github.com/apravint/context-condenser) | 98% BM25 Context Compression Engine for AI Coding Agents (Claude, Cursor, Antigravity) |
 | [**`agent-hindsight`**](https://github.com/apravint/agent-hindsight) | Temporal long-term episodic memory engine with recency decay and SQLite FTS5 |
 | [**`adversarial-pre-push`**](https://github.com/apravint/adversarial-pre-push) | 6-phase adversarial vulnerability auditing git pre-push gate with Hunter/Verifier separation |
