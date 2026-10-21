@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Headless ComfyUI Diffusion Engine
+# ==============================================================================
+set -euo pipefail
+
+COMFY_PORT="${COMFY_PORT:-8188}"
+URL="http://127.0.0.1:$COMFY_PORT"
+
+show_help() {
+    echo "Usage: iram-comfyui {open|status|start|stop|logs}"
+}
+
+check_status() {
+    if systemctl --user is-active --quiet iram-comfyui.service 2>/dev/null; then
+        echo "✅ ComfyUI Engine: ACTIVE (systemd user unit)"
+        echo "🔗 Canvas URL: $URL"
+    elif curl -s --max-time 1 "$URL" >/dev/null 2>&1; then
+        echo "✅ ComfyUI Engine: RUNNING on $URL (standalone)"
+    else
+        echo "⏹️  ComfyUI Engine: STOPPED"
+    fi
+}
+
+open_canvas() {
+    check_status
+    echo "🎨 Opening ComfyUI Canvas at $URL..."
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$URL" >/dev/null 2>&1 || true
+    fi
+}
+
+start_engine() {
+    echo "Starting ComfyUI diffusion service..."
+    if [ -f "$HOME/.config/systemd/user/iram-comfyui.service" ]; then
+        systemctl --user daemon-reload
+        systemctl --user start iram-comfyui.service
+        sleep 1
+        check_status
+    else
+        echo "Systemd unit iram-comfyui.service not installed."
+    fi
+}
+
+stop_engine() {
+    echo "Stopping ComfyUI..."
+    systemctl --user stop iram-comfyui.service 2>/dev/null || pkill -f "ComfyUI/main.py" || true
+    echo "ComfyUI stopped."
+}
+
+case "${1:-open}" in
+    open)
+        open_canvas
+        ;;
+    status)
+        check_status
+        ;;
+    start)
+        start_engine
+        ;;
+    stop)
+        stop_engine
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac

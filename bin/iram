@@ -208,26 +208,31 @@ case "$cmd" in
         exec "$LOCAL_BIN/iram-worldmonitor" "$@"
         ;;
     swarm)
-        if command -v ruflo >/dev/null 2>&1; then
+        if [ -x "$LOCAL_BIN/iram-swarm" ]; then
+            exec "$LOCAL_BIN/iram-swarm" "$@"
+        elif command -v ruflo >/dev/null 2>&1; then
             exec ruflo "$@"
-        elif [ -x "$HOME/.local/bin/ruflo" ]; then
-            exec "$HOME/.local/bin/ruflo" "$@"
         else
             exec npx -y ruflo "$@"
         fi
         ;;
-    openrig|team)
-        sub="${1:-}"
-        if [ "$sub" = "board" ] || [ "$sub" = "paperclip" ]; then
-            xdg-open "http://localhost:3100" 2>/dev/null || chromium --app="http://localhost:3100" 2>/dev/null &
-            exit 0
-        fi
-        if [ -d "$HOME/.local/share/iram/openrig" ]; then
-            cd "$HOME/.local/share/iram/openrig" && exec node packages/cli/bin/run.mjs "$@"
-        else
-            echo -e "${RED}OpenRig repository not found.${NC} Checked ~/.local/share/iram/openrig."
-            exit 1
-        fi
+    team)
+        exec "$LOCAL_BIN/iram-team" "$@"
+        ;;
+    openrig)
+        exec "$LOCAL_BIN/iram-openrig" "$@"
+        ;;
+    music)
+        exec "$LOCAL_BIN/iram-music" "$@"
+        ;;
+    video)
+        exec "$LOCAL_BIN/iram-video" "$@"
+        ;;
+    comfyui)
+        exec "$LOCAL_BIN/iram-comfyui" "$@"
+        ;;
+    genai)
+        exec "$LOCAL_BIN/iram-genai" "$@"
         ;;
     pre-push|prepush)
         exec "$LOCAL_BIN/iram-pre-push" "$@"

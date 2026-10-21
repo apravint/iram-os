@@ -393,6 +393,54 @@ def generate_architecture_map(repo_path: str = ".") -> str:
     except Exception as e:
         return f"Architecture map error: {e}"
 
+# --- VIRTUAL COMPANY & TEAM ORCHESTRATION (PAPERCLIP & RUFLO) ---
+@mcp.tool()
+def open_paperclip_team_board() -> str:
+    """Opens the Paperclip virtual company agent control board on port 3100."""
+    try:
+        subprocess.Popen(["iram-team", "board"])
+        return "Opened Paperclip Virtual Company Board at http://127.0.0.1:3100"
+    except Exception as e:
+        return f"Paperclip board error: {e}"
+
+@mcp.tool()
+def run_swarm_workflow(prompt: str, nodes: int = 4) -> str:
+    """Dispatches a task across the multi-persona agent swarm (Architect, Builder, Verifier, Design)."""
+    try:
+        res = subprocess.run(["iram-swarm", "run", prompt, "--nodes", str(nodes)], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Swarm error: {e}"
+
+# --- GENERATIVE MEDIA & MUSIC (HYPERFRAMES, YUE2, JASNA) ---
+@mcp.tool()
+def render_code_video(spec_path: str, fps: int = 60, duration: int = 5) -> str:
+    """Compiles an HTML/JS/Three.js animation specification directly to an MP4 video."""
+    try:
+        res = subprocess.run(["iram-video", "render", spec_path, "--fps", str(fps), "--duration", str(duration)], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Video render error: {e}"
+
+@mcp.tool()
+def synthesize_music_track(prompt: str, style: str = "cinematic") -> str:
+    """Synthesizes an offline musical theme or vocal score from text description."""
+    try:
+        res = subprocess.run(["iram-music", "synth", prompt, "--style", style], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Music synth error: {e}"
+
+@mcp.tool()
+def upscale_video_gpu(video_path: str, scale: int = 2) -> str:
+    """Applies GPU neural upscaling and frame restoration to a video."""
+    try:
+        res = subprocess.run(["iram-video", "upscale", video_path, "--scale", str(scale)], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"Upscale error: {e}"
+
+
 def main():
     if "--sse" in sys.argv or os.environ.get("IRAM_MCP_TRANSPORT") == "sse":
         port = int(os.environ.get("IRAM_MCP_PORT", 8991))

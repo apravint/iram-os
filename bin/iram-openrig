@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS OpenRig Terminal Team Harness
+# https://github.com/mvschwarz/openrig
+# ==============================================================================
+set -euo pipefail
+
+ROLE="${1:-team}"
+SPEC_DIR="${OPENRIG_SPEC_DIR:-$HOME/.config/openrig/specs}"
+
+echo "🤖 IRAM OS OpenRig Terminal Team Orchestrator"
+echo "Active Role / Mode: $ROLE"
+
+mkdir -p "$SPEC_DIR"
+
+launch_terminal_team() {
+    echo "Spawning OpenRig multi-pane terminal workspace..."
+    if command -v alacritty >/dev/null 2>&1; then
+        alacritty --class "openrig-team,Alacritty" \
+                  --title "OpenRig Team Workspace" \
+                  -e bash -c "echo '=== OpenRig Autonomous Team Session ==='; iram-swarm status; exec bash" &
+    elif command -v konsole >/dev/null 2>&1; then
+        konsole --new-tab -e bash -c "echo '=== OpenRig Autonomous Team Session ==='; iram-swarm status; exec bash" &
+    else
+        echo "Launching in current terminal..."
+        iram-swarm status
+    fi
+}
+
+case "$ROLE" in
+    team)
+        launch_terminal_team
+        ;;
+    lead)
+        echo "Starting OpenRig Lead Architect session..."
+        iram-swarm run "Lead Architect specification alignment"
+        ;;
+    builder)
+        echo "Starting OpenRig Builder session..."
+        iram-swarm run "Full-Stack Builder implementation cycle"
+        ;;
+    reviewer)
+        echo "Starting OpenRig Reviewer verification session..."
+        iram-audit .
+        ;;
+    *)
+        echo "Usage: iram-openrig {team|lead|builder|reviewer}"
+        exit 1
+        ;;
+esac

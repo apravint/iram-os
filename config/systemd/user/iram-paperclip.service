@@ -1,0 +1,16 @@
+[Unit]
+Description=IRAM OS Virtual Company Agent Control Plane (Paperclip)
+Documentation=https://github.com/paperclipai/paperclip
+After=network.target graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/paperclip
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5s
+Environment=PORT=3100
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target

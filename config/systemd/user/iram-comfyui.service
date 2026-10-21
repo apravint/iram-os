@@ -1,0 +1,13 @@
+[Unit]
+Description=IRAM OS Headless ComfyUI Generative Diffusion Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ComfyUI
+ExecStart=/usr/bin/python3 main.py --listen 127.0.0.1 --port 8188 --highvram
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Generative AI Studio (Open-Generative-AI 600+ Model Integration)
+# https://github.com/Anil-matcha/Open-Generative-AI
+# ==============================================================================
+set -euo pipefail
+
+STUDIO_DIR="${GENAI_STUDIO_DIR:-$HOME/Open-Generative-AI}"
+PORT="${GENAI_PORT:-3000}"
+URL="http://127.0.0.1:$PORT"
+
+echo "🎨 IRAM OS 600+ Model Generative AI Studio"
+
+if curl -s --max-time 0.5 "$URL" >/dev/null 2>&1; then
+    echo "Connecting to active studio session at $URL..."
+else
+    echo "Starting local studio server on port $PORT..."
+    if [ -d "$STUDIO_DIR" ]; then
+        cd "$STUDIO_DIR"
+        nohup npm run dev > "$HOME/.local/state/iram/genai.log" 2>&1 &
+        sleep 1.5
+    fi
+fi
+
+if command -v google-chrome >/dev/null 2>&1; then
+    google-chrome --app="$URL" --name="iram-genai" --class="iram-genai" >/dev/null 2>&1 &
+elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$URL" >/dev/null 2>&1 &
+else
+    echo "Studio URL: $URL"
+fi

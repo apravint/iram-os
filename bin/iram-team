@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Virtual Agent Team & Company Control Plane (Paperclip Integration)
+# https://github.com/paperclipai/paperclip
+# ==============================================================================
+set -euo pipefail
+
+PAPERCLIP_PORT="${PAPERCLIP_PORT:-3100}"
+PAPERCLIP_DIR="${PAPERCLIP_DIR:-$HOME/paperclip}"
+URL="http://127.0.0.1:$PAPERCLIP_PORT"
+
+show_help() {
+    echo "Usage: iram-team {board|status|start|stop|logs|add-agent}"
+    echo ""
+    echo "Commands:"
+    echo "  board      Open the Paperclip Agent Team control board in browser"
+    echo "  status     Check if the Paperclip orchestration engine is running"
+    echo "  start      Start the Paperclip agent company control plane daemon"
+    echo "  stop       Stop the Paperclip daemon"
+    echo "  logs       View live Paperclip orchestrator logs"
+    echo "  add-agent  Add an agent to the company hierarchy with a budget and role"
+}
+
+check_status() {
+    if systemctl --user is-active --quiet iram-paperclip.service 2>/dev/null; then
+        echo "✅ Paperclip Orchestrator: ACTIVE (systemd user service)"
+        echo "🔗 Control Plane URL: $URL"
+    elif curl -s "$URL" >/dev/null 2>&1; then
+        echo "✅ Paperclip Orchestrator: RUNNING on $URL (standalone)"
+    else
+        echo "⏹️  Paperclip Orchestrator: STOPPED"
+        echo "Run 'iram-team start' or 'systemctl --user start iram-paperclip.service' to launch."
+    fi
+}
+
+open_board() {
+    check_status
+    echo "🚀 Opening Paperclip Virtual Company Board at $URL..."
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$URL" >/dev/null 2>&1 || true
+    fi
+}
+
+start_daemon() {
+    echo "Starting Paperclip Agent Control Plane..."
+    if [ -f "$HOME/.config/systemd/user/iram-paperclip.service" ]; then
+        systemctl --user daemon-reload
+        systemctl --user start iram-paperclip.service
+        sleep 2
+        check_status
+    else
+        if [ -d "$PAPERCLIP_DIR" ]; then
+            cd "$PAPERCLIP_DIR"
+            nohup npm start > "$HOME/.local/state/iram/paperclip.log" 2>&1 &
+            echo "Started Paperclip in background (PID: $!)."
+        else
+            echo "Paperclip directory not found at $PAPERCLIP_DIR."
+        fi
+    fi
+}
+
+stop_daemon() {
+    echo "Stopping Paperclip..."
+    systemctl --user stop iram-paperclip.service 2>/dev/null || pkill -f "paperclip" || true
+    echo "Paperclip stopped."
+}
+
+show_logs() {
+    journalctl --user -u iram-paperclip.service -f -n 50 2>/dev/null || tail -f "$HOME/.local/state/iram/paperclip.log"
+}
+
+case "${1:-board}" in
+    board)
+        open_board
+        ;;
+    status)
+        check_status
+        ;;
+    start)
+        start_daemon
+        ;;
+    stop)
+        stop_daemon
+        ;;
+    logs)
+        show_logs
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac
