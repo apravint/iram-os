@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# ChronoCraft — Full-Screen Brutalist Timepiece & Focus Studio
+# Supports Fullscreen Clock, Event Countdown, and Precision Timer / Stopwatch
+# https://github.com/apravint/iram-os
+# ==============================================================================
+
+set -euo pipefail
+
+APP_HTML="$HOME/ChronoCraft/app/index.html"
+DESIGN_DIR="$HOME/ChronoCraft/design"
+
+if [ "${1:-}" = "design" ] || [ "${1:-}" = "figcraft" ]; then
+    echo "🎨 Opening ChronoCraft Mobile Design System in FigCraft..."
+    if command -v figcraft >/dev/null 2>&1; then
+        exec figcraft "$DESIGN_DIR/clock_screen.svg"
+    else
+        exec xdg-open "$DESIGN_DIR"
+    fi
+fi
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    echo "ChronoCraft — Full-Screen Timepiece & Focus Studio"
+    echo ""
+    echo "Usage:"
+    echo "  chronocraft              Launch Full-Screen App"
+    echo "  chronocraft design       Open Mobile UI Mockups in FigCraft"
+    echo ""
+    echo "Shortcuts inside App:"
+    echo "  [1] Clock Mode    [2] Countdown Mode    [3] Focus Timer"
+    echo "  [Space] Play/Pause Timer   [F] True Fullscreen Toggle"
+    echo "  [Tap anywhere] Toggle Immersion Clean View"
+    exit 0
+fi
+
+# Launch in native app window
+if command -v google-chrome >/dev/null 2>&1; then
+    exec google-chrome --app="file://$APP_HTML" --start-fullscreen --name="chronocraft" --class="chronocraft"
+elif command -v chromium >/dev/null 2>&1; then
+    exec chromium --app="file://$APP_HTML" --start-fullscreen --name="chronocraft" --class="chronocraft"
+elif command -v firefox >/dev/null 2>&1; then
+    exec firefox --new-window "file://$APP_HTML"
+else
+    exec xdg-open "file://$APP_HTML"
+fi
