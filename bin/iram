@@ -49,6 +49,7 @@ show_help() {
     echo -e "  ${CYAN}theme${NC} [list|set|next]     Live zero-restart theme switcher (18 curated palettes)"
     echo -e "  ${CYAN}audio${NC} [tuning|toggle|init] PipeWire studio audio routing & calibrated hardware DSP tuning"
     echo -e "  ${CYAN}network${NC} [scan|watch|info] Wi-Fi network radar: scan & monitor connected devices"
+    echo -e "  ${CYAN}quant${NC} [us|in|all]         Cross-market algorithmic stock leader scanner (US & NSE)"
     echo -e "  ${CYAN}migrate${NC} [run|status|create] Non-destructive timestamped system migrations engine"
     echo -e "  ${CYAN}lifecycle${NC} [dispatch|list] System hooks dispatcher (theme-set, battery-low, post-update)"
     echo -e "  ${CYAN}webapp${NC} [install|list|rm]  Isolated desktop PWA generation with Launch-or-Focus"
@@ -557,6 +558,9 @@ case "$cmd" in
         ;;
     power)
         exec "$LOCAL_BIN/iram-power-menu"
+        ;;
+    quant|screener)
+        exec python3 "$HOME/iram-quant/scanner.py" "$@"
         ;;
     apps|launcher)
         exec "$LOCAL_BIN/iram-app-launcher"
