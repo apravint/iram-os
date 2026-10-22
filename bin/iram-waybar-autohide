@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Waybar Edge-Triggered Autohide Daemon
+Automatically shows Waybar when the cursor touches the top screen edge (y <= 2),
+and hides it smoothly when the cursor leaves the bar area (y > 45).
+Communicates via Hyprland's native UNIX domain socket for zero-CPU overhead.
+https://github.com/apravint/iram-os
+"""
+
+import sys
+import os
+import time
+import socket
+import json
+import signal
+import subprocess
+
+PID_FILE = os.path.expanduser(f"{os.environ.get('XDG_RUNTIME_DIR', '/tmp')}/iram-waybar-autohide.pid")
+
+
+def get_hyprland_socket_path():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    rundir = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
+    if not sig:
+        try:
+            instances = [d for d in os.listdir(f"{rundir}/hypr") if os.path.isdir(f"{rundir}/hypr/{d}")]
+            if instances:
+                sig = instances[0]
+        except Exception:
+            pass
+    return f"{rundir}/hypr/{sig}/.socket.sock" if sig else None
+
+
+def query_hyprland_socket(sock_path, cmd):
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        s.connect(sock_path)
+        s.sendall(cmd.encode("utf-8"))
+        chunks = []
+        while True:
+            buf = s.recv(4096)
+            if not buf:
+                break
+            chunks.append(buf)
+        s.close()
+        return b"".join(chunks).decode("utf-8", errors="ignore")
+    except Exception:
+        return None
+
+
+def get_cursor_pos(sock_path):
+    res = query_hyprland_socket(sock_path, "cursorpos")
+    if res and "," in res:
+        parts = res.strip().split(",")
+        return int(parts[0].strip()), int(parts[1].strip())
+    return None, None
+
+
+def is_waybar_visible(sock_path):
+    res = query_hyprland_socket(sock_path, "j/layers")
+    if res:
+        try:
+            data = json.loads(res)
+            for mon, lvl in data.items():
+                for layer in lvl.get("levels", {}).get("2", []):
+                    if "waybar" in layer.get("namespace", ""):
+                        return True
+        except Exception:
+            pass
+    return False
+
+
+def get_waybar_pids():
+    try:
+        out = subprocess.check_output(["pgrep", "-x", "waybar"], text=True)
+        return [int(p.strip()) for p in out.strip().split() if p.strip()]
+    except Exception:
+        return []
+
+
+def toggle_waybar():
+    for pid in get_waybar_pids():
+        try:
+            os.kill(pid, signal.SIGUSR1)
+        except ProcessLookupError:
+            pass
+
+
+def run_daemon():
+    # Write PID
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+    sock_path = get_hyprland_socket_path()
+    if not sock_path or not os.path.exists(sock_path):
+        print("Error: Hyprland UNIX socket not found.", file=sys.stderr)
+        sys.exit(1)
+
+    print("IRAM OS Waybar Autohide Daemon active.")
+    
+    # Hide on startup if visible
+    if is_waybar_visible(sock_path):
+        toggle_waybar()
+    
+    visible = False
+    leave_timer = None
+    TRIGGER_EDGE_Y = 2   # Screen top edge threshold
+    BAR_HEIGHT_Y = 42    # Safe zone keeping bar open while hovering
+
+    try:
+        while True:
+            x, y = get_cursor_pos(sock_path)
+            if y is not None:
+                if y <= TRIGGER_EDGE_Y:
+                    leave_timer = None
+                    if not visible:
+                        toggle_waybar()
+                        visible = True
+                        time.sleep(0.15)
+                elif y > BAR_HEIGHT_Y:
+                    if visible:
+                        if leave_timer is None:
+                            leave_timer = time.time()
+                        elif time.time() - leave_timer > 0.35:  # Grace period before hiding
+                            toggle_waybar()
+                            visible = False
+                            leave_timer = None
+                else:
+                    # Inside the bar zone (2 < y <= BAR_HEIGHT_Y)
+                    leave_timer = None
+
+            time.sleep(0.08)  # ~12 Hz check, 0.05% CPU usage
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Ensure waybar is restored upon exit
+        if not is_waybar_visible(sock_path):
+            toggle_waybar()
+        if os.path.exists(PID_FILE):
+            os.remove(PID_FILE)
+
+
+def stop_daemon():
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+            os.kill(pid, signal.SIGTERM)
+            print("Waybar autohide daemon stopped.")
+        except Exception:
+            pass
+        if os.path.exists(PID_FILE):
+            os.remove(PID_FILE)
+    
+    # Ensure waybar is visible when daemon stops
+    sock_path = get_hyprland_socket_path()
+    if sock_path and not is_waybar_visible(sock_path):
+        toggle_waybar()
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "start"
+    if cmd in ["start", "run"]:
+        run_daemon()
+    elif cmd in ["stop", "disable"]:
+        stop_daemon()
+    elif cmd in ["toggle"]:
+        if os.path.exists(PID_FILE):
+            stop_daemon()
+            print("Autohide: DISABLED (Waybar pinned)")
+            subprocess.run(["notify-send", "-a", "IRAM OS", "Waybar Autohide", "DISABLED (Waybar pinned permanently)", "-i", "view-pin"])
+        else:
+            print("Autohide: ENABLED (Waybar autohides on edge)")
+            subprocess.run(["notify-send", "-a", "IRAM OS", "Waybar Autohide", "ENABLED (Hover screen top edge to reveal)", "-i", "view-reveal"])
+            # Launch in background
+            subprocess.Popen([sys.executable, os.path.abspath(__file__), "run"])
+    elif cmd == "status":
+        if os.path.exists(PID_FILE):
+            print("Autohide is ACTIVE (PID: {})".format(open(PID_FILE).read().strip()))
+        else:
+            print("Autohide is INACTIVE (Waybar pinned)")
+    else:
+        print("Usage: iram-waybar-autohide {start|stop|toggle|status}")
+
+
+if __name__ == "__main__":
+    main()
