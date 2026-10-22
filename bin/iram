@@ -48,6 +48,7 @@ show_help() {
     echo -e "  ${CYAN}craft${NC} [app]               Storytold Creative Suite (photo, vector, film, sound, cad...)"
     echo -e "  ${CYAN}theme${NC} [list|set|next]     Live zero-restart theme switcher (18 curated palettes)"
     echo -e "  ${CYAN}audio${NC} [tuning|toggle|init] PipeWire studio audio routing & calibrated hardware DSP tuning"
+    echo -e "  ${CYAN}network${NC} [scan|watch|info] Wi-Fi network radar: scan & monitor connected devices"
     echo -e "  ${CYAN}migrate${NC} [run|status|create] Non-destructive timestamped system migrations engine"
     echo -e "  ${CYAN}lifecycle${NC} [dispatch|list] System hooks dispatcher (theme-set, battery-low, post-update)"
     echo -e "  ${CYAN}webapp${NC} [install|list|rm]  Isolated desktop PWA generation with Launch-or-Focus"

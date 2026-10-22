@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Local Wi-Fi & Network Device Intelligence Tool (iram-network)
+Scans, identifies, fingerprints, and continuously monitors all connected devices
+on the local subnet with MAC vendor resolution, hostname lookup, and desktop alerts.
+https://github.com/apravint/iram-os
+"""
+
+import sys
+import os
+import time
+import socket
+import subprocess
+import concurrent.futures
+import re
+import json
+
+# Well-known MAC OUI database (common hardware vendors)
+COMMON_OUIS = {
+    "f0:ed:b8": "Jio / Foxconn (Router Gateway)",
+    "60:7e:a4": "Samsung Electronics (Galaxy / Smart TV)",
+    "8c:ea:48": "Apple, Inc. (iPhone / iPad / Mac)",
+    "b8:4d:43": "Intel Corporation (PC / Laptop)",
+    "9e:db:f6": "Xiaomi Communications",
+    "50:64:2b": "TP-Link Corporation",
+    "52:64:2b": "TP-Link Corporation",
+    "84:30:95": "Realtek Semiconductor",
+    "dc:a6:32": "Raspberry Pi Foundation",
+    "e4:5f:01": "Raspberry Pi Foundation",
+    "b8:27:eb": "Raspberry Pi Foundation",
+    "00:1a:11": "Google, Inc. (Nest / Chromecast)",
+    "3c:5a:37": "Google, Inc. (Pixel)",
+    "ac:37:43": "HTC Corporation",
+    "48:d7:05": "Amazon Technologies (Echo / FireTV)",
+    "cc:6b:1e": "Amazon Technologies",
+    "fc:65:de": "Amazon Technologies",
+    "f4:f5:e8": "Google, Inc.",
+    "00:50:56": "VMware, Inc.",
+    "08:00:27": "Oracle VirtualBox",
+    "52:54:00": "QEMU / KVM Virtual Machine",
+}
+
+# ANSI Colors
+CYAN = "\033[1;36m"
+GREEN = "\033[1;32m"
+YELLOW = "\033[1;33m"
+BLUE = "\033[1;34m"
+MAGENTA = "\033[1;35m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+
+
+def get_default_interface_and_subnet():
+    """Detect default network interface, IP, subnet, and default gateway."""
+    try:
+        route_out = subprocess.check_output(["ip", "route", "show", "default"], text=True)
+        # default via 192.168.29.1 dev wlp4s0 ... src 192.168.29.115
+        gw_match = re.search(r"via\s+([0-9\.]+)", route_out)
+        dev_match = re.search(r"dev\s+([a-zA-Z0-9_\-]+)", route_out)
+        src_match = re.search(r"src\s+([0-9\.]+)", route_out)
+
+        gateway = gw_match.group(1) if gw_match else "192.168.1.1"
+        dev = dev_match.group(1) if dev_match else "wlan0"
+        local_ip = src_match.group(1) if src_match else "192.168.1.100"
+
+        # Extract subnet prefix (assumes /24)
+        subnet_prefix = ".".join(local_ip.split(".")[:3]) + "."
+        return dev, local_ip, gateway, subnet_prefix
+    except Exception:
+        return "wlp4s0", "192.168.29.115", "192.168.29.1", "192.168.29."
+
+
+def resolve_vendor(mac):
+    """Resolve vendor from MAC address OUI."""
+    if not mac or mac == "Unknown":
+        return "Unknown Device"
+    prefix = mac.lower()[:8]
+    if prefix in COMMON_OUIS:
+        return COMMON_OUIS[prefix]
+    
+    # Try looking in /usr/share/ieee-data/oui.txt or /usr/share/nmap/nmap-mac-prefixes if available
+    for db in ["/usr/share/nmap/nmap-mac-prefixes", "/usr/share/arp-scan/ieee-oui.txt"]:
+        if os.path.isfile(db):
+            try:
+                hex_prefix = prefix.replace(":", "").upper()
+                with open(db, "r", errors="ignore") as f:
+                    for line in f:
+                        if line.startswith(hex_prefix):
+                            return line.split(None, 1)[1].strip()
+            except Exception:
+                pass
+
+    return "Network Client"
+
+
+def resolve_hostname(ip):
+    """Attempt reverse DNS lookup for IP."""
+    try:
+        name = socket.gethostbyaddr(ip)[0]
+        return name
+    except Exception:
+        return "-"
+
+
+def get_arp_table():
+    """Read Linux kernel ARP / neighbor cache."""
+    table = {}
+    try:
+        out = subprocess.check_output(["ip", "neigh", "show"], text=True)
+        for line in out.splitlines():
+            # 192.168.29.79 dev wlp4s0 lladdr 8c:ea:48:46:7c:56 REACHABLE
+            parts = line.split()
+            if len(parts) >= 5 and "lladdr" in parts:
+                ip = parts[0]
+                idx = parts.index("lladdr")
+                if idx + 1 < len(parts):
+                    mac = parts[idx + 1]
+                    table[ip] = mac
+    except Exception:
+        pass
+    return table
+
+
+def ping_host(ip):
+    """Pings a single IP with 1s timeout."""
+    try:
+        res = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", ip],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        return ip, res.returncode == 0
+    except Exception:
+        return ip, False
+
+
+def scan_subnet(dev, local_ip, gateway, subnet_prefix):
+    """Fast concurrent sweep of the /24 subnet."""
+    ips = [f"{subnet_prefix}{i}" for i in range(1, 255)]
+    live_ips = set()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+        futures = {executor.submit(ping_host, ip): ip for ip in ips}
+        for future in concurrent.futures.as_completed(futures):
+            ip, is_alive = future.result()
+            if is_alive:
+                live_ips.add(ip)
+
+    # Refresh ARP table
+    arp_table = get_arp_table()
+
+    devices = []
+    # Combine active live IPs and cached neighbors
+    all_targets = sorted(
+        list(live_ips.union(set(arp_table.keys()))),
+        key=lambda x: [int(p) for p in x.split(".") if p.isdigit()]
+    )
+
+    for ip in all_targets:
+        if not ip.startswith(subnet_prefix):
+            continue
+        mac = arp_table.get(ip, "-")
+        hostname = resolve_hostname(ip)
+        vendor = resolve_vendor(mac)
+
+        # Classify device role
+        role = "Client"
+        if ip == gateway:
+            role = "Gateway / Wi-Fi Router"
+        elif ip == local_ip:
+            role = "This Machine (IRAM OS)"
+
+        devices.append({
+            "ip": ip,
+            "mac": mac,
+            "hostname": hostname,
+            "vendor": vendor,
+            "role": role,
+            "alive": ip in live_ips
+        })
+
+    return devices
+
+
+def print_devices_table(devices, dev, local_ip, gateway):
+    print(f"\n{BOLD}{CYAN}=== IRAM OS Wi-Fi Network Radar ==={NC}")
+    print(f"Interface: {BOLD}{dev}{NC} | Local IP: {GREEN}{local_ip}{NC} | Gateway: {YELLOW}{gateway}{NC}\n")
+
+    header = f"{BOLD}{'IP ADDRESS':<16} {'MAC ADDRESS':<19} {'HOSTNAME':<22} {'ROLE / VENDOR':<32} {'STATUS'}{NC}"
+    print(header)
+    print("─" * 105)
+
+    for d in devices:
+        status = f"{GREEN}● Active{NC}" if d["alive"] else f"{DIM}○ Cached{NC}"
+        ip_fmt = f"{CYAN}{d['ip']:<16}{NC}"
+        mac_fmt = f"{d['mac']:<19}"
+        host_fmt = f"{d['hostname'][:20]:<22}"
+
+        label = f"{d['role']} ({d['vendor']})" if d['role'] != "Client" else d['vendor']
+        label_fmt = f"{label[:30]:<32}"
+
+        print(f"{ip_fmt} {mac_fmt} {host_fmt} {label_fmt} {status}")
+
+    print("─" * 105)
+    print(f"{BOLD}Total Network Devices Detected:{NC} {len(devices)}\n")
+
+
+def watch_network(dev, local_ip, gateway, subnet_prefix, interval=15):
+    print(f"{BOLD}{BLUE}Starting IRAM Network Device Watcher...{NC}")
+    print(f"Monitoring subnet {subnet_prefix}0/24 every {interval}s. Press Ctrl+C to stop.\n")
+
+    known_ips = set()
+    first_run = True
+
+    try:
+        while True:
+            devices = scan_subnet(dev, local_ip, gateway, subnet_prefix)
+            current_ips = {d["ip"]: d for d in devices if d["alive"]}
+
+            if not first_run:
+                new_ips = set(current_ips.keys()) - known_ips
+                for ip in new_ips:
+                    info = current_ips[ip]
+                    msg = f"IP: {ip} | MAC: {info['mac']} ({info['vendor']})"
+                    print(f"\n{YELLOW}⚡ NEW DEVICE DETECTED:{NC} {msg}")
+                    subprocess.run([
+                        "notify-send", "-a", "IRAM Network",
+                        "⚡ New Device on Wi-Fi!",
+                        msg,
+                        "-i", "network-wireless"
+                    ])
+
+            known_ips = set(current_ips.keys())
+            first_run = False
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nNetwork watcher stopped.")
+
+
+def main():
+    dev, local_ip, gateway, subnet_prefix = get_default_interface_and_subnet()
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "scan"
+
+    if cmd in ["scan", "list"]:
+        print(f"Scanning Wi-Fi subnet {subnet_prefix}0/24 on {dev}...")
+        devices = scan_subnet(dev, local_ip, gateway, subnet_prefix)
+        print_devices_table(devices, dev, local_ip, gateway)
+
+    elif cmd in ["watch", "monitor"]:
+        watch_network(dev, local_ip, gateway, subnet_prefix)
+
+    elif cmd in ["json"]:
+        devices = scan_subnet(dev, local_ip, gateway, subnet_prefix)
+        print(json.dumps(devices, indent=2))
+
+    elif cmd in ["info"]:
+        print(f"\n{BOLD}{CYAN}=== Network Interface Information ==={NC}")
+        print(f"Active Wi-Fi Interface: {BOLD}{dev}{NC}")
+        print(f"Workstation Local IP:   {GREEN}{local_ip}{NC}")
+        print(f"Gateway Router IP:      {YELLOW}{gateway}{NC}")
+        print(f"Broadcast Subnet:       {subnet_prefix}0/24\n")
+
+    else:
+        print(f"{BOLD}IRAM OS Wi-Fi Network Monitor & Scanner{NC}")
+        print("Usage:")
+        print("  iram network              # Scan and display all connected devices")
+        print("  iram network watch        # Continuously monitor and alert on new devices")
+        print("  iram network info         # Display current interface and gateway info")
+        print("  iram network json         # Output network devices in JSON format")
+
+
+if __name__ == "__main__":
+    main()
