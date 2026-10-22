@@ -42,8 +42,11 @@ def ask_ai_diagnosis(service_name, log_snippet):
         f"Recent journal log (condensed):\n```\n{condensed}\n```\n"
         f"In 1 concise sentence, what is the root cause and recommended action?"
     )
-    res, provider = query_llm(prompt, num_predict=128)
-    return res.strip() if res else "Unknown failure"
+    try:
+        res, provider = query_llm(prompt, num_predict=128)
+        return res.strip() if res else "Unknown failure"
+    except Exception:
+        return "Manual inspection required"
 
 
 def check_failed_services():
@@ -115,7 +118,12 @@ def diagnose_and_heal():
             if is_user:
                 run_cmd(f"systemctl --user restart {service}")
             else:
-                run_cmd(f"sudo -n systemctl restart {service}")
+                can_sudo = run_cmd("sudo -n true 2>&1") == ""
+                if can_sudo:
+                    run_cmd(f"sudo -n systemctl restart {service}")
+                else:
+                    actions_taken.append(f"ℹ️ System service {service} is degraded (requires sudo to inspect)")
+                    continue
 
             # Verify if still failing
             current_failed = [s[0] for s in check_failed_services()]
