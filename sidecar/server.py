@@ -287,6 +287,107 @@ async def capture_screenshot():
         return {"success": False, "error": str(e)}
 
 
+@app.get("/api/theme")
+async def get_theme():
+    """Returns current active IRAM OS theme name and palette."""
+    theme_name = "dracula"
+    try:
+        proc = subprocess.run(["iram", "theme", "current"], env=get_system_env(), capture_output=True, text=True, timeout=2)
+        if proc.stdout.strip():
+            theme_name = proc.stdout.strip().lower()
+    except Exception:
+        pass
+    return {"theme": theme_name}
+
+
+@app.get("/api/system_stats")
+async def get_system_stats():
+    """Returns live RAM, CPU load, and Wi-Fi SSID."""
+    stats = {
+        "ram_used_mb": 0,
+        "ram_total_mb": 0,
+        "ram_pct": 0,
+        "load_avg": 0.0,
+        "wifi_ssid": "Disconnected",
+        "pinned": False
+    }
+    try:
+        with open('/proc/meminfo') as f:
+            lines = f.readlines()
+        mem = {}
+        for l in lines:
+            parts = l.split(':')
+            if len(parts) == 2:
+                mem[parts[0].strip()] = int(parts[1].strip().split()[0])
+        total_mb = mem.get('MemTotal', 0) // 1024
+        avail_mb = mem.get('MemAvailable', 0) // 1024
+        used_mb = total_mb - avail_mb
+        stats["ram_total_mb"] = total_mb
+        stats["ram_used_mb"] = used_mb
+        stats["ram_pct"] = round((used_mb / total_mb) * 100, 1) if total_mb else 0
+    except Exception:
+        pass
+
+    try:
+        stats["load_avg"] = round(os.getloadavg()[0], 2)
+    except Exception:
+        pass
+
+    try:
+        proc = subprocess.run(
+            'iwgetid -r 2>/dev/null || nmcli -t -f active,ssid dev wifi | grep "^yes" | cut -d: -f2 | head -1',
+            shell=True, env=get_system_env(), capture_output=True, text=True, timeout=2
+        )
+        ssid = proc.stdout.strip().split("\n")[0]
+        if ssid:
+            stats["wifi_ssid"] = ssid
+    except Exception:
+        pass
+
+    # Check pinned status
+    try:
+        proc = subprocess.run(
+            ["hyprctl", "activewindow", "-j"],
+            env=get_system_env(), capture_output=True, text=True, timeout=1
+        )
+        data = json.loads(proc.stdout)
+        stats["pinned"] = bool(data.get("pinned", False))
+    except Exception:
+        pass
+
+    return stats
+
+
+@app.post("/api/pin")
+async def toggle_pin():
+    """Toggles Hyprland pin state on the active window."""
+    try:
+        subprocess.run(["hyprctl", "dispatch", "pin", "active"], env=get_system_env(), timeout=1)
+        # Check new state
+        proc = subprocess.run(["hyprctl", "activewindow", "-j"], env=get_system_env(), capture_output=True, text=True, timeout=1)
+        data = json.loads(proc.stdout)
+        return {"success": True, "pinned": bool(data.get("pinned", False))}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/feedback")
+async def record_feedback(request: Request):
+    """Records thumbs rating into Hindsight memory."""
+    try:
+        data = await request.json()
+        prompt = data.get("prompt", "")
+        rating = data.get("rating", "up")  # "up" or "down"
+        hindsight_retain(
+            f"User gave thumbs {rating} to prompt: '{prompt}'",
+            category="feedback",
+            importance=4 if rating == "up" else 5
+        )
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/chat")
 async def chat_endpoint(request: Request):
     """
@@ -339,14 +440,16 @@ async def chat_endpoint(request: Request):
         tool_cmd = parse_tool_invocation(first_pass_text)
 
         if tool_cmd:
+            t0 = time.time()
             # 1. Inform frontend that a tool has started
             yield f"event: tool_start\ndata: {json.dumps({'command': tool_cmd})}\n\n"
 
             # 2. Execute tool locally on the machine
             tool_output = run_tool_command(tool_cmd)
+            duration_s = round(time.time() - t0, 2)
 
-            # 3. Inform frontend of tool result
-            yield f"event: tool_output\ndata: {json.dumps({'command': tool_cmd, 'output': tool_output})}\n\n"
+            # 3. Inform frontend of tool result with execution duration
+            yield f"event: tool_output\ndata: {json.dumps({'command': tool_cmd, 'output': tool_output, 'duration': duration_s})}\n\n"
 
             # 4. Synthesize final natural language answer
             truncated_out = tool_output[:1500] + ("..." if len(tool_output) > 1500 else "")
