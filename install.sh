@@ -150,6 +150,13 @@ fi
 # Install Wayland session
 sudo cp "$REPO_DIR/system/iram.desktop" /usr/share/wayland-sessions/iram.desktop
 
+# Install kernel & networking sysctl optimizations (TCP BBR & interactive tuning)
+if [ -f "$REPO_DIR/system/sysctl.d/99-iram-performance.conf" ]; then
+    sudo cp "$REPO_DIR/system/sysctl.d/99-iram-performance.conf" /etc/sysctl.d/99-iram-performance.conf
+    sudo cp "$REPO_DIR/system/modules-load.d/bbr.conf" /etc/modules-load.d/bbr.conf 2>/dev/null || true
+    sudo sysctl --system >/dev/null 2>&1 || true
+fi
+
 echo -e "\n${YELLOW}[4/6] Installing user dotfiles & scripts...${NC}"
 mkdir -p "$HOME/.config" "$HOME/.local/bin" "$HOME/.config/iram/hooks"
 
