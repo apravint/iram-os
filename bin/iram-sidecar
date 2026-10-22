@@ -8,15 +8,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 SIDECAR_DIR="$REPO_DIR/sidecar"
+
+# Sandboxed Flatpak or Native Profile
 PROFILE_DIR="$HOME/.config/iram/sidecar-profile"
+if command -v flatpak >/dev/null 2>&1 && flatpak info com.google.Chrome >/dev/null 2>&1; then
+    PROFILE_DIR="$HOME/.var/app/com.google.Chrome/sidecar-profile"
+fi
 mkdir -p "$PROFILE_DIR"
 
 PORT=8765
 
-# 1. Ensure the Sidecar server is running
+# 1. Ensure the Sidecar server is running (Systemd or Daemon)
 if ! curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
-    nohup python3 "$SIDECAR_DIR/server.py" > /tmp/iram-sidecar-server.log 2>&1 &
-    # Wait for server to bind
+    if systemctl --user is-active --quiet iram-sidecar.service 2>/dev/null; then
+        systemctl --user restart iram-sidecar.service
+    else
+        systemctl --user start iram-sidecar.service 2>/dev/null || \
+        nohup python3 "$SIDECAR_DIR/server.py" > /tmp/iram-sidecar-server.log 2>&1 &
+    fi
     for i in {1..25}; do
         if curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
             break
@@ -25,13 +34,20 @@ if ! curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
     done
 fi
 
-# 2. Focus existing window if already open, or launch new floating window
-WM_CLASS="IramGeminiSidecar"
+# 2. Toggle or focus existing window if already open
+if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    TARGET_ADDR=$(hyprctl clients -j 2>/dev/null | jq -r '
+        .[] | select((.title | test("IRAM OS Gemini Sidecar"; "i")) or (.class | test("IramGeminiSidecar"; "i"))) | .address' | head -n 1)
 
-if command -v hyprctl >/dev/null 2>&1; then
-    # Check if window already exists in hyprctl clients
-    if hyprctl clients -j 2>/dev/null | grep -qi "$WM_CLASS"; then
-        hyprctl dispatch focuswindow "class:$WM_CLASS"
+    if [ -n "$TARGET_ADDR" ] && [ "$TARGET_ADDR" != "null" ]; then
+        ACTIVE_ADDR=$(hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty')
+        if [ "$ACTIVE_ADDR" = "$TARGET_ADDR" ]; then
+            # Already active: toggle close/hide
+            hyprctl dispatch closewindow "address:$TARGET_ADDR" >/dev/null 2>&1
+        else
+            # In background: bring to front and focus
+            hyprctl dispatch focuswindow "address:$TARGET_ADDR" >/dev/null 2>&1
+        fi
         exit 0
     fi
 fi
@@ -46,15 +62,20 @@ for candidate in google-chrome brave-browser chromium; do
 done
 
 if [ -n "$BROWSER" ]; then
-    exec "$BROWSER" \
+    nohup "$BROWSER" \
         --app="http://127.0.0.1:$PORT" \
-        --class="$WM_CLASS" \
+        --class="IramGeminiSidecar" \
         --user-data-dir="$PROFILE_DIR" \
         --window-size=960,720 \
-        --enable-features=UseOzonePlatform \
-        --ozone-platform=wayland \
-        "$@"
+        --no-first-run \
+        --no-default-browser-check \
+        --disable-fre \
+        --disable-sync \
+        --disable-features=Translate \
+        "$@" >/dev/null 2>&1 &
+    disown
+    exit 0
 else
     # Terminal Fallback
-    exec "$SCRIPT_DIR/iram-agent-sidecar"
+    exec "$HOME/.local/bin/iram-agent-interactive"
 fi

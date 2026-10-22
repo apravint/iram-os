@@ -61,11 +61,13 @@ def scan_repository(repo_path: str):
 
     # Phase 1: Reconnaissance & Coverage Ledger
     files_to_scan = []
-    ignored_dirs = {".git", "node_modules", "target", "dist", "build", "__pycache__", ".venv"}
+    ignored_dirs = {".git", "node_modules", "target", "dist", "build", "__pycache__", ".venv", ".audit", "static"}
     
     for root, dirs, files in os.walk(abs_path):
         dirs[:] = [d for d in dirs if d not in ignored_dirs]
         for f in files:
+            if f.endswith(".min.js") or f.endswith(".min.css"):
+                continue
             ext = os.path.splitext(f)[1].lower()
             if ext in {".py", ".sh", ".js", ".ts", ".json", ".conf", ".service", ".rs", ".go", ".c", ".cpp"}:
                 files_to_scan.append(os.path.join(root, f))
@@ -176,11 +178,19 @@ def format_report(findings: dict) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="IRAM OS Adversarial Security Auditor")
-    parser.add_argument("path", nargs="?", default=".", help="Repository or directory to audit")
+    parser.add_argument("path", nargs="?", default="", help="Repository or directory to audit")
     parser.add_argument("--json", action="store_true", help="Output raw JSON findings")
     args = parser.parse_args()
 
-    results = scan_repository(args.path)
+    target_path = args.path
+    if not target_path or target_path == ".":
+        # If in home directory without explicit path, default to iram-os to prevent multi-GB disk crawl
+        if os.path.abspath(os.getcwd()) == os.path.expanduser("~") and os.path.exists(os.path.expanduser("~/iram-os")):
+            target_path = os.path.expanduser("~/iram-os")
+        else:
+            target_path = "."
+
+    results = scan_repository(target_path)
     if args.json:
         print(json.dumps(results, indent=2))
     else:

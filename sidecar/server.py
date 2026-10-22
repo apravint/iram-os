@@ -48,6 +48,7 @@ app.add_middleware(
 
 STATIC_DIR = os.path.join(SCRIPT_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 FORBIDDEN_PATTERNS = [
     r"rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force)\s+/\s*$",
@@ -65,7 +66,8 @@ AVAILABLE SYSTEM TOOLS:
 - `iram quant [all|us|in]` : Algorithmic stock market leader radar (200 SMA regime filter, ATR position sizing).
 - `iram theme [list|current|set <name>|next]` : 43 curated themes with zero-restart hot-reloading.
 - `iram info` : OS status HUD (kernel, distribution, theme, memory, compositor).
-- `iram audit` : Adversarial security audit engine (sudoers, open ports, permissions).
+- `ss -tulpn` : Inspect listening network ports, sockets, and active connections.
+- `iram audit [path]` : Adversarial code and repository vulnerability auditor.
 - `iram craft <app>` : Storytold creative apps (photo, vector, film, sound, cad, word, grid, deck, pdf).
 - `iram ocr` : Screen region OCR text extraction to clipboard.
 - `iram capture [screenshot|screenrecord|webcam|qr]` : Desktop capture suite.
@@ -86,11 +88,44 @@ Examples:
 - User: "how much disk space is left?" -> [TOOL: df -h /]
 - User: "switch my theme to Dracula" -> [TOOL: iram theme set Dracula]
 - User: "are there any open ports?" -> [TOOL: ss -tulpn]
+- User: "check for suspicious open listening ports" -> [TOOL: ss -tulpn]
+- User: "run security audit on codebase" -> [TOOL: iram audit]
 - User: "what audio is playing?" -> [TOOL: playerctl metadata]
 - User: "turn volume down to 40%" -> [TOOL: wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.40]
 
 After the tool runs, you will be given the output to provide a friendly, beautifully formatted markdown response with key takeaways.
 """
+
+
+def get_system_env() -> Dict[str, str]:
+    """Builds a comprehensive runtime environment with user binaries and Wayland display."""
+    env = os.environ.copy()
+    user_bin = os.path.expanduser("~/.local/bin")
+    iram_bin = os.path.expanduser("~/iram-os/bin")
+    current_path = env.get("PATH", "")
+    env["PATH"] = f"{user_bin}:{iram_bin}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:{current_path}"
+
+    runtime_dir = env.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    env["XDG_RUNTIME_DIR"] = runtime_dir
+
+    # Auto-detect Hyprland signature if running under systemd
+    if "HYPRLAND_INSTANCE_SIGNATURE" not in env:
+        hypr_dir = os.path.join(runtime_dir, "hypr")
+        if os.path.isdir(hypr_dir):
+            try:
+                sigs = [d for d in os.listdir(hypr_dir) if not d.endswith(".lock")]
+                if sigs:
+                    env["HYPRLAND_INSTANCE_SIGNATURE"] = sigs[0]
+            except Exception:
+                pass
+
+    if "WAYLAND_DISPLAY" not in env:
+        for w in ["wayland-1", "wayland-0"]:
+            if os.path.exists(os.path.join(runtime_dir, w)):
+                env["WAYLAND_DISPLAY"] = w
+                break
+
+    return env
 
 
 def is_safe_command(cmd: str) -> bool:
@@ -107,6 +142,7 @@ def run_tool_command(cmd: str) -> str:
         proc = subprocess.run(
             cmd,
             shell=True,
+            env=get_system_env(),
             capture_output=True,
             text=True,
             timeout=30
@@ -243,7 +279,7 @@ async def capture_screenshot():
     """Captures screenshot using grim and returns base64 image data."""
     tmp_path = "/tmp/iram_sidecar_snap.png"
     try:
-        subprocess.run(["grim", tmp_path], check=True, timeout=5)
+        subprocess.run(["grim", tmp_path], check=True, timeout=5, env=get_system_env())
         with open(tmp_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode("utf-8")
         return {"success": True, "image": f"data:image/png;base64,{img_b64}"}
