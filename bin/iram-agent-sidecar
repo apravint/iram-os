@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Iram Agentic OS Sidecar Window (Super + Shift + A)
-# Launches a floating interactive agent terminal sidecar
+# Launches the Google Gemini-grade graphical sidecar app with local tool execution
 # ==============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GEMINI_SIDECAR="$SCRIPT_DIR/iram-sidecar"
+
+if [ -x "$GEMINI_SIDECAR" ] && command -v google-chrome >/dev/null 2>&1; then
+    exec "$GEMINI_SIDECAR" "$@"
+fi
+
 INTERACTIVE_BIN="$HOME/.local/bin/iram-agent-interactive"
 if [ ! -f "$INTERACTIVE_BIN" ]; then
-    INTERACTIVE_BIN="$(dirname "$0")/iram-agent-interactive"
+    INTERACTIVE_BIN="$SCRIPT_DIR/iram-agent-interactive"
 fi
 
 if command -v alacritty >/dev/null 2>&1; then

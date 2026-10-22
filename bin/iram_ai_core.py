@@ -72,7 +72,7 @@ def get_gemini_api_key() -> str:
 
 def get_default_models() -> Tuple[str, str]:
     """Returns (gemini_model, ollama_model) with sensible fallbacks."""
-    g_model = os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash"
+    g_model = os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash"
     o_model = os.environ.get("OLLAMA_MODEL") or "qwen2.5:1.5b"
     return g_model, o_model
 
@@ -127,8 +127,8 @@ def mark_gemini_failed(reason: str = ""):
 # 3. Unified Inference Dispatcher
 # ==============================================================================
 
-def query_gemini_direct(prompt: str, system_prompt: Optional[str] = None, model: Optional[str] = None, timeout: float = 2.0) -> Optional[str]:
-    """Direct query to Google Gemini API with strict low timeout."""
+def query_gemini_direct(prompt: str, system_prompt: Optional[str] = None, model: Optional[str] = None, timeout: float = 6.0) -> Optional[str]:
+    """Direct query to Google Gemini API with sensible timeout."""
     key = get_gemini_api_key()
     if not key:
         return None
@@ -149,8 +149,34 @@ def query_gemini_direct(prompt: str, system_prompt: Optional[str] = None, model:
             data = json.loads(resp.read().decode("utf-8"))
             candidates = data.get("candidates", [])
             if candidates:
+                if os.path.exists(CIRCUIT_BREAKER_FILE):
+                    try:
+                        os.remove(CIRCUIT_BREAKER_FILE)
+                    except Exception:
+                        pass
                 return candidates[0]["content"]["parts"][0]["text"].strip()
     except Exception as e:
+        # Fallback to flash-lite if standard flash spikes
+        if g_model != "gemini-3.5-flash-lite":
+            try:
+                fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
+                req_fallback = urllib.request.Request(
+                    fallback_url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json", "x-goog-api-key": key}
+                )
+                with urllib.request.urlopen(req_fallback, timeout=timeout) as resp_fallback:
+                    data = json.loads(resp_fallback.read().decode("utf-8"))
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        if os.path.exists(CIRCUIT_BREAKER_FILE):
+                            try:
+                                os.remove(CIRCUIT_BREAKER_FILE)
+                            except Exception:
+                                pass
+                        return candidates[0]["content"]["parts"][0]["text"].strip()
+            except Exception:
+                pass
         mark_gemini_failed(str(e))
     return None
 

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Gemini-Grade Autonomous Desktop Sidecar Launcher
+# Launches the Google Gemini webapp sidecar with local computer control
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+SIDECAR_DIR="$REPO_DIR/sidecar"
+PROFILE_DIR="$HOME/.config/iram/sidecar-profile"
+mkdir -p "$PROFILE_DIR"
+
+PORT=8765
+
+# 1. Ensure the Sidecar server is running
+if ! curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+    nohup python3 "$SIDECAR_DIR/server.py" > /tmp/iram-sidecar-server.log 2>&1 &
+    # Wait for server to bind
+    for i in {1..25}; do
+        if curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.15
+    done
+fi
+
+# 2. Focus existing window if already open, or launch new floating window
+WM_CLASS="IramGeminiSidecar"
+
+if command -v hyprctl >/dev/null 2>&1; then
+    # Check if window already exists in hyprctl clients
+    if hyprctl clients -j 2>/dev/null | grep -qi "$WM_CLASS"; then
+        hyprctl dispatch focuswindow "class:$WM_CLASS"
+        exit 0
+    fi
+fi
+
+# 3. Detect browser
+BROWSER=""
+for candidate in google-chrome brave-browser chromium; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        BROWSER="$candidate"
+        break
+    fi
+done
+
+if [ -n "$BROWSER" ]; then
+    exec "$BROWSER" \
+        --app="http://127.0.0.1:$PORT" \
+        --class="$WM_CLASS" \
+        --user-data-dir="$PROFILE_DIR" \
+        --window-size=960,720 \
+        --enable-features=UseOzonePlatform \
+        --ozone-platform=wayland \
+        "$@"
+else
+    # Terminal Fallback
+    exec "$SCRIPT_DIR/iram-agent-sidecar"
+fi
