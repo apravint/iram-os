@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iram Agentic OS Sidecar Window (Super + Shift + A)
-# Launches the Google Gemini-grade graphical sidecar app with local tool execution
+# IRAM OS - Gemini-Grade Sidecar Window (Super + Shift + A / Waybar Click)
+# Launches the Google Gemini graphical sidecar app with local tool execution
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GEMINI_SIDECAR="$SCRIPT_DIR/iram-sidecar"
+export PATH="$HOME/.local/bin:$HOME/iram-os/bin:$PATH"
 
-if [ -x "$GEMINI_SIDECAR" ] && command -v google-chrome >/dev/null 2>&1; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GEMINI_SIDECAR="$HOME/.local/bin/iram-sidecar"
+if [ ! -x "$GEMINI_SIDECAR" ]; then
+    GEMINI_SIDECAR="$SCRIPT_DIR/iram-sidecar"
+fi
+
+# Always prioritize the Gemini WebApp Sidecar
+if [ -x "$GEMINI_SIDECAR" ]; then
     exec "$GEMINI_SIDECAR" "$@"
 fi
 
+# Fallback only if Gemini sidecar is missing
 INTERACTIVE_BIN="$HOME/.local/bin/iram-agent-interactive"
 if [ ! -f "$INTERACTIVE_BIN" ]; then
     INTERACTIVE_BIN="$SCRIPT_DIR/iram-agent-interactive"
