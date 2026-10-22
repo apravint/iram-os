@@ -39,7 +39,8 @@ echo -e "\n${BOLD}Recommended Optimizations:${NC}"
 echo -e "  1. Defer plocate-updatedb.timer by 15 minutes after boot"
 echo -e "  2. Defer apt-daily.timer & apt-daily-upgrade.timer by 20-30 minutes"
 echo -e "  3. Defer fwupd-refresh.timer by 25 minutes"
-echo -e "  4. Set plocate and apt background I/O scheduling to Idle class"
+echo -e "  4. Defer dpkg-db-backup.timer by 35 minutes"
+echo -e "  5. Set background maintenance I/O scheduling to Idle class"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo -e "\n${YELLOW}To apply these optimizations with elevated privileges, run:${NC}"
@@ -80,6 +81,21 @@ mkdir -p /etc/systemd/system/fwupd-refresh.timer.d
 cat << 'EOF' > /etc/systemd/system/fwupd-refresh.timer.d/override.conf
 [Timer]
 OnBootSec=25min
+EOF
+
+# Override dpkg-db-backup
+mkdir -p /etc/systemd/system/dpkg-db-backup.timer.d
+cat << 'EOF' > /etc/systemd/system/dpkg-db-backup.timer.d/override.conf
+[Timer]
+OnBootSec=35min
+EOF
+
+# Set background maintenance I/O priority to Idle
+mkdir -p /etc/systemd/system/plocate-updatedb.service.d
+cat << 'EOF' > /etc/systemd/system/plocate-updatedb.service.d/override.conf
+[Service]
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
 EOF
 
 systemctl daemon-reload
