@@ -14,6 +14,12 @@ window#waybar {
     border: 1px solid @border;
     border-radius: 0;
     box-shadow: none;
+    opacity: 0.0;
+    transition: opacity 0.25s ease-in-out;
+}
+
+window#waybar:hover {
+    opacity: 1.0;
 }
 
 #custom-menu {

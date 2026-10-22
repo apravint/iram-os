@@ -1,6 +1,8 @@
 {
     "layer": "top",
     "position": "top",
+    "exclusive": false,
+    "passthrough": false,
     "height": 30,
     "margin-top": 4,
     "margin-left": 4,
