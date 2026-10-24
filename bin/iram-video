@@ -113,6 +113,12 @@ def list_videos():
             print(f"  • {f} ({size:.1f} MB)")
 
 def main():
+    # If invoked with full engine commands (e.g. prompt, --montage, pipelines, backlot, --real, --film, --help, etc.), delegate to full engine
+    if len(sys.argv) > 1 and sys.argv[1] not in ("studio", "render", "upscale", "list"):
+        full_engine = os.path.expanduser("~/iram-video/bin/iram-video")
+        if os.path.exists(full_engine) and os.access(full_engine, os.X_OK):
+            os.execv(full_engine, [full_engine] + sys.argv[1:])
+
     parser = argparse.ArgumentParser(description="IRAM OS Video & Hyperframes Engine")
     subparsers = parser.add_subparsers(dest="command")
 
