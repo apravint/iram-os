@@ -46,7 +46,8 @@ show_help() {
     echo -e "  ${CYAN}video${NC} [prompt] [opts]     Universal Film & Video Studio (Shorts, Film, Cinema)"
     echo -e "  ${CYAN}voice${NC} [speak|clone|design] Open-source VoiceStudio engine (cloning, design & dubbing)"
     echo -e "  ${CYAN}craft${NC} [app]               Storytold Creative Suite (photo, vector, film, sound, cad...)"
-    echo -e "  ${CYAN}theme${NC} [list|set|next]     Live zero-restart theme switcher (18 curated palettes)"
+    echo -e "  ${CYAN}theme${NC} [list|set|generate|timeline] Live zero-restart theme switcher (49 curated palettes & AI Generator)"
+    echo -e "  ${CYAN}fetch${NC} [alpora|watch]       Faceted polygon mountain system card synchronized with theme"
     echo -e "  ${CYAN}audio${NC} [tuning|toggle|init] PipeWire studio audio routing & calibrated hardware DSP tuning"
     echo -e "  ${CYAN}network${NC} [scan|watch|info] Wi-Fi network radar: scan & monitor connected devices"
     echo -e "  ${CYAN}quant${NC} [us|in|all]         Cross-market algorithmic stock leader scanner (US & NSE)"
@@ -361,9 +362,9 @@ case "$cmd" in
 
             local applied_via_omarchy=false
             if [ -x "/usr/local/bin/omarchy-theme-set" ]; then
-                if /usr/local/bin/omarchy-theme-set "$slug" 2>/dev/null; then
+                if /usr/local/bin/omarchy-theme-set "$slug" >/dev/null 2>&1; then
                     applied_via_omarchy=true
-                elif /usr/local/bin/omarchy-theme-set "$target" 2>/dev/null; then
+                elif /usr/local/bin/omarchy-theme-set "$target" >/dev/null 2>&1; then
                     applied_via_omarchy=true
                 fi
             fi
@@ -471,6 +472,12 @@ case "$cmd" in
                         "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true
                         ;;
                 esac
+                ;;
+            timeline)
+                exec "$LOCAL_BIN/iram-theme-timeline" "$@"
+                ;;
+            generate|ai|ai-generate)
+                exec "$LOCAL_BIN/iram-theme-generate" "$@"
                 ;;
             gui|"")
                 exec "$LOCAL_BIN/iram-theme-switch"
@@ -602,6 +609,9 @@ case "$cmd" in
         else
             echo -e "  ${BOLD}OpenClaw Core:${NC}  ${YELLOW}Standby${NC}"
         fi
+        ;;
+    fetch)
+        exec "$LOCAL_BIN/iram-fetch" "$@"
         ;;
     clean)
         echo "Cleaning Flatpak unused runtimes..."

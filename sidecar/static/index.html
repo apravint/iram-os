@@ -82,7 +82,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 12px 20px;
-      background: rgba(19, 20, 23, 0.8);
+      background: var(--bg-surface);
       backdrop-filter: blur(24px);
       -webkit-backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--border-subtle);
@@ -497,7 +497,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(35, 37, 41, 0.7);
+      background: var(--bg-surface);
       cursor: pointer;
       user-select: none;
     }
@@ -580,7 +580,7 @@
       transform: translateX(-50%);
       width: 90%;
       max-width: 600px;
-      background: rgba(26, 27, 31, 0.95);
+      background: var(--bg-surface-elevated);
       backdrop-filter: blur(20px);
       border: 1px solid var(--border-subtle);
       border-radius: 16px;
@@ -1052,6 +1052,62 @@
       btnSound.classList.toggle('active', soundEnabled);
       btnSound.title = soundEnabled ? 'Audio Chimes: Enabled' : 'Audio Chimes: Muted';
     }
+
+    // --- Dynamic OS Theme Synchronization (UI/UX Pro Max) ---
+    let currentThemeName = "";
+    function hexToRgba(hex, alpha) {
+      if (!hex || hex.length < 6) return `rgba(255,255,255,${alpha})`;
+      const clean = hex.replace('#', '');
+      const r = parseInt(clean.substring(0, 2), 16) || 255;
+      const g = parseInt(clean.substring(2, 4), 16) || 255;
+      const b = parseInt(clean.substring(4, 6), 16) || 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    async function syncTheme() {
+      try {
+        const resp = await fetch('/api/theme');
+        const data = await resp.json();
+        if (!data || !data.colors) return;
+        if (data.theme === currentThemeName) return;
+        currentThemeName = data.theme;
+        
+        const c = data.colors;
+        const root = document.documentElement;
+
+        const bg = c.background || '#0e0e10';
+        const darkBg = c.dark_background || c.background || '#141416';
+        const fg = c.foreground || '#f0f0f4';
+        const muted = c.muted || '#9aa0a6';
+        const accent = c.accent || '#4285F4';
+        const secondary = c.secondary || c.magenta || '#9B72CF';
+        const cyan = c.cyan || c.blue || accent;
+
+        root.style.setProperty('--bg-main', bg);
+        root.style.setProperty('--bg-surface', hexToRgba(darkBg, 0.75));
+        root.style.setProperty('--bg-surface-elevated', hexToRgba(darkBg, 0.90));
+        root.style.setProperty('--bg-input', hexToRgba(darkBg, 0.85));
+        root.style.setProperty('--border-subtle', hexToRgba(fg, 0.10));
+        root.style.setProperty('--border-glow', hexToRgba(accent, 0.40));
+        root.style.setProperty('--text-main', fg);
+        root.style.setProperty('--text-muted', muted);
+        root.style.setProperty('--accent-blue', accent);
+        root.style.setProperty('--accent-purple', secondary);
+        root.style.setProperty('--accent-pink', c.red || '#D96570');
+        root.style.setProperty('--accent-green', c.green || '#34A853');
+
+        // Aurora Ambient Gradient based on active theme colors
+        root.style.setProperty('--gradient-gemini', `linear-gradient(135deg, ${accent}, ${secondary}, ${cyan})`);
+        root.style.setProperty('--gradient-aurora', `
+          radial-gradient(circle at 10% 20%, ${hexToRgba(accent, 0.18)}, transparent 45%),
+          radial-gradient(circle at 90% 80%, ${hexToRgba(secondary, 0.15)}, transparent 45%),
+          radial-gradient(circle at 50% 50%, ${hexToRgba(cyan, 0.10)}, transparent 55%)
+        `);
+      } catch (e) {}
+    }
+    syncTheme();
+    setInterval(syncTheme, 4000);
+    window.addEventListener('focus', syncTheme);
 
     // --- Live System Stats HUD ---
     async function updateSystemStats() {

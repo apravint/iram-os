@@ -1,0 +1,10 @@
+{
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#F0F9FF",
+    "sideBar.background": "#ccd3d8",
+    "editor.background": "#F0F9FF",
+    "editor.foreground": "#0C4A6E",
+    "focusBorder": "#16A34A"
+  }
+}

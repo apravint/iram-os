@@ -289,15 +289,50 @@ async def capture_screenshot():
 
 @app.get("/api/theme")
 async def get_theme():
-    """Returns current active IRAM OS theme name and palette."""
+    """Returns current active IRAM OS theme name and full palette tokens."""
     theme_name = "dracula"
     try:
         proc = subprocess.run(["iram", "theme", "current"], env=get_system_env(), capture_output=True, text=True, timeout=2)
         if proc.stdout.strip():
-            theme_name = proc.stdout.strip().lower()
+            theme_name = proc.stdout.strip()
     except Exception:
         pass
-    return {"theme": theme_name}
+
+    colors = {
+        "mode": "dark",
+        "background": "#0e0e10",
+        "dark_background": "#141416",
+        "darker_background": "#0a0a0c",
+        "lighter_background": "#1e1e24",
+        "foreground": "#f0f0f4",
+        "dark_foreground": "#8a8f98",
+        "light_foreground": "#f5f6fa",
+        "bright_foreground": "#ffffff",
+        "accent": "#4285F4",
+        "secondary": "#9B72CF",
+        "selection": "#313244",
+        "muted": "#9aa0a6",
+        "hyprland_active_border": "rgb(66, 133, 244) rgb(155, 114, 207) 45deg"
+    }
+
+    toml_path = os.path.expanduser("~/.local/state/iram/current/theme/colors.toml")
+    if os.path.exists(toml_path):
+        try:
+            with open(toml_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("#") or not line:
+                        continue
+                    m = re.match(r'^([a-zA-Z0-9_]+)\s*=\s*["\']([^"\']+)["\']', line)
+                    if m:
+                        colors[m.group(1)] = m.group(2)
+        except Exception:
+            pass
+
+    return {
+        "theme": theme_name,
+        "colors": colors
+    }
 
 
 @app.get("/api/system_stats")

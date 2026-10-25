@@ -5,9 +5,12 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 SIDECAR_DIR="$REPO_DIR/sidecar"
+if [ ! -d "$SIDECAR_DIR" ]; then
+    SIDECAR_DIR="$HOME/iram-os/sidecar"
+fi
 
 # Sandboxed Flatpak or Native Profile
 PROFILE_DIR="$HOME/.config/iram/sidecar-profile"
@@ -52,7 +55,14 @@ if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     fi
 fi
 
-# 3. Detect browser
+# 3. Native WebKitGTK Wayland window runner (zero sandbox issues, instant Wayland floating window)
+if [ -f "$SIDECAR_DIR/window.py" ] && python3 -c "import gi; gi.require_version('WebKit2', '4.1'); from gi.repository import WebKit2" >/dev/null 2>&1; then
+    nohup python3 "$SIDECAR_DIR/window.py" >/dev/null 2>&1 &
+    disown
+    exit 0
+fi
+
+# 4. Detect browser fallback
 BROWSER=""
 for candidate in google-chrome brave-browser chromium; do
     if command -v "$candidate" >/dev/null 2>&1; then
