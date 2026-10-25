@@ -83,6 +83,9 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
             elif path == "/api/theme":
                 name = params.get("name", "")
                 response_data = self.handle_theme(name)
+            elif path == "/api/theme/generate":
+                prompt = params.get("prompt", "")
+                response_data = self.handle_theme_generate(prompt)
             elif path == "/api/voice":
                 text = params.get("text", "")
                 voice = params.get("voice", "jarvis")
@@ -133,6 +136,9 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
             elif path == "/api/theme":
                 name = params.get("name", [""])[0]
                 response_data = self.handle_theme(name)
+            elif path == "/api/theme/generate":
+                prompt = params.get("prompt", [""])[0]
+                response_data = self.handle_theme_generate(prompt)
             elif path == "/api/voice":
                 text = params.get("text", ["Hello from IRAM OS"])[0]
                 voice = params.get("voice", ["jarvis"])[0]
@@ -234,13 +240,62 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
             return {"ok": True, "launched": app}
         return {"ok": False, "error": f"Unknown app target: {app}"}
 
-    def handle_theme(self, name):
-        if not name:
-            return {"ok": False, "error": "No theme name specified"}
-        # Execute theme change
-        cmd = [resolve_bin("iram"), "theme", "set", name]
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"ok": True, "theme": name, "message": f"Theme set to {name}"}
+    def handle_theme(self, name=""):
+        if name:
+            cmd = [resolve_bin("iram"), "theme", "set", name]
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return {"ok": True, "theme": name, "message": f"Theme set to {name}"}
+
+        # Return active theme & colors
+        theme_name = "alpora-forest-mist"
+        try:
+            p = subprocess.run([resolve_bin("iram"), "theme", "current"], capture_output=True, text=True, timeout=2)
+            if p.stdout.strip():
+                theme_name = p.stdout.strip()
+        except Exception:
+            pass
+
+        colors = {
+            "mode": "dark",
+            "background": "#0e0e10",
+            "dark_background": "#141416",
+            "darker_background": "#0a0a0c",
+            "lighter_background": "#1e1e24",
+            "foreground": "#f0f0f4",
+            "dark_foreground": "#8a8f98",
+            "light_foreground": "#f5f6fa",
+            "bright_foreground": "#ffffff",
+            "accent": "#4285F4",
+            "secondary": "#9B72CF",
+            "selection": "#313244",
+            "muted": "#9aa0a6",
+            "hyprland_active_border": "rgb(66, 133, 244) rgb(155, 114, 207) 45deg"
+        }
+        toml_path = os.path.expanduser("~/.local/state/iram/current/theme/colors.toml")
+        if os.path.exists(toml_path):
+            try:
+                with open(toml_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("#") or not line:
+                            continue
+                        if "=" in line:
+                            k, v = line.split("=", 1)
+                            colors[k.strip()] = v.strip().strip('"').strip("'")
+            except Exception:
+                pass
+        return {"ok": True, "theme": theme_name, "colors": colors}
+
+    def handle_theme_generate(self, prompt=""):
+        if not prompt:
+            return {"ok": False, "error": "No prompt provided for theme generation"}
+        gen_bin = resolve_bin("iram-theme-generate")
+        try:
+            proc = subprocess.run([gen_bin, prompt], capture_output=True, text=True, timeout=15)
+            # Fetch updated theme
+            return self.handle_theme("")
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def handle_voice(self, text, voice):
         if not text:

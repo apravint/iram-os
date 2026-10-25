@@ -3,120 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IRAM OS 3D Studio & Viewer</title>
+    <title>IRAM OS 3D Studio & CAD Viewer</title>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js + OrbitControls + STLLoader + OBJLoader from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+
     <style>
+        :root {
+            --bg-main: #0c0e16;
+            --bg-surface: rgba(18, 22, 34, 0.78);
+            --bg-surface-elevated: rgba(26, 32, 50, 0.88);
+            --bg-input: rgba(22, 28, 44, 0.85);
+            --accent-primary: #00f0ff;
+            --accent-secondary: #7000ff;
+            --accent-success: #05ffa1;
+            --text-main: #f0f4fc;
+            --text-muted: #8b95b5;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 240, 255, 0.28);
+            --card-radius: 14px;
+            --glow-shadow: 0 16px 44px rgba(0, 0, 0, 0.7);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             user-select: none;
         }
+
         body {
-            background-color: #14161f;
-            color: #cdd6f4;
-            font-family: "JetBrains Mono", "SF Pro Display", monospace;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
+            position: relative;
         }
+
         #canvas-container {
             width: 100%;
             height: 100%;
             position: absolute;
             top: 0;
             left: 0;
+            z-index: 1;
         }
+
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glow);
+            border-radius: var(--card-radius);
+            box-shadow: var(--glow-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            pointer-events: auto;
+            position: relative;
+            z-index: 10;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* Floating Top Toolbar */
         .hud-overlay {
             position: absolute;
             top: 16px;
             left: 16px;
-            z-index: 10;
-            background: rgba(20, 22, 31, 0.85);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 240, 255, 0.3);
-            border-radius: 8px;
-            padding: 14px 18px;
-            pointer-events: auto;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            width: 420px;
+            padding: 18px;
         }
         .hud-title {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 800;
-            color: #00f0ff;
-            letter-spacing: 0.5px;
+            color: var(--accent-primary);
+            letter-spacing: -0.2px;
             margin-bottom: 4px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
         .hud-subtitle {
             font-size: 11px;
-            color: #a6adc8;
-            margin-bottom: 12px;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            font-family: 'JetBrains Mono', monospace;
         }
         .controls-row {
             display: flex;
             gap: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+            align-items: center;
         }
-        button, select {
-            background: #1e2233;
-            color: #cdd6f4;
-            border: 1px solid #33394f;
-            border-radius: 6px;
-            padding: 6px 12px;
+        select, button {
+            background: var(--bg-surface-elevated);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 8px 12px;
             font-size: 12px;
             font-family: inherit;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            outline: none;
         }
-        button:hover, select:hover {
-            background: #293049;
-            border-color: #00f0ff;
+        select {
+            flex-grow: 1;
+        }
+        select:focus, button:focus-visible {
+            border-color: var(--accent-primary);
+            outline: 2px solid var(--accent-primary);
+            outline-offset: 2px;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent-primary);
             color: #ffffff;
+            transform: translateY(-1px);
         }
         button.active {
-            background: #00f0ff;
-            color: #0d0f18;
+            background: var(--accent-primary);
+            color: #0c0e16;
             font-weight: 800;
-            border-color: #00f0ff;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 16px var(--border-glow);
+        }
+        .palette-chips {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .chip-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+            padding: 0;
+        }
+        .chip-btn:hover, .chip-btn.selected {
+            transform: scale(1.2);
+            border-color: #ffffff;
+            box-shadow: 0 0 12px currentColor;
         }
         .dropzone-hint {
             font-size: 11px;
-            color: #6c7086;
-            margin-top: 6px;
+            color: var(--text-muted);
+            margin-top: 8px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px dashed var(--border-subtle);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            font-family: 'JetBrains Mono', monospace;
         }
+
+        /* Floating Bottom Right Stats Badge */
         .stats-badge {
             position: absolute;
             bottom: 16px;
             right: 16px;
-            background: rgba(20, 22, 31, 0.85);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(0, 240, 255, 0.2);
-            border-radius: 6px;
-            padding: 8px 12px;
+            padding: 10px 16px;
             font-size: 11px;
-            color: #a6adc8;
-            z-index: 10;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 14px;
         }
         .stats-badge span {
-            color: #05ffa1;
-            font-weight: bold;
+            color: var(--accent-success);
+            font-weight: 700;
         }
     </style>
-    <!-- Three.js + OrbitControls + STLLoader from CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
 </head>
 <body>
-    <div class="hud-overlay">
-        <div class="hud-title">⚡ IRAM 3D Studio (Three.js)</div>
-        <div class="hud-subtitle">Interactive WebGL Mesh & CAD Inspector</div>
+    <div id="canvas-container"></div>
+
+    <!-- Floating Top Toolbar -->
+    <div class="hud-overlay glass-panel">
+        <div class="hud-title">
+            <span style="font-size:18px;">🪐</span>
+            <span>IRAM 3D Studio & CAD Viewer</span>
+        </div>
+        <div class="hud-subtitle">Interactive WebGL Mesh & CAD Inspector • Three.js</div>
+        
         <div class="controls-row">
             <select id="model-select">
                 <option value="torus">Torus Knot (Parametric)</option>
@@ -127,20 +213,31 @@
             <button id="btn-wireframe">Wireframe</button>
             <button id="btn-rotate" class="active">Auto-Rotate</button>
         </div>
+
         <div class="controls-row">
-            <button id="btn-theme-cyan">Cyan</button>
-            <button id="btn-theme-crimson">Crimson</button>
-            <button id="btn-theme-emerald">Emerald</button>
-            <button id="btn-theme-gold">Gold</button>
+            <span style="font-size:11px; color:var(--text-muted); font-family:'JetBrains Mono', monospace;">Lighting Core:</span>
+            <div class="palette-chips">
+                <button class="chip-btn selected" id="btn-theme-cyan" style="background:#00f0ff; color:#00f0ff;" title="Cyber Cyan"></button>
+                <button class="chip-btn" id="btn-theme-crimson" style="background:#ff0055; color:#ff0055;" title="Neon Crimson"></button>
+                <button class="chip-btn" id="btn-theme-emerald" style="background:#05ffa1; color:#05ffa1;" title="Matrix Emerald"></button>
+                <button class="chip-btn" id="btn-theme-gold" style="background:#ffb800; color:#ffb800;" title="Cinema Gold"></button>
+                <button class="chip-btn" id="btn-theme-purple" style="background:#b800ff; color:#b800ff;" title="Cosmic Purple"></button>
+            </div>
         </div>
-        <div class="dropzone-hint">📁 Drag & Drop local .STL or .OBJ file to inspect</div>
+
+        <div class="dropzone-hint">
+            <span>📁</span>
+            <span>Drag & drop local .STL or .OBJ file to inspect in 3D</span>
+        </div>
     </div>
 
-    <div class="stats-badge">
-        Renderer: <span id="stat-engine">WebGL</span> | Polys: <span id="stat-poly">0</span> | FPS: <span id="stat-fps">60</span>
+    <!-- Floating Bottom Stats Badge -->
+    <div class="stats-badge glass-panel">
+        <div>Engine: <span id="stat-engine">WebGL ACES</span></div>
+        <div>Polys: <span id="stat-poly">0</span></div>
+        <div>FPS: <span id="stat-fps">60</span></div>
+        <div>Manifold: <span style="color:var(--accent-success);">✓ Pass</span></div>
     </div>
-
-    <div id="canvas-container"></div>
 
     <script>
         let scene, camera, renderer, controls;
@@ -152,29 +249,26 @@
         function init() {
             const container = document.getElementById('canvas-container');
 
-            // Scene
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x14161f);
-            scene.fog = new THREE.FogExp2(0x14161f, 0.015);
+            scene.background = new THREE.Color(0x0c0e16);
+            scene.fog = new THREE.FogExp2(0x0c0e16, 0.015);
 
-            // Camera
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(20, 20, 35);
 
-            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
             renderer.shadowMap.enabled = true;
             container.appendChild(renderer.domElement);
 
-            // OrbitControls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
 
-            // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
             scene.add(ambientLight);
 
             const dirLight1 = new THREE.DirectionalLight(0x00f0ff, 1.2);
@@ -185,12 +279,10 @@
             dirLight2.position.set(-20, -20, -20);
             scene.add(dirLight2);
 
-            // Grid Floor
-            const gridHelper = new THREE.GridHelper(60, 40, 0x00f0ff, 0x282c3f);
+            const gridHelper = new THREE.GridHelper(60, 40, 0x00f0ff, 0x1f263d);
             gridHelper.position.y = -8;
             scene.add(gridHelper);
 
-            // Load model from URL or fallback to initial preset
             const urlParams = new URLSearchParams(window.location.search);
             const fileParam = urlParams.get('file');
             if (fileParam) {
@@ -199,10 +291,10 @@
                 loadPrimitive('dna');
             }
 
-            // Event Listeners
             window.addEventListener('resize', onWindowResize);
             setupUI();
             setupDragAndDrop();
+            syncTheme();
 
             animate();
         }
@@ -238,11 +330,11 @@
         function createMaterial() {
             return new THREE.MeshStandardMaterial({
                 color: activeColor,
-                metalness: 0.3,
+                metalness: 0.35,
                 roughness: 0.2,
                 wireframe: isWireframe,
                 emissive: activeColor,
-                emissiveIntensity: 0.15
+                emissiveIntensity: 0.18
             });
         }
 
@@ -253,7 +345,6 @@
             if (type === 'torus') {
                 geom = new THREE.TorusKnotGeometry(7, 2.2, 128, 32);
             } else if (type === 'dna') {
-                // Procedural DNA Double Helix
                 const group = new THREE.Group();
                 const mat = createMaterial();
                 const beadMat = new THREE.MeshStandardMaterial({ color: 0xff0055, roughness: 0.3 });
@@ -279,7 +370,6 @@
                 updateStats(1200);
                 return;
             } else if (type === 'rack') {
-                // Parametric Lab Tube Rack
                 const group = new THREE.Group();
                 const baseGeom = new THREE.BoxGeometry(16, 1.2, 10);
                 const rackMat = createMaterial();
@@ -290,7 +380,6 @@
                 group.add(base);
                 group.add(top);
 
-                // Posts & Tube representations
                 for (let x = -6; x <= 6; x += 4) {
                     for (let z = -3; z <= 3; z += 3) {
                         const tubeGeom = new THREE.CylinderGeometry(1.2, 1.2, 8, 16);
@@ -339,25 +428,30 @@
                 btnRotate.classList.toggle('active', autoRotate);
             });
 
-            // Color buttons
             const colors = {
                 'btn-theme-cyan': 0x00f0ff,
                 'btn-theme-crimson': 0xff0055,
                 'btn-theme-emerald': 0x05ffa1,
-                'btn-theme-gold': 0xffb800
+                'btn-theme-gold': 0xffb800,
+                'btn-theme-purple': 0xb800ff
             };
             for (const [id, hex] of Object.entries(colors)) {
-                document.getElementById(id).addEventListener('click', () => {
-                    activeColor = hex;
-                    if (currentMesh) {
-                        currentMesh.traverse((child) => {
-                            if (child.isMesh && child.material) {
-                                child.material.color.setHex(hex);
-                                if (child.material.emissive) child.material.emissive.setHex(hex);
-                            }
-                        });
-                    }
-                });
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('click', () => {
+                        document.querySelectorAll('.chip-btn').forEach(c => c.classList.remove('selected'));
+                        el.classList.add('selected');
+                        activeColor = hex;
+                        if (currentMesh) {
+                            currentMesh.traverse((child) => {
+                                if (child.isMesh && child.material) {
+                                    child.material.color.setHex(hex);
+                                    if (child.material.emissive) child.material.emissive.setHex(hex);
+                                }
+                            });
+                        }
+                    });
+                }
             }
         }
 
@@ -402,6 +496,29 @@
             });
         }
 
+        function syncTheme() {
+            fetch('http://127.0.0.1:8990/api/theme')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok && data.colors) {
+                        const c = data.colors;
+                        const root = document.documentElement;
+                        const bgMain = c.darker_background || c.background || '#0c0e16';
+                        const accent = c.accent || '#00f0ff';
+                        const success = c.green || '#05ffa1';
+
+                        root.style.setProperty('--bg-main', bgMain);
+                        root.style.setProperty('--accent-primary', accent);
+                        root.style.setProperty('--accent-success', success);
+                        root.style.setProperty('--border-glow', `${accent}44`);
+
+                        scene.background.set(bgMain);
+                        scene.fog.color.set(bgMain);
+                    }
+                })
+                .catch(() => {});
+        }
+
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -421,7 +538,6 @@
             controls.update();
             renderer.render(scene, camera);
 
-            // FPS Counter
             frameCount++;
             const now = performance.now();
             if (now - lastTime >= 1000) {

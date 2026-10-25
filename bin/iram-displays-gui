@@ -125,50 +125,102 @@ class DisplayApp(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_border_width(16)
 
-        # Apply dark theme styling
+        # Apply theme-aware Spatial/Bento styling
+        colors = {
+            "bg": "#0c0e16",
+            "surface": "#161b28",
+            "surface_elevated": "#222a3d",
+            "accent": "#00f0ff",
+            "secondary": "#7000ff",
+            "success": "#05ffa1",
+            "fg": "#f0f4fc",
+            "muted": "#8b95b5",
+            "border": "#28314e"
+        }
+        toml_path = os.path.expanduser("~/.local/state/iram/current/theme/colors.toml")
+        if os.path.exists(toml_path):
+            try:
+                with open(toml_path, "r", encoding="utf-8") as f:
+                    raw = {}
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            raw[k.strip()] = v.strip().strip('"').strip("'")
+                if raw.get("background"): colors["bg"] = raw["background"]
+                if raw.get("darker_background"): colors["bg"] = raw["darker_background"]
+                if raw.get("dark_background"): colors["surface"] = raw["dark_background"]
+                if raw.get("lighter_background"): colors["surface_elevated"] = raw["lighter_background"]
+                if raw.get("accent"): colors["accent"] = raw["accent"]
+                if raw.get("secondary"): colors["secondary"] = raw["secondary"]
+                if raw.get("green"): colors["success"] = raw["green"]
+                if raw.get("bright_foreground"): colors["fg"] = raw["bright_foreground"]
+                if raw.get("muted"): colors["muted"] = raw["muted"]
+                if raw.get("selection"): colors["border"] = raw["selection"]
+            except Exception:
+                pass
+
         css_provider = Gtk.CssProvider()
-        css_data = """
-        window {
-            background-color: #1e1e2e;
-            color: #cdd6f4;
-        }
-        label {
-            color: #cdd6f4;
-        }
-        .header-title {
-            font-size: 18px;
-            font-weight: bold;
-            color: #89b4fa;
-        }
-        .monitor-card {
-            background-color: #181825;
-            border-radius: 0;
-            border: 1px solid #313244;
-            padding: 14px;
+        css_data = f"""
+        window {{
+            background-color: {colors["bg"]};
+            color: {colors["fg"]};
+            font-family: "Google Sans", "Inter", sans-serif;
+        }}
+        label {{
+            color: {colors["fg"]};
+        }}
+        .header-title {{
+            font-size: 19px;
+            font-weight: 800;
+            color: {colors["accent"]};
+            letter-spacing: -0.3px;
+        }}
+        .monitor-card {{
+            background-color: {colors["surface"]};
+            border-radius: 12px;
+            border: 1px solid {colors["border"]};
+            padding: 16px;
             margin-bottom: 12px;
-        }
-        .monitor-title {
+        }}
+        .monitor-title {{
             font-size: 15px;
-            font-weight: bold;
-            color: #a6e3a1;
-        }
-        .monitor-badge {
-            background-color: #45475a;
-            color: #cdd6f4;
-            border-radius: 0;
-            padding: 2px 8px;
+            font-weight: 700;
+            color: {colors["success"]};
+        }}
+        .monitor-badge {{
+            background-color: {colors["surface_elevated"]};
+            color: {colors["muted"]};
+            border-radius: 6px;
+            padding: 3px 8px;
             font-size: 11px;
-        }
-        button.suggested-action {
-            background-color: #89b4fa;
-            color: #11111b;
-            font-weight: bold;
-            border-radius: 0;
-            padding: 8px 16px;
-        }
-        button.suggested-action:hover {
-            background-color: #b4befe;
-        }
+            font-weight: 600;
+        }}
+        button {{
+            background-color: {colors["surface_elevated"]};
+            color: {colors["fg"]};
+            border: 1px solid {colors["border"]};
+            border-radius: 8px;
+            padding: 7px 14px;
+            font-weight: 600;
+            transition: all 150ms ease;
+        }}
+        button:hover {{
+            background-color: {colors["border"]};
+            color: #ffffff;
+        }}
+        button.suggested-action {{
+            background-color: {colors["accent"]};
+            color: #0c0e16;
+            font-weight: 800;
+            border-radius: 8px;
+            padding: 8px 18px;
+            border: none;
+        }}
+        button.suggested-action:hover {{
+            background-color: {colors["secondary"]};
+            color: #ffffff;
+        }}
         """
         css_provider.load_from_data(css_data.encode('utf-8'))
         Gtk.StyleContext.add_provider_for_screen(

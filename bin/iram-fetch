@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""
+IRAM OS & ALPORA Faceted Mountain System Fetch Card
+Pure Python, zero-dependency, TrueColor ANSI system info card.
+Renders a faceted polygon mountain mark synchronized with active theme colors.
+"""
+
+import argparse
+import os
+from pathlib import Path
+import platform
+import pwd
+import re
+import select
+import shutil
+import signal
+import sys
+import termios
+import time
+import tty
+import unicodedata
+
+
+def clean(value: str) -> str:
+    """Strip terminal control sequences for secure output."""
+    return "".join(c for c in str(value) if not unicodedata.category(c).startswith("C"))
+
+
+def cells(value: str) -> int:
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in value if not unicodedata.combining(c))
+
+
+def fit(value: str, width: int) -> str:
+    res = ""
+    for char in clean(value):
+        if cells(res + char) > width:
+            break
+        res += char
+    return res + " " * (width - cells(res))
+
+
+def get_active_theme_info(requested_theme: str | None = None) -> tuple[str, dict[str, str]]:
+    home = Path.home()
+    theme_name = "Default"
+    toml_path = home / ".local/state/iram/current/theme/colors.toml"
+
+    if requested_theme:
+        slug = requested_theme.lower().replace(" ", "-")
+        candidate = home / f"iram-os/themes/{slug}/colors.toml"
+        if candidate.exists():
+            toml_path = candidate
+            theme_name = requested_theme
+    else:
+        name_file = home / ".local/state/iram/current/theme.name"
+        if name_file.exists():
+            theme_name = name_file.read_text().strip()
+
+    palette = {
+        "background": "#1e1e2e",
+        "surface": "#313244",
+        "text": "#cdd6f4",
+        "muted": "#6c7086",
+        "accent": "#89b4fa",
+        "secondary": "#f38ba8",
+        "cool": "#94e2d5",
+        "border": "#45475a",
+    }
+
+    if toml_path.exists():
+        for line in toml_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("#") or not line:
+                continue
+            m = re.match(r'^([a-zA-Z0-9_]+)\s*=\s*["\']([^"\']+)["\']', line)
+            if m:
+                k, v = m.group(1), m.group(2)
+                if k == "background":
+                    palette["background"] = v
+                elif k in ("lighter_background", "selection"):
+                    palette["surface"] = v
+                elif k in ("foreground", "light_foreground"):
+                    palette["text"] = v
+                elif k == "muted":
+                    palette["muted"] = v
+                elif k == "accent":
+                    palette["accent"] = v
+                elif k in ("secondary", "red", "orange"):
+                    palette["secondary"] = v
+                elif k in ("cyan", "green", "blue"):
+                    palette["cool"] = v
+
+        if "border" not in palette or palette["border"] == "#45475a":
+            palette["border"] = palette.get("muted", palette["surface"])
+
+    label = theme_name.replace("-", " ").title()
+    return label, palette
+
+
+def system_rows(theme_label: str) -> list[tuple[str, str]]:
+    try:
+        os_name = platform.freedesktop_os_release().get("PRETTY_NAME", "Ubuntu 26.10")
+    except OSError:
+        os_name = "Linux"
+
+    try:
+        mem = dict(re.findall(r"^(\w+):\s+(\d+)", Path("/proc/meminfo").read_text(), re.M))
+        total = int(mem["MemTotal"])
+        used = total - int(mem["MemAvailable"])
+        memory = f"{used / 1048576:.1f} / {total / 1048576:.1f} GiB"
+    except (OSError, KeyError, ValueError):
+        memory = "unavailable"
+
+    try:
+        minutes = int(float(Path("/proc/uptime").read_text().split()[0]) // 60)
+        uptime = f"{minutes // 60}h {minutes % 60:02d}m"
+    except (OSError, ValueError, IndexError):
+        uptime = "unavailable"
+
+    desktop = "Hyprland"
+    raw_desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    if "Hyprland" in raw_desktop or os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        try:
+            ver_proc = subprocess.run(["hyprctl", "version"], capture_output=True, text=True, timeout=1, check=False)
+            m = re.search(r"Hyprland\s+([0-9\.]+)", ver_proc.stdout)
+            desktop = f"Hyprland {m.group(1)}" if m else "Hyprland"
+        except Exception:
+            desktop = "Hyprland"
+    elif raw_desktop:
+        desktop = raw_desktop.split(":")[0]
+    try:
+        shell = Path(pwd.getpwuid(os.getuid()).pw_shell).name
+    except KeyError:
+        shell = Path(os.environ.get("SHELL", "bash")).name
+
+    term = os.environ.get("TERM_PROGRAM") or os.environ.get("TERM", "kitty")
+
+    return [
+        ("OS", os_name),
+        ("Kernel", platform.release()),
+        ("Desktop", desktop),
+        ("Shell", shell),
+        ("Terminal", term),
+        ("Theme", theme_label),
+        ("Memory", memory),
+        ("Uptime", uptime),
+    ]
+
+
+def inside(x: int, y: int, triangle: list[tuple[int, int]]) -> bool:
+    signs = []
+    for a, b in zip(triangle, triangle[1:] + triangle[:1]):
+        signs.append((x - b[0]) * (a[1] - b[1]) - (a[0] - b[0]) * (y - b[1]))
+    return not (min(signs) < 0 < max(signs))
+
+
+def mountain(palette: dict[str, str]) -> list[list[str | None]]:
+    """30x30 pixels; 2 vertical samples per terminal cell using half-blocks."""
+    peak, left, right, ridge, split = (14, 2), (0, 27), (29, 27), (17, 16), (10, 16)
+    facets = [
+        (palette["cool"], [left, peak, split]),
+        (palette["text"], [peak, split, ridge]),
+        (palette["accent"], [left, split, (11, 27)]),
+        (palette["accent"], [split, ridge, (11, 27)]),
+        (palette["border"], [(11, 27), ridge, (20, 27)]),
+        (palette["cool"], [peak, right, ridge]),
+        (palette["surface"], [ridge, right, (20, 27)]),
+    ]
+    pixels = []
+    for y in range(30):
+        row = []
+        for x in range(30):
+            # Sun orb in upper right
+            colour = palette["secondary"] if (x - 25) ** 2 + (y - 5) ** 2 <= 6 else None
+            for fill, triangle in facets:
+                if inside(x, y, triangle):
+                    colour = fill
+            row.append(colour)
+        pixels.append(row)
+    return pixels
+
+
+def render(theme_label: str, palette: dict[str, str], colour: bool = True, width: int = 88, alpora_brand: bool = False) -> str:
+    reset = "\033[0m" if colour else ""
+
+    def ink(role_or_hex: str, bg: bool = False) -> str:
+        if not colour:
+            return ""
+        val = palette[role_or_hex] if role_or_hex in palette else role_or_hex
+        val = val.lstrip("#")
+        if len(val) == 6:
+            r, g, b = int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16)
+            return f"\033[{48 if bg else 38};2;{r};{g};{b}m"
+        return ""
+
+    def text(value: str, role: str = "text") -> str:
+        return ink(role) + value + reset
+
+    logo = []
+    pixels = mountain(palette)
+    for y in range(0, 30, 2):
+        line = ""
+        for x in range(30):
+            top, bottom = pixels[y][x], pixels[y + 1][x]
+            if not colour:
+                line += "#" if (top or bottom) else " "
+            elif top and bottom:
+                line += ink(top) + ink(bottom, True) + "▀" + reset
+            elif top:
+                line += ink(top) + "▀" + reset
+            elif bottom:
+                line += ink(bottom) + "▄" + reset
+            else:
+                line += " "
+        logo.append(line)
+
+    edge = lambda s: text(s, "border")
+    title_text = "  A L P O R A" if alpora_brand else "  I R A M   O S"
+    subtitle_text = "  A different view." if alpora_brand else "  Ubuntu 26.10 Agentic Craft Suite"
+
+    panel = [
+        edge("╭" + "─" * 40 + "╮"),
+        edge("│") + text(fit(title_text, 40), "accent") + edge("│"),
+        edge("│") + text(fit(subtitle_text, 40), "muted") + edge("│"),
+        edge("├" + "─" * 40 + "┤"),
+    ]
+
+    for key, value in system_rows(theme_label):
+        panel.append(edge("│") + "  " + text(fit(key, 10), "secondary") + text(fit(value, 27)) + " " + edge("│"))
+
+    swatches = "".join(ink(role, True) + "   " + reset for role in ("surface", "border", "cool", "accent", "secondary", "text")) if colour else fit("FACETED MOUNTAIN CRAFT SUITE", 38)
+    panel += [
+        edge("│") + " " * 40 + edge("│"),
+        edge("│") + "  " + swatches + " " * (16 if colour else 0) + edge("│"),
+        edge("╰" + "─" * 40 + "╯"),
+    ]
+
+    brand_badge = "       A L P O R A" if alpora_brand else "       I R A M   O S"
+
+    if width >= 80:
+        lines = ["  " + left + "    " + right for left, right in zip(logo, panel)]
+        lines.append("  " + text(brand_badge, "accent"))
+    else:
+        lines = ["  " + line for line in logo]
+        lines += ["  " + text(brand_badge, "accent"), ""]
+        lines += ["  " + line for line in panel]
+
+    return "\n" + "\n".join(lines) + "\n\n"
+
+
+def watch(theme_arg: str | None, colour: bool, alpora_brand: bool):
+    """Watches active theme in the foreground and live re-renders on palette changes."""
+    fd = sys.stdin.fileno()
+    saved_terminal = termios.tcgetattr(fd)
+    previous_signal = signal.getsignal(signal.SIGTERM)
+
+    def stop(_sig, _frame):
+        raise KeyboardInterrupt
+
+    try:
+        signal.signal(signal.SIGTERM, stop)
+        tty.setcbreak(fd)
+        sys.stdout.write("\033[?1049h\033[?25l\033[2J")
+        previous = None
+        refresh_at = 0
+
+        while True:
+            size = shutil.get_terminal_size((88, 24))
+            label, palette = get_active_theme_info(theme_arg)
+            current = (label, palette, size)
+            now = time.monotonic()
+            if current != previous or now >= refresh_at:
+                frame = render(label, palette, colour, size.columns, alpora_brand)
+                frame = "\033[K\n".join(frame.split("\n"))
+                sys.stdout.write("\033[H" + frame + "\033[J")
+                sys.stdout.flush()
+                previous = current
+                refresh_at = now + 4
+
+            readable, _, _ = select.select([fd], [], [], 0.5)
+            if readable:
+                key = os.read(fd, 32)
+                if not key or any(c in key for c in (b"q", b"Q", b"\x1b", b"\x04")):
+                    break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSANOW, saved_terminal)
+        sys.stdout.write("\033[0m\033[?25h\033[?1049l")
+        sys.stdout.flush()
+        signal.signal(signal.SIGTERM, previous_signal)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="IRAM OS & ALPORA faceted mountain system card.")
+    parser.add_argument("--theme", help="Preview a specific theme palette")
+    parser.add_argument("--no-color", action="store_true", help="Print plain text without ANSI truecolor")
+    parser.add_argument("--watch", action="store_true", help="Live watch terminal following active theme changes")
+    parser.add_argument("--once", action="store_true", help="Print once and exit (default)")
+    parser.add_argument("--alpora", action="store_true", help="Display ALPORA title and motto")
+
+    args = parser.parse_args()
+
+    colour = (
+        sys.stdout.isatty()
+        and os.environ.get("TERM", "") not in ("", "dumb", "linux")
+        and "NO_COLOR" not in os.environ
+        and not args.no_color
+    )
+
+    alpora_brand = args.alpora or (os.path.basename(sys.argv[0]) == "alpora-fetch")
+
+    if args.watch and sys.stdout.isatty() and sys.stdin.isatty():
+        watch(args.theme, colour, alpora_brand)
+    else:
+        label, palette = get_active_theme_info(args.theme)
+        width = shutil.get_terminal_size((88, 24)).columns
+        print(render(label, palette, colour, width, alpora_brand), end="")
+
+
+if __name__ == "__main__":
+    main()

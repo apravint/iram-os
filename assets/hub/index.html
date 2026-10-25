@@ -4,50 +4,97 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IRAM OS Sovereign Command Hub</title>
+    
+    <!-- Google Fonts: Inter, Google Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js + OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
     <style>
+        :root {
+            --bg-main: #0c0e14;
+            --bg-surface: rgba(18, 21, 31, 0.72);
+            --bg-surface-elevated: rgba(26, 30, 46, 0.85);
+            --bg-input: rgba(22, 26, 38, 0.88);
+            --accent-primary: #00f0ff;
+            --accent-secondary: #7000ff;
+            --accent-success: #05ffa1;
+            --accent-pink: #ff007f;
+            --text-main: #f0f4fc;
+            --text-muted: #8b95b5;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 240, 255, 0.28);
+            --card-radius: 16px;
+            --glow-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             user-select: none;
         }
+
         body {
-            background-color: #080a10;
-            color: #cdd6f4;
-            font-family: "JetBrains Mono", "SF Pro Display", monospace;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
+            position: relative;
         }
+
+        /* Ambient Aurora Glow */
+        .aurora-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            background: 
+                radial-gradient(circle at 12% 18%, rgba(0, 240, 255, 0.12), transparent 42%),
+                radial-gradient(circle at 88% 78%, rgba(112, 0, 255, 0.14), transparent 46%),
+                radial-gradient(circle at 50% 50%, rgba(5, 255, 161, 0.06), transparent 50%);
+            transition: background 0.8s ease;
+        }
+
         #canvas-container {
             width: 100%;
             height: 100%;
             position: absolute;
             top: 0;
             left: 0;
-            z-index: 1;
+            z-index: 2;
         }
 
-        /* Glassmorphism Styling */
+        /* Glassmorphism Surface */
         .glass-panel {
-            background: rgba(13, 16, 26, 0.82);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(0, 240, 255, 0.22);
-            border-radius: 12px;
-            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            background: var(--bg-surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glow);
+            border-radius: var(--card-radius);
+            box-shadow: var(--glow-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
             pointer-events: auto;
             position: relative;
             z-index: 10;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
         }
 
-        /* Top Bar */
+        /* Top Navigation Bar */
         .hub-header {
             position: absolute;
-            top: 16px;
+            top: 14px;
             left: 16px;
             right: 16px;
-            padding: 14px 24px;
+            padding: 12px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -58,186 +105,282 @@
             gap: 14px;
         }
         .brand-badge {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #00f0ff, #7000ff);
-            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 900;
-            color: #080a10;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+            color: #0c0e14;
+            box-shadow: 0 0 20px var(--border-glow);
         }
         .brand-title {
             font-size: 16px;
             font-weight: 800;
-            letter-spacing: 0.5px;
-            color: #ffffff;
+            letter-spacing: -0.3px;
+            color: var(--text-main);
         }
-        .brand-title span { color: #00f0ff; }
-        .brand-subtitle { font-size: 11px; color: #7982a9; margin-top: 2px; }
+        .brand-title span {
+            color: var(--accent-primary);
+            font-weight: 800;
+        }
+        .brand-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
         .system-pill {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             background: rgba(5, 255, 161, 0.12);
             border: 1px solid rgba(5, 255, 161, 0.35);
             padding: 6px 14px;
-            border-radius: 20px;
+            border-radius: 9999px;
             font-size: 11px;
             font-weight: 700;
-            color: #05ffa1;
+            color: var(--accent-success);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .system-pill .dot {
+            width: 7px;
+            height: 7px;
+            background: var(--accent-success);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent-success);
+            animation: pulse-dot 2s infinite ease-in-out;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(0.85); opacity: 0.5; }
+        }
+        .theme-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            padding: 5px 12px;
+            border-radius: 9999px;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .theme-pill strong {
+            color: var(--accent-primary);
         }
 
-        /* Hub Grid */
+        /* Bento Grid */
         .hub-grid {
             position: absolute;
-            top: 96px;
+            top: 86px;
             left: 16px;
             right: 16px;
-            bottom: 116px;
+            bottom: 84px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
             gap: 16px;
             z-index: 10;
             pointer-events: none;
         }
         .hub-card {
-            padding: 20px;
+            padding: 22px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             pointer-events: auto;
-            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
         }
         .hub-card:hover {
-            border-color: #00f0ff;
+            border-color: var(--accent-primary);
             transform: translateY(-2px);
-            box-shadow: 0 16px 54px rgba(0, 240, 255, 0.15);
+            box-shadow: 0 20px 56px rgba(0, 0, 0, 0.75), 0 0 24px var(--border-glow);
         }
         .card-header {
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
+            align-items: flex-start;
+            margin-bottom: 10px;
         }
-        .card-title {
-            font-size: 13px;
-            font-weight: 800;
-            color: #ffffff;
+        .card-title-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+        }
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
         }
         .card-tag {
             font-size: 10px;
             font-weight: 700;
             padding: 3px 8px;
-            border-radius: 4px;
+            border-radius: 6px;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: 'JetBrains Mono', monospace;
         }
-        .tag-cyan { background: rgba(0, 240, 255, 0.18); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.3); }
-        .tag-pink { background: rgba(255, 0, 110, 0.18); color: #ff006e; border: 1px solid rgba(255, 0, 110, 0.3); }
-        .tag-green { background: rgba(5, 255, 161, 0.18); color: #05ffa1; border: 1px solid rgba(5, 255, 161, 0.3); }
-        .tag-purple { background: rgba(184, 0, 255, 0.18); color: #b800ff; border: 1px solid rgba(184, 0, 255, 0.3); }
+        .tag-cyan { background: rgba(0, 240, 255, 0.15); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.35); }
+        .tag-green { background: rgba(5, 255, 161, 0.15); color: #05ffa1; border: 1px solid rgba(5, 255, 161, 0.35); }
+        .tag-pink { background: rgba(255, 0, 127, 0.15); color: #ff007f; border: 1px solid rgba(255, 0, 127, 0.35); }
+        .tag-purple { background: rgba(184, 0, 255, 0.15); color: #cba6f7; border: 1px solid rgba(184, 0, 255, 0.35); }
 
         .card-desc {
-            font-size: 11px;
-            color: #949cbb;
+            font-size: 12px;
             line-height: 1.5;
-            margin-bottom: 16px;
+            color: var(--text-muted);
+            margin-bottom: 14px;
         }
         .card-content {
-            flex-grow: 1;
             display: flex;
             flex-direction: column;
             gap: 10px;
+            margin-top: auto;
         }
 
-        /* Inputs & Buttons */
-        input, select {
-            width: 100%;
-            background: #181d2e;
-            border: 1px solid #28314e;
-            color: #ffffff;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 11px;
-        }
+        /* Controls: Buttons, Inputs, Selects */
         button {
-            width: 100%;
-            background: #1c2236;
-            color: #cdd6f4;
-            border: 1px solid #2d3756;
-            border-radius: 6px;
-            padding: 8px 14px;
-            font-size: 11px;
+            background: var(--bg-surface-elevated);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 9px 14px;
+            font-size: 12px;
             font-family: inherit;
-            font-weight: 700;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
+            min-height: 38px;
         }
         button:hover {
-            background: #283250;
-            border-color: #00f0ff;
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent-primary);
             color: #ffffff;
+            transform: translateY(-1px);
+        }
+        button:focus-visible {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: 2px;
         }
         button.primary {
-            background: linear-gradient(135deg, #0077ff, #00f0ff);
-            color: #080a10;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: #0c0e14;
             border: none;
-            box-shadow: 0 4px 16px rgba(0, 240, 255, 0.35);
+            font-weight: 800;
+            box-shadow: 0 4px 20px var(--border-glow);
+        }
+        button.primary:hover {
+            box-shadow: 0 6px 26px var(--border-glow);
+            transform: translateY(-1px);
         }
 
-        /* Bottom Status Bar */
-        .hub-footer {
+        input[type="text"], select {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            min-height: 38px;
+        }
+        input[type="text"]:focus, select:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 12px var(--border-glow);
+        }
+
+        /* Bottom Command & Chat Bar */
+        .chat-bar {
             position: absolute;
-            bottom: 10px;
+            bottom: 16px;
             left: 16px;
             right: 16px;
-            padding: 6px 20px;
+            padding: 8px 16px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            font-size: 10px;
-            color: #7982a9;
+            gap: 12px;
+            z-index: 20;
+            border-radius: 12px;
         }
-        .footer-stat span {
-            color: #05ffa1;
-            font-weight: 700;
+        .chat-bar .copilot-icon {
+            font-size: 18px;
+            color: var(--accent-primary);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .chat-bar .copilot-icon:hover {
+            transform: scale(1.15);
+        }
+        .chat-bar input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .chat-bar input::placeholder {
+            color: var(--text-muted);
         }
 
-        /* Sovereign Multi-Turn Chat Drawer */
+        /* Sovereign Multi-Turn Agent Chat Drawer */
         #chat-modal {
-            display: none;
             position: absolute;
-            bottom: 96px;
-            left: 16px;
+            bottom: 74px;
             right: 16px;
-            height: 430px;
+            width: 480px;
+            height: 520px;
+            display: none;
             flex-direction: column;
-            z-index: 40;
-            border-color: #00f0ff;
-            box-shadow: 0 16px 64px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 240, 255, 0.2);
-            overflow: hidden;
-            transition: all 0.25s ease;
+            z-index: 100;
+            box-shadow: 0 24px 72px rgba(0, 0, 0, 0.85), 0 0 32px var(--border-glow);
+            animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
         #chat-modal.expanded {
-            top: 76px;
-            bottom: 96px;
-            height: auto;
+            width: calc(100vw - 32px);
+            height: calc(100vh - 100px);
+            left: 16px;
+            right: 16px;
+            bottom: 84px;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .chat-modal-header {
-            padding: 10px 18px;
-            background: rgba(13, 16, 26, 0.95);
-            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -245,117 +388,146 @@
         .chat-messages {
             flex-grow: 1;
             overflow-y: auto;
-            padding: 16px 20px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
             gap: 12px;
-            scroll-behavior: smooth;
         }
+        .chat-messages::-webkit-scrollbar { width: 5px; }
+        .chat-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
         .chat-bubble {
-            max-width: 85%;
             padding: 12px 16px;
-            border-radius: 10px;
-            font-size: 12px;
-            line-height: 1.6;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            max-width: 90%;
             word-break: break-word;
-            position: relative;
+            user-select: text;
         }
         .bubble-user {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(112, 0, 255, 0.2));
+            border: 1px solid var(--accent-primary);
             align-self: flex-end;
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(112, 0, 255, 0.25));
-            border: 1px solid rgba(0, 240, 255, 0.4);
             color: #ffffff;
         }
         .bubble-agent {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
             align-self: flex-start;
-            background: rgba(18, 22, 36, 0.88);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: #cdd6f4;
+            color: var(--text-main);
         }
         .bubble-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 6px;
             font-size: 10px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
         }
         .bubble-code {
-            background: #080a10;
-            border: 1px solid #28314e;
-            border-radius: 6px;
-            padding: 8px 12px;
-            margin: 6px 0;
-            font-family: monospace;
-            overflow-x: auto;
             position: relative;
-            color: #00f0ff;
+            background: #080a10;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin: 8px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            overflow-x: auto;
         }
         .copy-code-btn {
             position: absolute;
-            top: 4px;
-            right: 4px;
-            background: #181d2e;
-            border: 1px solid #28314e;
-            color: #00f0ff;
-            padding: 2px 8px;
-            font-size: 9px;
+            top: 6px;
+            right: 6px;
+            padding: 3px 8px;
+            font-size: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 4px;
             cursor: pointer;
+            color: var(--accent-primary);
         }
         .quick-chips {
             display: flex;
-            gap: 8px;
-            padding: 0 4px;
+            gap: 6px;
             overflow-x: auto;
-            scrollbar-width: none;
-            margin-bottom: 6px;
+            padding: 8px 16px;
+            border-top: 1px solid var(--border-subtle);
         }
+        .quick-chips::-webkit-scrollbar { display: none; }
         .quick-chip {
-            background: rgba(24, 29, 46, 0.75);
-            border: 1px solid rgba(0, 240, 255, 0.25);
-            border-radius: 12px;
             padding: 4px 10px;
-            font-size: 10px;
-            color: #949cbb;
-            cursor: pointer;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            border-radius: 9999px;
+            font-size: 11px;
+            color: var(--text-muted);
             white-space: nowrap;
-            transition: all 0.2s;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
         .quick-chip:hover {
             background: rgba(0, 240, 255, 0.15);
-            border-color: #00f0ff;
+            border-color: var(--accent-primary);
             color: #ffffff;
         }
+
+        /* Toast notifications */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--accent-primary);
+            color: #0c0e14;
+            font-weight: 800;
+            padding: 10px 18px;
+            border-radius: 10px;
+            box-shadow: 0 10px 32px var(--border-glow);
+            display: none;
+            z-index: 9999;
+            transition: opacity 0.25s ease;
+            font-size: 12px;
+            font-family: 'Google Sans', sans-serif;
+        }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
+    <div class="aurora-bg" id="aurora-bg"></div>
     <div id="canvas-container"></div>
 
-    <!-- Header -->
+    <!-- Header Navigation -->
     <div class="hub-header glass-panel">
         <div class="brand-container">
             <div class="brand-badge">⚡</div>
             <div>
                 <div class="brand-title">IRAM OS <span>Sovereign Command Hub</span></div>
-                <div class="brand-subtitle">Autonomous Multimodal Operating System • Ubuntu 26.10 • Hyprland 0.56</div>
+                <div class="brand-subtitle">Autonomous Multimodal Operating System • Hyprland 0.56 • Wayland Core</div>
             </div>
         </div>
-        <div class="system-pill">
-            <span style="display:inline-block;width:7px;height:7px;background:#05ffa1;border-radius:50%;box-shadow:0 0 8px #05ffa1;"></span>
-            <span>SYSTEM HEALTHY • PIPEWIRE 48kHz DSP</span>
+        <div class="header-actions">
+            <div class="theme-pill">
+                <span>Theme:</span>
+                <strong id="header-theme-name">Loading...</strong>
+            </div>
+            <div class="system-pill">
+                <span class="dot"></span>
+                <span id="telemetry-pill-text">SYSTEM READY • PIPEWIRE 48kHz</span>
+            </div>
         </div>
     </div>
 
-    <!-- Hub Cards Grid -->
+    <!-- Bento Grid -->
     <div class="hub-grid">
         <!-- Card 1: 3D Spatial Computing -->
         <div class="hub-card glass-panel">
             <div>
                 <div class="card-header">
-                    <div class="card-title"><span>🪐</span> IRAM 3D Studio</div>
+                    <div class="card-title-group">
+                        <div class="card-icon">🪐</div>
+                        <div class="card-title">3D Spatial Studio</div>
+                    </div>
                     <span class="card-tag tag-cyan">Three.js WebGL</span>
                 </div>
                 <div class="card-desc">
@@ -376,11 +548,14 @@
         <div class="hub-card glass-panel">
             <div>
                 <div class="card-header">
-                    <div class="card-title"><span>🎙️</span> VoiceStudio Engine</div>
-                    <span class="card-tag tag-green">Local ElevenLabs</span>
+                    <div class="card-title-group">
+                        <div class="card-icon">🎙️</div>
+                        <div class="card-title">VoiceStudio Neural Engine</div>
+                    </div>
+                    <span class="card-tag tag-green">PipeWire DSP</span>
                 </div>
                 <div class="card-desc">
-                    Zero-shot voice cloning, prompt-based voice design, and neural speech synthesis.
+                    Zero-shot voice cloning, prompt-based voice design, and low-latency speech synthesis.
                 </div>
             </div>
             <div class="card-content">
@@ -402,58 +577,68 @@
         <div class="hub-card glass-panel">
             <div>
                 <div class="card-header">
-                    <div class="card-title"><span>🧠</span> Harness² Agent Swarm</div>
-                    <span class="card-tag tag-pink">Google Research</span>
+                    <div class="card-title-group">
+                        <div class="card-icon">🧠</div>
+                        <div class="card-title">Harness² Swarm Loop</div>
+                    </div>
+                    <span class="card-tag tag-pink">Cyclic Engine</span>
                 </div>
                 <div class="card-desc">
-                    Deterministic cyclic loop (Plan → Act → Verify → Reflect) with Qdrant episodic memory.
+                    Deterministic cyclic loop (Plan → Act → Verify → Reflect) with Qdrant episodic memory traces.
                 </div>
             </div>
             <div class="card-content">
-                <input type="text" id="harness-task" placeholder="Enter task or goal...">
+                <input type="text" id="harness-task" placeholder="Enter task or goal (e.g. audit system integrity)...">
                 <button class="primary" id="btn-run-harness">
                     <span>🚀</span> Dispatch Harness² Cycle
                 </button>
                 <button id="btn-harness-history">
-                    <span>📋</span> View Past Episodic Traces
+                    <span>📋</span> Open Memory Inspector
                 </button>
             </div>
         </div>
 
-        <!-- Card 4: Zero-Restart Theme Studio -->
+        <!-- Card 4: Hypr Theme Studio & AI Generator -->
         <div class="hub-card glass-panel">
             <div>
                 <div class="card-header">
-                    <div class="card-title"><span>🎨</span> Hypr Theme Studio</div>
-                    <span class="card-tag tag-purple">18 Palettes</span>
+                    <div class="card-title-group">
+                        <div class="card-icon">🎨</div>
+                        <div class="card-title">Theme Studio & AI Vibe</div>
+                    </div>
+                    <span class="card-tag tag-purple">Zero-Restart</span>
                 </div>
                 <div class="card-desc">
-                    Live zero-restart palette switcher for Hyprland borders, Waybar gradients, and Alacritty.
+                    Live zero-restart palette switcher for Hyprland borders, Waybar, and apps, plus instant AI vibe generation.
                 </div>
             </div>
             <div class="card-content">
-                <select id="theme-select">
-                    <option value="tokyo-storm">Tokyo Storm</option>
-                    <option value="cyberpunk-neon">Cyberpunk Neon</option>
-                    <option value="synthwave-84">Synthwave 84</option>
-                    <option value="catppuccin-mocha">Catppuccin Mocha</option>
-                    <option value="dracula">Dracula Official</option>
-                    <option value="nord-frost">Nord Frost</option>
-                    <option value="rose-pine-moon">Rosé Pine Moon</option>
-                    <option value="gruvbox">Gruvbox Retro</option>
-                    <option value="kanagawa-wave">Kanagawa Wave</option>
-                    <option value="material-ocean">Material Ocean</option>
-                    <option value="matte-black">Matte Black Sovereign</option>
-                    <option value="aura-dark">Aura Dark</option>
-                    <option value="oxocarbon">Oxocarbon</option>
-                    <option value="vesper">Vesper Minimal</option>
-                </select>
-                <button class="primary" id="btn-apply-theme">
-                    <span>✨</span> Apply Theme Instantly
-                </button>
-                <button id="btn-launch-theme-3d">
-                    <span>🔮</span> Open 3D PBR Material Studio
-                </button>
+                <div style="display:flex; gap:8px;">
+                    <select id="theme-select" style="flex:1;">
+                        <option value="alpora-forest-mist">Alpora Forest Mist</option>
+                        <option value="alpora-rose-sunset">Alpora Rose Sunset</option>
+                        <option value="alpora-northern-lights">Alpora Northern Lights</option>
+                        <option value="alpora-frost">Alpora Frost (AI)</option>
+                        <option value="cyberpunk-pro-max">Cyberpunk Pro Max (AI)</option>
+                        <option value="tokyo-storm">Tokyo Storm</option>
+                        <option value="catppuccin-mocha">Catppuccin Mocha</option>
+                        <option value="dracula">Dracula Official</option>
+                        <option value="nord-frost">Nord Frost</option>
+                        <option value="synthwave-84">Synthwave 84</option>
+                        <option value="gruvbox">Gruvbox Retro</option>
+                        <option value="kanagawa-wave">Kanagawa Wave</option>
+                        <option value="matte-black">Matte Black Sovereign</option>
+                    </select>
+                    <button class="primary" id="btn-apply-theme" style="min-width:90px;">
+                        <span>✨ Apply</span>
+                    </button>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="theme-prompt-input" placeholder="AI Theme vibe (e.g. 'Neon Tokyo Rain')..." style="flex:1;">
+                    <button id="btn-generate-theme" style="min-width:110px;">
+                        <span>🪄 Generate</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -461,11 +646,14 @@
         <div class="hub-card glass-panel">
             <div>
                 <div class="card-header">
-                    <div class="card-title"><span>🎬</span> IRAM Video Studio</div>
+                    <div class="card-title-group">
+                        <div class="card-icon">🎬</div>
+                        <div class="card-title">IRAM Video Studio</div>
+                    </div>
                     <span class="card-tag tag-cyan">Cinema & Shorts</span>
                 </div>
                 <div class="card-desc">
-                    Generative film trailers, code launch videos, and kinetic 3D WebGL motion titles.
+                    Generative film trailers, code launch videos, and kinetic 3D WebGL motion titles for social media.
                 </div>
             </div>
             <div class="card-content">
@@ -482,23 +670,27 @@
         <div class="hub-card glass-panel">
             <div>
                 <div class="card-header">
-                    <div class="card-title"><span>🛡️</span> Sovereign MCP Gateway</div>
-                    <span class="card-tag tag-green">Active Stdio</span>
+                    <div class="card-title-group">
+                        <div class="card-icon">🛡️</div>
+                        <div class="card-title">Sovereign MCP Gateway</div>
+                    </div>
+                    <span class="card-tag tag-green">FastMCP Active</span>
                 </div>
                 <div class="card-desc">
-                    Central Model Context Protocol server exposing Desktop Control, 3D, Voice, and Qdrant tools.
+                    Central Model Context Protocol server exposing Desktop Control, 3D, Voice, and Qdrant memory tools.
                 </div>
             </div>
             <div class="card-content">
-                <div style="font-size:11px; color:#cdd6f4; line-height:1.6;">
-                    • Gateway: <strong style="color:#05ffa1;">iram-mcp-server</strong><br/>
-                    • Tools Exposed: <strong style="color:#00f0ff;">21 Tools</strong><br/>
-                    • Agents: <strong style="color:#ffffff;">Antigravity, Claude, OpenClaw</strong>
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.7; font-family:'JetBrains Mono', monospace;">
+                    • Protocol: <strong style="color:var(--accent-success);">FastMCP Linux Desktop</strong><br/>
+                    • Tools Available: <strong style="color:var(--accent-primary);" id="stat-mcp-count">22 Tools</strong><br/>
+                    • Agents Connected: <strong style="color:#ffffff;">Antigravity, Sidecar, Swarm</strong>
                 </div>
                 <button id="btn-mcp-status" style="margin-top:auto;">
-                    <span>🔍</span> Inspect MCP Endpoints
+                    <span>🔍</span> Query MCP Tool Registry
                 </button>
             </div>
+        </div>
     </div>
 
     <!-- Sovereign Multi-Turn Agent Chat Drawer -->
@@ -506,58 +698,53 @@
         <div class="chat-modal-header">
             <div style="display:flex; align-items:center; gap:10px;">
                 <span style="font-size:16px;">🤖</span>
-                <span style="font-weight:800; font-size:13px; color:#ffffff;">IRAM Sovereign Agent Copilot</span>
+                <span style="font-weight:700; font-size:13px; color:var(--text-main);">IRAM Sovereign Copilot</span>
                 <span id="chat-tier-badge" class="card-tag tag-cyan" style="font-size:9px;">SmartRouter</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <select id="chat-model-select" style="width:auto; padding:3px 8px; font-size:10px; background:#181d2e; border:1px solid #28314e; border-radius:4px; color:#00f0ff;">
+                <select id="chat-model-select" style="width:auto; padding:4px 8px; font-size:11px; min-height:30px;">
                     <option value="auto">⚡ SmartRouter (Auto)</option>
                 </select>
-                <button id="btn-clear-chat" style="width:auto; padding:3px 8px; font-size:10px; background:transparent; border:1px solid #28314e;" title="Clear Chat History">🗑️</button>
-                <button id="btn-expand-chat" style="width:auto; padding:3px 8px; font-size:10px; background:transparent; border:1px solid #28314e;" title="Toggle Fullscreen">↕</button>
-                <button id="btn-close-chat" style="width:auto; padding:3px 8px; font-size:10px; background:transparent; border:1px solid #28314e;" title="Close Chat">✕</button>
+                <button id="btn-clear-chat" style="padding:4px 8px; min-height:30px;" title="Clear Chat">🗑️</button>
+                <button id="btn-expand-chat" style="padding:4px 8px; min-height:30px;" title="Toggle Fullscreen">↕</button>
+                <button id="btn-close-chat" style="padding:4px 8px; min-height:30px;" title="Close Chat">✕</button>
             </div>
         </div>
         <div id="chat-messages" class="chat-messages">
             <div class="chat-bubble bubble-agent">
                 <div class="bubble-meta">
-                    <span style="color:#00f0ff; font-weight:800;">🤖 IRAM Sovereign Copilot</span>
-                    <span style="color:#7982a9;">System Ready</span>
+                    <span style="color:var(--accent-primary); font-weight:700;">🤖 IRAM Sovereign Copilot</span>
+                    <span>System Ready</span>
                 </div>
                 Welcome to your Sovereign Desktop Copilot! Control themes, launch 3D tools, monitor Wayland telemetry, or query local Ollama LLMs with 0ms SmartRouter caching.
             </div>
         </div>
-        <div class="quick-chips" id="quick-chips-container" style="padding: 6px 16px; border-top: 1px solid rgba(255,255,255,0.05);">
+        <div class="quick-chips" id="quick-chips-container">
             <div class="quick-chip" data-prompt="system status">📊 System Health</div>
-            <div class="quick-chip" data-prompt="switch theme to cyberpunk neon">🎨 Cyberpunk Neon</div>
-            <div class="quick-chip" data-prompt="switch theme to tokyo storm">🌸 Tokyo Storm</div>
+            <div class="quick-chip" data-prompt="switch theme to alpora-forest-mist">🌲 Forest Mist</div>
+            <div class="quick-chip" data-prompt="switch theme to tokyo-storm">🌸 Tokyo Storm</div>
             <div class="quick-chip" data-prompt="launch 3d cad">🪐 3D Mesh Inspector</div>
-            <div class="quick-chip" data-prompt="inspect mcp">🛡️ MCP 21 Tools</div>
+            <div class="quick-chip" data-prompt="inspect mcp">🛡️ MCP 22 Tools</div>
             <div class="quick-chip" data-prompt="speak Welcome to IRAM OS Sovereign Hub">🔊 Voice Demo</div>
             <div class="quick-chip" data-prompt="Give 3 tips for Wayland performance">⚡ Wayland Tips</div>
         </div>
     </div>
 
     <!-- Bottom Command & Chat Bar -->
-    <div class="chat-bar glass-panel" style="position:absolute; bottom:48px; left:16px; right:16px; padding:8px 14px; display:flex; align-items:center; gap:10px; z-index:20;">
-        <span id="btn-toggle-drawer" style="font-size:18px; color:#00f0ff; cursor:pointer;" title="Toggle Chat Panel">⚡</span>
-        <input type="text" id="chat-input" placeholder="Ask IRAM Agent (e.g. 'system status', 'switch theme to tokyo storm', 'launch 3d cad')..." style="flex-grow:1; background:transparent; border:none; outline:none; color:#ffffff; font-size:12px;" />
-        <button id="btn-chat-send" style="width:auto; padding:6px 16px; background:linear-gradient(135deg, #00f0ff, #7000ff); color:#080a10; border:none; border-radius:6px; font-weight:800; cursor:pointer;">Ask</button>
-        <button id="btn-chat-speak" style="width:auto; padding:6px 12px; background:#181d2e; border:1px solid #28314e; border-radius:6px; cursor:pointer;" title="Speak response through PipeWire">🔊 Voice</button>
+    <div class="chat-bar glass-panel">
+        <span id="btn-toggle-drawer" class="copilot-icon" title="Toggle Sovereign Copilot">⚡</span>
+        <input type="text" id="chat-input" placeholder="Ask IRAM Sovereign Copilot (e.g. 'system status', 'switch theme to tokyo-storm', 'launch 3d cad')..." />
+        <button id="btn-chat-send" class="primary" style="padding:6px 18px; min-height:34px;">Ask</button>
+        <button id="btn-chat-speak" style="padding:6px 14px; min-height:34px;" title="Speak response through PipeWire">🔊 Voice</button>
     </div>
 
-    <!-- Footer -->
-    <div class="hub-footer glass-panel">
-        <div class="footer-stat">Active Compositor: <span>Hyprland 0.56 (Wayland)</span></div>
-        <div class="footer-stat">Kernel: <span>Linux 6.17-generic</span></div>
-        <div class="footer-stat">Vector Memory: <span>Qdrant Embedded</span></div>
-    </div>
-    <div id="toast" style="position:fixed;bottom:24px;right:24px;background:rgba(0,240,255,0.92);color:#080a10;font-weight:800;padding:12px 20px;border-radius:8px;box-shadow:0 8px 32px rgba(0,240,255,0.45);display:none;z-index:9999;transition:opacity 0.25s ease;font-size:12px;"></div>
+    <div id="toast"></div>
 
     <script>
-        // Background Three.js Holographic Core Animation
+        // Dynamic Three.js Holographic Core Animation
         let scene, camera, renderer;
-        let torus, coreMesh, particleSystem;
+        let torus, particleSystem, pointLight1, pointLight2;
+        let activeThemeColors = null;
 
         function init3D() {
             const container = document.getElementById('canvas-container');
@@ -571,41 +758,40 @@
             container.appendChild(renderer.domElement);
 
             // Subtle Ambient & Point Lights
-            scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-            const pLight1 = new THREE.PointLight(0x00f0ff, 2, 50);
-            pLight1.position.set(15, 15, 15);
-            scene.add(pLight1);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+            pointLight1 = new THREE.PointLight(0x00f0ff, 2.2, 60);
+            pointLight1.position.set(15, 15, 15);
+            scene.add(pointLight1);
 
-            const pLight2 = new THREE.PointLight(0xff006e, 1.5, 50);
-            pLight2.position.set(-15, -15, 10);
-            scene.add(pLight2);
+            pointLight2 = new THREE.PointLight(0x7000ff, 1.8, 60);
+            pointLight2.position.set(-15, -15, 10);
+            scene.add(pointLight2);
 
-            // Central Holographic Torus
+            // Holographic Torus Knot
             const geom = new THREE.TorusKnotGeometry(8, 2.2, 128, 32);
             const mat = new THREE.MeshStandardMaterial({
                 color: 0x00f0ff,
                 emissive: 0x00f0ff,
-                emissiveIntensity: 0.15,
+                emissiveIntensity: 0.2,
                 wireframe: true,
                 transparent: true,
-                opacity: 0.25
+                opacity: 0.3
             });
             torus = new THREE.Mesh(geom, mat);
             scene.add(torus);
 
             // Floating Starfield
-            const pCount = 900;
+            const pCount = 1000;
             const pGeom = new THREE.BufferGeometry();
             const pPos = new Float32Array(pCount * 3);
-            for (let i = 0; i < pCount * 3; i++) pPos[i] = (Math.random() - 0.5) * 140;
+            for (let i = 0; i < pCount * 3; i++) pPos[i] = (Math.random() - 0.5) * 150;
             pGeom.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
             particleSystem = new THREE.Points(pGeom, new THREE.PointsMaterial({
-                size: 0.8, color: 0x00f0ff, transparent: true, opacity: 0.4
+                size: 0.85, color: 0x00f0ff, transparent: true, opacity: 0.45
             }));
             scene.add(particleSystem);
 
             window.addEventListener('resize', onResize);
-            setupUI();
             animate();
         }
 
@@ -618,11 +804,89 @@
         function animate() {
             requestAnimationFrame(animate);
             if (torus) {
-                torus.rotation.y += 0.004;
-                torus.rotation.x += 0.002;
+                torus.rotation.y += 0.0035;
+                torus.rotation.x += 0.0018;
             }
-            if (particleSystem) particleSystem.rotation.y += 0.001;
+            if (particleSystem) particleSystem.rotation.y += 0.0008;
             renderer.render(scene, camera);
+        }
+
+        function update3DThemeColors(colors) {
+            if (!colors) return;
+            const accentHex = parseInt((colors.accent || '#00f0ff').replace('#', '0x'), 16);
+            const secondaryHex = parseInt((colors.secondary || '#7000ff').replace('#', '0x'), 16);
+
+            if (torus && torus.material) {
+                torus.material.color.setHex(accentHex);
+                torus.material.emissive.setHex(accentHex);
+            }
+            if (particleSystem && particleSystem.material) {
+                particleSystem.material.color.setHex(accentHex);
+            }
+            if (pointLight1) pointLight1.color.setHex(accentHex);
+            if (pointLight2) pointLight2.color.setHex(secondaryHex);
+        }
+
+        // Live Dynamic Theme Sync
+        function syncTheme() {
+            fetch('/api/theme')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok && data.colors) {
+                        const c = data.colors;
+                        const root = document.documentElement;
+
+                        const bgMain = c.darker_background || c.background || '#0c0e14';
+                        const accent = c.accent || '#00f0ff';
+                        const secondary = c.secondary || '#7000ff';
+                        const success = c.green || '#05ffa1';
+                        const fg = c.bright_foreground || c.foreground || '#ffffff';
+                        const muted = c.dark_foreground || c.muted || '#8b95b5';
+
+                        root.style.setProperty('--bg-main', bgMain);
+                        root.style.setProperty('--accent-primary', accent);
+                        root.style.setProperty('--accent-secondary', secondary);
+                        root.style.setProperty('--accent-success', success);
+                        root.style.setProperty('--text-main', fg);
+                        root.style.setProperty('--text-muted', muted);
+                        root.style.setProperty('--border-glow', `${accent}44`);
+
+                        const aurora = document.getElementById('aurora-bg');
+                        if (aurora) {
+                            aurora.style.background = `
+                                radial-gradient(circle at 12% 18%, ${accent}22, transparent 42%),
+                                radial-gradient(circle at 88% 78%, ${secondary}22, transparent 46%),
+                                radial-gradient(circle at 50% 50%, ${success}10, transparent 50%)
+                            `;
+                        }
+
+                        const headerName = document.getElementById('header-theme-name');
+                        if (headerName) headerName.innerText = data.theme || 'Active';
+
+                        const sel = document.getElementById('theme-select');
+                        if (sel && data.theme) {
+                            // If active theme isn't in select list, append it
+                            let found = false;
+                            for (let i = 0; i < sel.options.length; i++) {
+                                if (sel.options[i].value === data.theme) {
+                                    sel.selectedIndex = i;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                const opt = document.createElement('option');
+                                opt.value = data.theme;
+                                opt.innerText = `${data.theme} (Active)`;
+                                opt.selected = true;
+                                sel.appendChild(opt);
+                            }
+                        }
+
+                        update3DThemeColors(c);
+                    }
+                })
+                .catch(() => {});
         }
 
         function showToast(msg) {
@@ -651,10 +915,10 @@
                 });
         }
 
+        // Setup Controls & Handlers
         function setupUI() {
             document.getElementById('btn-launch-3d').onclick = () => callApi('/api/launch?app=iram-3d', "🚀 3D CAD Inspector Launched");
             document.getElementById('btn-launch-swarm').onclick = () => callApi('/api/launch?app=iram-agent-graph', "⚡ 3D Agent Swarm Graph Opened");
-            document.getElementById('btn-launch-theme-3d').onclick = () => callApi('/api/launch?app=iram-theme-3d', "🔮 3D Theme Studio Opened");
             document.getElementById('btn-launch-video-3d').onclick = () => callApi('/api/launch?app=iram-video-3d', "🎥 3D Motion Graphics Studio Opened");
 
             document.getElementById('btn-speak').onclick = () => {
@@ -666,6 +930,31 @@
             document.getElementById('btn-apply-theme').onclick = () => {
                 const theme = document.getElementById('theme-select').value;
                 callApi(`/api/theme?name=${theme}`, `✨ Theme Applied: ${theme}`);
+                setTimeout(syncTheme, 400);
+            };
+
+            document.getElementById('btn-generate-theme').onclick = () => {
+                const prompt = document.getElementById('theme-prompt-input').value.trim();
+                if (!prompt) {
+                    showToast("Please enter a theme vibe prompt");
+                    return;
+                }
+                showToast(`🪄 Generating AI Theme: "${prompt}"...`);
+                fetch('/api/theme/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok) {
+                        showToast(`✨ Generated & applied theme: ${data.theme}`);
+                        syncTheme();
+                    } else {
+                        showToast("⚠ Theme generation failed: " + (data.error || "Unknown"));
+                    }
+                })
+                .catch(() => showToast("⚠ Theme generator error"));
             };
 
             document.getElementById('btn-run-harness').onclick = () => {
@@ -689,13 +978,15 @@
                     fetch('/api/mcp')
                         .then(r => r.json())
                         .then(data => {
-                            showToast(`🛡️ MCP Gateway Active: ${data.tools.length} Tools Available`);
+                            const count = data.tools ? data.tools.length : 22;
+                            document.getElementById('stat-mcp-count').innerText = `${count} Tools`;
+                            showToast(`🛡️ MCP Gateway Active: ${count} Tools Verified`);
                         })
                         .catch(() => showToast("⚠ Failed to query MCP status"));
                 };
             }
 
-            // Sovereign Multi-Turn Agent Chat Drawer Handlers
+            // Sovereign Multi-Turn Agent Copilot Handlers
             const chatModal = document.getElementById('chat-modal');
             const chatMessages = document.getElementById('chat-messages');
             const chatInput = document.getElementById('chat-input');
@@ -711,7 +1002,6 @@
             let promptHistory = [];
             let historyIndex = -1;
 
-            // Load available models from Sovereign Hub Backend
             function loadModels() {
                 fetch('/api/models')
                     .then(r => r.json())
@@ -730,7 +1020,6 @@
             }
             loadModels();
 
-            // Toggle / Expand / Close Controls
             if (btnToggleDrawer) {
                 btnToggleDrawer.onclick = () => {
                     const isOpen = chatModal.style.display === 'flex';
@@ -738,21 +1027,17 @@
                     if (!isOpen) chatInput.focus();
                 };
             }
-            if (btnCloseChat) {
-                btnCloseChat.onclick = () => { chatModal.style.display = 'none'; };
-            }
+            if (btnCloseChat) btnCloseChat.onclick = () => { chatModal.style.display = 'none'; };
             if (btnExpandChat) {
-                btnExpandChat.onclick = () => {
-                    chatModal.classList.toggle('expanded');
-                };
+                btnExpandChat.onclick = () => { chatModal.classList.toggle('expanded'); };
             }
             if (btnClearChat) {
                 btnClearChat.onclick = () => {
                     chatMessages.innerHTML = `
                         <div class="chat-bubble bubble-agent">
                             <div class="bubble-meta">
-                                <span style="color:#00f0ff; font-weight:800;">🤖 IRAM Sovereign Copilot</span>
-                                <span style="color:#7982a9;">Session Cleared</span>
+                                <span style="color:var(--accent-primary); font-weight:700;">🤖 IRAM Sovereign Copilot</span>
+                                <span>Session Cleared</span>
                             </div>
                             Chat history cleared. How can I assist you with IRAM OS today?
                         </div>
@@ -761,7 +1046,6 @@
                 };
             }
 
-            // Quick Chips Auto-Execution
             document.querySelectorAll('.quick-chip').forEach(chip => {
                 chip.onclick = () => {
                     const prompt = chip.getAttribute('data-prompt');
@@ -772,13 +1056,9 @@
                 };
             });
 
-            // Safe Markdown & Code Formatter
             function formatMarkdown(text) {
                 if (!text) return "";
-                // Escape raw HTML tags
                 let safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-                // Replace code blocks
                 safe = safe.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
                     const blockId = 'code-' + Math.random().toString(36).substr(2, 9);
                     return `
@@ -788,12 +1068,8 @@
                         </div>
                     `;
                 });
-
-                // Inline code
-                safe = safe.replace(/`([^`]+)`/g, '<code style="background:#080a10; padding:2px 6px; border-radius:4px; color:#00f0ff;">$1</code>');
-                // Bold
+                safe = safe.replace(/`([^`]+)`/g, '<code style="background:#080a10; padding:2px 6px; border-radius:4px; color:var(--accent-primary);">$1</code>');
                 safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#ffffff;">$1</strong>');
-                // Line breaks
                 safe = safe.replace(/\n/g, '<br/>');
                 return safe;
             }
@@ -801,37 +1077,33 @@
             window.copyCode = function(id) {
                 const el = document.getElementById(id);
                 if (el) {
-                    navigator.clipboard.writeText(el.innerText).then(() => {
-                        showToast("✓ Code copied to clipboard");
-                    });
+                    navigator.clipboard.writeText(el.innerText).then(() => showToast("Copied to clipboard"));
                 }
             };
 
-            function appendBubble(role, content, meta = {}) {
-                chatModal.style.display = 'flex';
+            function appendBubble(role, content, meta = null) {
                 const bubble = document.createElement('div');
-                bubble.className = `chat-bubble ${role === 'user' ? 'bubble-user' : 'bubble-agent'}`;
-
-                const metaDiv = document.createElement('div');
-                metaDiv.className = 'bubble-meta';
+                bubble.className = `chat-bubble bubble-${role}`;
 
                 const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
                 if (role === 'user') {
-                    metaDiv.innerHTML = `<span style="color:#ffffff; font-weight:800;">󱙺 User</span><span style="color:#a6adc8;">${now}</span>`;
-                    bubble.appendChild(metaDiv);
-                    const bodyDiv = document.createElement('div');
-                    bodyDiv.innerText = content;
-                    bubble.appendChild(bodyDiv);
-                } else {
-                    const modelTag = meta.cached ? '⚡ 0ms Cache ($0)' : (meta.model || 'IRAM Agent');
-                    metaDiv.innerHTML = `
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="color:#00f0ff; font-weight:800;">🤖 ${modelTag}</span>
-                            <span class="card-tag tag-cyan" style="font-size:8px;">${meta.tier || 'Routed'}</span>
+                    bubble.innerHTML = `
+                        <div class="bubble-meta">
+                            <span style="color:#ffffff; font-weight:700;">You</span>
+                            <span>${now}</span>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="cursor:pointer; color:#00f0ff; font-size:11px;" title="Listen via PipeWire" onclick="callApi('/api/voice?text=' + encodeURIComponent('${encodeURIComponent(content.slice(0, 150))}'), '🔊 Speaking response')">🔊</span>
-                            <span style="color:#7982a9;">${now}</span>
+                        <div>${formatMarkdown(content)}</div>
+                    `;
+                } else {
+                    const modelName = meta && meta.model ? meta.model : "Copilot";
+                    const metaDiv = document.createElement('div');
+                    metaDiv.className = 'bubble-meta';
+                    metaDiv.innerHTML = `
+                        <span style="color:var(--accent-primary); font-weight:700;">🤖 ${modelName}</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="cursor:pointer;" title="Speak with Voice" onclick="callApi('/api/voice?text=' + encodeURIComponent('${encodeURIComponent(content.slice(0, 150))}'), '🔊 Speaking response')">🔊</span>
+                            <span>${now}</span>
                         </div>
                     `;
                     bubble.appendChild(metaDiv);
@@ -856,11 +1128,10 @@
 
                 const chosenModel = chatModelSelect ? chatModelSelect.value : 'auto';
 
-                // Pulsing temporary loading bubble
                 const loadingBubble = document.createElement('div');
                 loadingBubble.className = 'chat-bubble bubble-agent';
                 loadingBubble.id = 'temp-loading-bubble';
-                loadingBubble.innerHTML = `<span style="color:#00f0ff;">⚡ Reasoning with ${chosenModel}...</span>`;
+                loadingBubble.innerHTML = `<span style="color:var(--accent-primary);">⚡ Reasoning with ${chosenModel}...</span>`;
                 chatMessages.appendChild(loadingBubble);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
 
@@ -925,9 +1196,9 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data.ok) {
-                        const sysPill = document.querySelector('.system-pill span:last-child');
-                        if (sysPill) {
-                            sysPill.innerText = `CPU ${data.cpu_percent}% • RAM ${data.memory.used_gb}/${data.memory.total_gb}GB (${data.memory.percent}%) • PIPEWIRE 48kHz`;
+                        const pill = document.getElementById('telemetry-pill-text');
+                        if (pill) {
+                            pill.innerText = `CPU ${data.cpu_percent}% • RAM ${data.memory.used_gb}/${data.memory.total_gb}GB • WS ${data.hyprland ? data.hyprland.workspace : 1}`;
                         }
                     }
                 })
@@ -936,8 +1207,11 @@
 
         window.onload = () => {
             init3D();
+            setupUI();
+            syncTheme();
             updateTelemetry();
-            setInterval(updateTelemetry, 3000);
+            setInterval(updateTelemetry, 3500);
+            setInterval(syncTheme, 8000); // Polling for zero-restart theme updates
         };
     </script>
 </body>

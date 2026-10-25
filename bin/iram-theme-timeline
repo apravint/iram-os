@@ -1,0 +1,423 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - ALPORA Solar Timeline Engine
+Dynamic time-of-day desktop lighting and palette transition system.
+Seamlessly interpolates colors and transitions wallpapers across:
+Night (00:00) -> Dawn (05:30) -> Morning (08:00) -> Day (13:00) -> Sunset (18:30) -> Dusk (21:00)
+"""
+
+import argparse
+import datetime
+import math
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+# Timeline 24-hour keyframes (minute, key, label)
+STOPS = (
+    (0, "night", "Night"),          # 00:00
+    (330, "dawn", "Dawn"),          # 05:30
+    (480, "morning", "Morning"),    # 08:00
+    (780, "day", "Day"),            # 13:00
+    (1110, "sunset", "Sunset"),     # 18:30
+    (1260, "dusk", "Dusk"),         # 21:00
+)
+
+# Semantic 8-channel palettes for the 6 landscape lighting states:
+# (background, surface, text, muted, accent, secondary, cool, border)
+PALETTES = (
+    ("#131c30", "#232e49", "#e9eef7", "#a8b4ce", "#9eafe8", "#bdacda", "#88b9df", "#465578"),  # night
+    ("#292433", "#403648", "#f5eaf0", "#c8b6ca", "#dcaccb", "#edb2a5", "#adb8dc", "#715b78"),  # dawn
+    ("#242f35", "#35484c", "#eff3ed", "#b6c7c5", "#d6ccab", "#ecc89a", "#9cc7da", "#627e83"),  # morning
+    ("#1f2e38", "#324755", "#eef5f8", "#afc7d4", "#9ecbdc", "#c9d8aa", "#8ebbe5", "#5a7c91"),  # day
+    ("#30272a", "#4b3938", "#f7eee4", "#cdb9b2", "#e3b796", "#f1c186", "#c5b4cd", "#83655c"),  # sunset
+    ("#211f35", "#35314d", "#eeeafa", "#b8b0cf", "#baa9dd", "#d3a2ba", "#9daedb", "#615878"),  # dusk
+)
+
+PALETTE_KEYS = ("background", "surface", "text", "muted", "accent", "secondary", "cool", "border")
+
+STAGE_MAP = {
+    "night": 0,
+    "dawn": 330,
+    "morning": 480,
+    "day": 780,
+    "sunset": 1110,
+    "dusk": 1260,
+}
+
+
+def hex_to_rgb(hex_code: str) -> tuple[int, int, int]:
+    h = hex_code.lstrip("#")
+    if len(h) == 6:
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return (30, 30, 40)
+
+
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    r = max(0, min(255, int(r + 0.5)))
+    g = max(0, min(255, int(g + 0.5)))
+    b = max(0, min(255, int(b + 0.5)))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def adjust_brightness(hex_code: str, factor: float) -> str:
+    r, g, b = hex_to_rgb(hex_code)
+    return rgb_to_hex(r * factor, g * factor, b * factor)
+
+
+def palette_for(minute: int) -> dict[str, str]:
+    """Smooth Hermite cubic interpolation between keyframe palettes."""
+    val = minute % 1440
+    lower = len(STOPS) - 1
+    for idx in range(len(STOPS) - 1):
+        if val < STOPS[idx + 1][0]:
+            lower = idx
+            break
+    upper = (lower + 1) % len(STOPS)
+    start = STOPS[lower][0]
+    end = STOPS[upper][0] if upper else 1440
+    t = (val - start) / (end - start)
+    # Hermite smoothstep curve: 3*t^2 - 2*t^3
+    t = t * t * (3.0 - 2.0 * t)
+
+    def blend(c1: str, c2: str) -> str:
+        r1, g1, b1 = hex_to_rgb(c1)
+        r2, g2, b2 = hex_to_rgb(c2)
+        r = r1 * (1.0 - t) + r2 * t
+        g = g1 * (1.0 - t) + g2 * t
+        b = b1 * (1.0 - t) + b2 * t
+        return rgb_to_hex(r, g, b)
+
+    return {key: blend(a, b) for key, a, b in zip(PALETTE_KEYS, PALETTES[lower], PALETTES[upper])}
+
+
+def nearest_stage(minute: int) -> tuple[str, str, int]:
+    """Finds closest lighting stage based on circular distance around 24-hour cycle."""
+    val = minute % 1440
+    best_stop = STOPS[0]
+    best_dist = 1440
+
+    for stop in STOPS:
+        stop_m = stop[0]
+        diff = abs(val - stop_m)
+        circ_dist = min(diff, 1440 - diff)
+        if circ_dist < best_dist:
+            best_dist = circ_dist
+            best_stop = stop
+
+    return best_stop[1], best_stop[2], best_stop[0]
+
+
+def parse_time_argument(arg: str) -> int:
+    """Parses HH:MM, phase name, or integer minutes (0-1440)."""
+    arg = arg.strip().lower()
+    if arg in STAGE_MAP:
+        return STAGE_MAP[arg]
+    if ":" in arg:
+        parts = arg.split(":")
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            h, m = int(parts[0]), int(parts[1])
+            if 0 <= h < 24 and 0 <= m < 60:
+                return h * 60 + m
+    if arg.isdigit():
+        val = int(arg)
+        if 0 <= val <= 1440:
+            return val % 1440
+    raise ValueError(f"Invalid time format: '{arg}'. Expected HH:MM, minute (0-1440), or phase name ({', '.join(STAGE_MAP.keys())}).")
+
+
+def generate_colors_toml(palette: dict[str, str]) -> str:
+    """Generates IRAM OS compliant colors.toml text."""
+    bg = palette["background"]
+    surf = palette["surface"]
+    txt = palette["text"]
+    mut = palette["muted"]
+    acc = palette["accent"]
+    sec = palette["secondary"]
+    cool = palette["cool"]
+
+    dark_bg = adjust_brightness(bg, 0.8)
+    darker_bg = adjust_brightness(bg, 0.6)
+    light_bg = adjust_brightness(surf, 1.1)
+
+    r_acc, g_acc, b_acc = hex_to_rgb(acc)
+    r_sec, g_sec, b_sec = hex_to_rgb(sec)
+    border_def = f"rgb({acc.lstrip('#')}) rgb({sec.lstrip('#')}) 45deg"
+
+    return f"""mode = "dark"
+
+background = "{bg}"
+dark_background = "{dark_bg}"
+darker_background = "{darker_bg}"
+lighter_background = "{light_bg}"
+
+foreground = "{txt}"
+dark_foreground = "{mut}"
+light_foreground = "{txt}"
+bright_foreground = "#ffffff"
+
+accent = "{acc}"
+secondary = "{sec}"
+selection = "{surf}"
+muted = "{mut}"
+
+red = "{sec}"
+yellow = "{acc}"
+green = "{cool}"
+cyan = "{cool}"
+blue = "{cool}"
+magenta = "{acc}"
+orange = "{sec}"
+
+hyprland_active_border = "{border_def}"
+"""
+
+
+def apply_timeline(minute: int, sync: bool = True) -> dict[str, str]:
+    """Computes palette and wallpaper, writes state, and triggers desktop sync."""
+    stage_key, stage_label, _ = nearest_stage(minute)
+    palette = palette_for(minute)
+    toml_content = generate_colors_toml(palette)
+
+    home = Path.home()
+    theme_dir = home / "iram-os/themes/alpora-timeline"
+    bg_path = theme_dir / "backgrounds" / f"{stage_key}.png"
+
+    if not bg_path.exists():
+        # Fallback to sunset if stage wallpaper is missing
+        bg_path = theme_dir / "backgrounds/sunset.png"
+
+    theme_dir.mkdir(parents=True, exist_ok=True)
+    (theme_dir / "colors.toml").write_text(toml_content, encoding="utf-8")
+
+    # Update active IRAM state
+    state_dir = home / ".local/state/iram/current"
+    state_dir.mkdir(parents=True, exist_ok=True)
+
+    theme_state_dir = state_dir / "theme"
+    theme_state_dir.mkdir(parents=True, exist_ok=True)
+    (theme_state_dir / "colors.toml").write_text(toml_content, encoding="utf-8")
+    (state_dir / "theme.name").write_text("alpora-timeline\n", encoding="utf-8")
+
+    # Symlink active wallpaper
+    bg_link = state_dir / "background"
+    if bg_link.exists() or bg_link.is_symlink():
+        try:
+            bg_link.unlink()
+        except OSError:
+            pass
+    try:
+        bg_link.symlink_to(bg_path)
+    except OSError:
+        pass
+
+    # Record timeline current metadata
+    h = minute // 60
+    m = minute % 60
+    meta = (
+        f"minute={minute}\n"
+        f"time={h:02d}:{m:02d}\n"
+        f"stage={stage_key}\n"
+        f"stage_label={stage_label}\n"
+        f"wallpaper={bg_path}\n"
+    )
+    (state_dir / "timeline.state").write_text(meta, encoding="utf-8")
+
+    if sync:
+        sync_bin = shutil.which("iram-theme-sync-all") or str(home / "iram-os/bin/iram-theme-sync-all")
+        if os.path.exists(sync_bin) and os.access(sync_bin, os.X_OK):
+            subprocess.run([sync_bin], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    return {
+        "minute": minute,
+        "time": f"{h:02d}:{m:02d}",
+        "stage": stage_key,
+        "label": stage_label,
+        "wallpaper": str(bg_path),
+        "palette": palette,
+    }
+
+
+def ansi_color_box(hex_code: str) -> str:
+    r, g, b = hex_to_rgb(hex_code)
+    return f"\033[48;2;{r};{g};{b}m   \033[0m"
+
+
+def print_status(minute: int, res: dict) -> None:
+    h = minute // 60
+    m = minute % 60
+    stage = res["stage"].capitalize()
+    label = res["label"]
+    p = res["palette"]
+
+    print("╭─────────────────────────────────────────────────────────────╮")
+    print("│            IRAM OS · ALPORA Solar Timeline Engine           │")
+    print("├─────────────────────────────────────────────────────────────┤")
+    print(f"│  Solar Time:   {h:02d}:{m:02d} ({minute:4d} / 1440 min)                      │")
+    print(f"│  Phase:        {stage:<12} ({label})                         │")
+    print(f"│  Wallpaper:    {Path(res['wallpaper']).name:<43} │")
+    print("├─────────────────────────────────────────────────────────────┤")
+    print("│  Active Palette Interpolation:                              │")
+    swatches = "  ".join(f"{ansi_color_box(p[k])} {k[:3]}" for k in ("background", "surface", "accent", "secondary", "cool"))
+    print(f"│  {swatches} │")
+    print("╰─────────────────────────────────────────────────────────────╯")
+
+
+def setup_systemd_timer() -> bool:
+    """Installs and enables systemd user timer for periodic updates."""
+    home = Path.home()
+    systemd_user_dir = home / ".config/systemd/user"
+    systemd_user_dir.mkdir(parents=True, exist_ok=True)
+
+    service_file = systemd_user_dir / "iram-theme-timeline.service"
+    timer_file = systemd_user_dir / "iram-theme-timeline.timer"
+
+    service_content = f"""[Unit]
+Description=IRAM OS ALPORA Solar Timeline Theme Updater
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart={home}/.local/bin/iram-theme-timeline run
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+"""
+
+    timer_content = """[Unit]
+Description=Run IRAM OS ALPORA Solar Timeline every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"""
+
+    service_file.write_text(service_content, encoding="utf-8")
+    timer_file.write_text(timer_content, encoding="utf-8")
+
+    try:
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+        subprocess.run(["systemctl", "--user", "enable", "--now", "iram-theme-timeline.timer"], check=True)
+        return True
+    except subprocess.SubprocessError as e:
+        print(f"Warning: Could not configure systemd user timer: {e}")
+        return False
+
+
+def stop_systemd_timer() -> bool:
+    try:
+        subprocess.run(["systemctl", "--user", "disable", "--now", "iram-theme-timeline.timer"], check=True)
+        return True
+    except subprocess.SubprocessError:
+        return False
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="IRAM OS ALPORA Solar Timeline Engine",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    # run (default)
+    subparsers.add_parser("run", help="Evaluate current time and apply matching solar theme")
+
+    # set
+    set_parser = subparsers.add_parser("set", help="Preview or apply a specific time or stage")
+    set_parser.add_argument("target", help="Time (HH:MM), minute (0-1440), or phase (night, dawn, morning, day, sunset, dusk)")
+
+    # status
+    subparsers.add_parser("status", help="Show current timeline status and color swatches")
+
+    # start / enable
+    subparsers.add_parser("start", help="Enable and start the systemd 15-minute background timer")
+    subparsers.add_parser("enable", help="Alias for start")
+
+    # stop / disable
+    subparsers.add_parser("stop", help="Disable and stop the systemd timer")
+    subparsers.add_parser("disable", help="Alias for stop")
+
+    # daemon
+    daemon_parser = subparsers.add_parser("daemon", help="Run foreground monitoring loop")
+    daemon_parser.add_argument("--interval", type=int, default=900, help="Seconds between updates (default: 900)")
+
+    args = parser.parse_args()
+
+    cmd = args.command or "run"
+
+    if cmd == "run":
+        now = datetime.datetime.now()
+        minute = now.hour * 60 + now.minute
+        res = apply_timeline(minute, sync=True)
+        print(f"✓ ALPORA Timeline: {res['time']} [{res['stage'].capitalize()}] applied cleanly.")
+        return 0
+
+    elif cmd == "set":
+        try:
+            minute = parse_time_argument(args.target)
+        except ValueError as e:
+            sys.exit(f"Error: {e}")
+        res = apply_timeline(minute, sync=True)
+        print_status(minute, res)
+        print(f"✓ ALPORA Timeline manually locked to {res['time']} [{res['stage'].capitalize()}].")
+        return 0
+
+    elif cmd == "status":
+        state_file = Path.home() / ".local/state/iram/current/timeline.state"
+        if state_file.exists():
+            data = dict(line.strip().split("=", 1) for line in state_file.read_text().splitlines() if "=" in line)
+            minute = int(data.get("minute", 0))
+        else:
+            now = datetime.datetime.now()
+            minute = now.hour * 60 + now.minute
+        stage_key, stage_label, _ = nearest_stage(minute)
+        palette = palette_for(minute)
+        res = {
+            "minute": minute,
+            "stage": stage_key,
+            "label": stage_label,
+            "wallpaper": str(Path.home() / f"iram-os/themes/alpora-timeline/backgrounds/{stage_key}.png"),
+            "palette": palette,
+        }
+        print_status(minute, res)
+        return 0
+
+    elif cmd in ("start", "enable"):
+        if setup_systemd_timer():
+            print("✓ Systemd user timer enabled: updates every 15 minutes.")
+        else:
+            print("Failed to enable systemd timer.")
+        return 0
+
+    elif cmd in ("stop", "disable"):
+        if stop_systemd_timer():
+            print("✓ Systemd user timer stopped and disabled.")
+        else:
+            print("Failed to stop systemd timer.")
+        return 0
+
+    elif cmd == "daemon":
+        import time
+        interval = args.interval
+        print(f"Starting ALPORA Solar Timeline daemon (polling every {interval}s)... Press Ctrl+C to exit.")
+        try:
+            while True:
+                now = datetime.datetime.now()
+                minute = now.hour * 60 + now.minute
+                res = apply_timeline(minute, sync=True)
+                print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Applied {res['time']} ({res['stage']})")
+                time.sleep(interval)
+        except KeyboardInterrupt:
+            print("\nTimeline daemon stopped.")
+            return 0
+
+
+if __name__ == "__main__":
+    main()

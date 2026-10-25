@@ -384,174 +384,208 @@ class ThemeSwitcherApp(Gtk.Window):
         self.connect("destroy", self.on_window_close)
 
     def apply_custom_css(self):
+        colors = {
+            "bg": "#0e1017",
+            "surface": "#161824",
+            "surface_elevated": "#1e2235",
+            "accent": "#00f0ff",
+            "secondary": "#7000ff",
+            "success": "#05ffa1",
+            "fg": "#f0f4fc",
+            "muted": "#8f98ba",
+            "border": "#28314e"
+        }
+        toml_path = os.path.expanduser("~/.local/state/iram/current/theme/colors.toml")
+        if os.path.exists(toml_path):
+            try:
+                with open(toml_path, "r", encoding="utf-8") as f:
+                    raw = {}
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            raw[k.strip()] = v.strip().strip('"').strip("'")
+                if raw.get("background"): colors["bg"] = raw["background"]
+                if raw.get("darker_background"): colors["bg"] = raw["darker_background"]
+                if raw.get("dark_background"): colors["surface"] = raw["dark_background"]
+                if raw.get("lighter_background"): colors["surface_elevated"] = raw["lighter_background"]
+                if raw.get("accent"): colors["accent"] = raw["accent"]
+                if raw.get("secondary"): colors["secondary"] = raw["secondary"]
+                if raw.get("green"): colors["success"] = raw["green"]
+                if raw.get("bright_foreground"): colors["fg"] = raw["bright_foreground"]
+                if raw.get("muted"): colors["muted"] = raw["muted"]
+                if raw.get("selection"): colors["border"] = raw["selection"]
+            except Exception:
+                pass
+
         css_provider = Gtk.CssProvider()
-        css_data = """
-        window, window.background, .main-bg {
-            background-color: rgba(14, 16, 23, 0.98);
-            color: #cdd6f4;
-            font-family: "JetBrainsMono Nerd Font", "Inter", sans-serif;
-        }
-        .header-title {
-            font-size: 21px;
+        css_data = f"""
+        window, window.background, .main-bg {{
+            background-color: {colors["bg"]};
+            color: {colors["fg"]};
+            font-family: "Google Sans", "Inter", sans-serif;
+        }}
+        .header-title {{
+            font-size: 22px;
             font-weight: 800;
-            color: #00f0ff;
+            color: {colors["accent"]};
             letter-spacing: -0.5px;
-        }
-        .header-subtitle {
+        }}
+        .header-subtitle {{
             font-size: 13px;
-            color: #9aa2c2;
-        }
-        search-entry, entry {
-            background-color: #1a1e2d;
+            color: {colors["muted"]};
+        }}
+        search-entry, entry {{
+            background-color: {colors["surface"]};
             color: #ffffff;
-            border: 1px solid #2e354d;
-            border-radius: 0px;
+            border: 1px solid {colors["border"]};
+            border-radius: 10px;
             padding: 8px 14px;
-            font-size: 14px;
-        }
-        entry:focus {
-            border-color: #00f0ff;
+            font-size: 13px;
+        }}
+        entry:focus {{
+            border-color: {colors["accent"]};
             box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
-        }
-        .cat-btn {
-            background-color: #1a1e2d;
-            color: #8f98ba;
-            border: 1px solid #282f45;
-            border-radius: 0px;
+        }}
+        .cat-btn {{
+            background-color: {colors["surface"]};
+            color: {colors["muted"]};
+            border: 1px solid {colors["border"]};
+            border-radius: 8px;
             padding: 6px 16px;
             font-size: 12px;
             font-weight: 700;
             transition: all 150ms ease;
-        }
-        .cat-btn:hover {
-            background-color: #272f48;
+        }}
+        .cat-btn:hover {{
+            background-color: {colors["surface_elevated"]};
             color: #ffffff;
-            border-color: #00f0ff;
-        }
-        .cat-btn-active {
-            background-color: #00f0ff;
+            border-color: {colors["accent"]};
+        }}
+        .cat-btn-active {{
+            background-color: {colors["accent"]};
             color: #08090f;
-            border-color: #00f0ff;
+            border-color: {colors["accent"]};
             font-weight: 800;
-        }
-        .action-tool-btn {
-            background-color: #1a1e2d;
-            color: #cdd6f4;
-            border: 1px solid #2e354d;
-            border-radius: 0px;
+        }}
+        .action-tool-btn {{
+            background-color: {colors["surface"]};
+            color: {colors["fg"]};
+            border: 1px solid {colors["border"]};
+            border-radius: 8px;
             padding: 6px 14px;
             font-size: 12px;
             font-weight: 600;
-        }
-        .action-tool-btn:hover {
-            background-color: #2a324d;
-            color: #00f0ff;
-            border-color: #00f0ff;
-        }
-        .toggle-btn-active {
-            background-color: #05ffa1;
+        }}
+        .action-tool-btn:hover {{
+            background-color: {colors["surface_elevated"]};
+            color: {colors["accent"]};
+            border-color: {colors["accent"]};
+        }}
+        .toggle-btn-active {{
+            background-color: {colors["success"]};
             color: #06150e;
             font-weight: 800;
-            border-color: #05ffa1;
-        }
-        flowbox {
+            border-color: {colors["success"]};
+        }}
+        flowbox {{
             background-color: transparent;
-        }
-        flowboxchild {
+        }}
+        flowboxchild {{
             padding: 8px;
             background-color: transparent;
-        }
-        .theme-card {
-            background-color: #161824;
-            border: 2px solid #24293d;
-            border-radius: 0px;
-            padding: 8px;
+        }}
+        .theme-card {{
+            background-color: {colors["surface"]};
+            border: 1px solid {colors["border"]};
+            border-radius: 12px;
+            padding: 10px;
             transition: all 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-        .theme-card:hover {
-            border-color: #00f0ff;
-            background-color: #1e2235;
-            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.15);
-        }
-        .active-card {
-            border-color: #05ffa1;
-            background-color: #12211c;
-            box-shadow: 0 0 16px rgba(5, 255, 161, 0.2);
-        }
-        .theme-title {
+        }}
+        .theme-card:hover {{
+            border-color: {colors["accent"]};
+            background-color: {colors["surface_elevated"]};
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }}
+        .active-card {{
+            border-color: {colors["success"]};
+            background-color: {colors["surface_elevated"]};
+            box-shadow: 0 0 16px rgba(5, 255, 161, 0.25);
+        }}
+        .theme-title {{
             font-size: 14px;
             font-weight: 700;
             color: #ffffff;
-        }
-        .modern-badge {
+        }}
+        .modern-badge {{
             background-color: rgba(0, 240, 255, 0.18);
             color: #00f0ff;
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 0px;
-        }
-        .cyber-badge {
+            border-radius: 6px;
+        }}
+        .cyber-badge {{
             background-color: rgba(255, 0, 128, 0.2);
             color: #ff3399;
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 0px;
-        }
-        .light-badge {
+            border-radius: 6px;
+        }}
+        .light-badge {{
             background-color: rgba(255, 193, 7, 0.2);
             color: #ffd13b;
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 0px;
-        }
-        .generic-badge {
+            border-radius: 6px;
+        }}
+        .generic-badge {{
             background-color: rgba(140, 150, 180, 0.18);
             color: #9aa2c2;
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
-            border-radius: 0px;
-        }
-        .active-badge {
-            background-color: #05ffa1;
+            border-radius: 6px;
+        }}
+        .active-badge {{
+            background-color: {colors["success"]};
             color: #05140d;
             font-size: 10px;
             font-weight: 800;
             padding: 2px 8px;
-            border-radius: 0px;
-        }
-        .wp-badge {
+            border-radius: 6px;
+        }}
+        .wp-badge {{
             font-size: 11px;
-            color: #7983a5;
-        }
-        button.suggested-action {
-            background-color: #00f0ff;
+            color: {colors["muted"]};
+        }}
+        button.suggested-action {{
+            background-color: {colors["accent"]};
             color: #06080e;
             font-weight: 800;
-            border-radius: 0px;
+            border-radius: 8px;
             padding: 10px 24px;
-            font-size: 14px;
+            font-size: 13px;
             border: none;
-        }
-        button.suggested-action:hover {
-            background-color: #38f4ff;
-            box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
-        }
-        button.cancel-btn {
-            background-color: #1a1e2d;
-            color: #cdd6f4;
-            border: 1px solid #2e354d;
-            border-radius: 0px;
-            padding: 10px 20px;
-            font-size: 14px;
-        }
-        button.cancel-btn:hover {
-            background-color: #283049;
+        }}
+        button.suggested-action:hover {{
+            background-color: {colors["secondary"]};
             color: #ffffff;
-        }
+        }}
+        button.cancel-btn {{
+            background-color: {colors["surface"]};
+            color: {colors["fg"]};
+            border: 1px solid {colors["border"]};
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 13px;
+        }}
+        button.cancel-btn:hover {{
+            background-color: {colors["surface_elevated"]};
+            color: #ffffff;
+        }}
         """
         css_provider.load_from_data(css_data.encode('utf-8'))
         Gtk.StyleContext.add_provider_for_screen(

@@ -4,76 +4,243 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IRAM OS 3D Motion Graphics & Intro Studio</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
-        body {
-            background:#07090e;
-            color:#cdd6f4;
-            font-family:"JetBrains Mono", monospace;
-            overflow:hidden;
-            width:100vw;
-            height:100vh;
-        }
-        #canvas-container { width:100%; height:100%; position:absolute; top:0; left:0; }
-        .glass-panel {
-            background:rgba(14, 17, 27, 0.85);
-            backdrop-filter:blur(14px);
-            border:1px solid rgba(0, 240, 255, 0.25);
-            border-radius:10px;
-            box-shadow:0 10px 40px rgba(0,0,0,0.6);
-            pointer-events:auto;
-        }
-        .hud-top {
-            position:absolute; top:16px; left:16px; right:16px;
-            display:flex; justify-content:space-between; align-items:center;
-            padding:12px 20px; z-index:10;
-        }
-        .hud-left {
-            position:absolute; top:86px; left:16px; width:330px;
-            padding:18px; z-index:10;
-        }
-        .hud-bottom {
-            position:absolute; bottom:16px; left:16px; right:16px;
-            display:flex; justify-content:space-between; align-items:center;
-            padding:12px 20px; z-index:10;
-        }
-        .form-row { margin-bottom:12px; }
-        label { display:block; font-size:10px; color:#7982a9; text-transform:uppercase; margin-bottom:4px; font-weight:700; }
-        input, select {
-            width:100%; background:#1b2032; border:1px solid #28314e;
-            color:#ffffff; padding:8px 12px; border-radius:6px; font-family:inherit; font-size:12px;
-        }
-        button {
-            background:#181d2e; color:#cdd6f4; border:1px solid #28314e;
-            border-radius:6px; padding:8px 16px; font-size:12px; font-weight:700;
-            cursor:pointer; transition:all 0.2s ease;
-        }
-        button:hover { background:#252d47; border-color:#00f0ff; color:#ffffff; }
-        button.record {
-            background:linear-gradient(135deg, #ff0055, #ff5500);
-            color:#ffffff; border:none; box-shadow:0 4px 18px rgba(255, 0, 85, 0.4);
-        }
-        button.record.active { animation: pulse 1s infinite; }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
-    </style>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js + OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #07090e;
+            --bg-surface: rgba(16, 20, 32, 0.78);
+            --bg-surface-elevated: rgba(24, 30, 48, 0.88);
+            --bg-input: rgba(20, 26, 42, 0.85);
+            --accent-primary: #00f0ff;
+            --accent-secondary: #ff0055;
+            --accent-success: #05ffa1;
+            --text-main: #f0f4fc;
+            --text-muted: #8b95b5;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 240, 255, 0.28);
+            --card-radius: 14px;
+            --glow-shadow: 0 16px 44px rgba(0, 0, 0, 0.7);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glow);
+            border-radius: var(--card-radius);
+            box-shadow: var(--glow-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            pointer-events: auto;
+            position: relative;
+            z-index: 10;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* Top HUD Bar */
+        .hud-top {
+            position: absolute;
+            top: 14px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 22px;
+        }
+        .hud-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .hud-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #ffffff;
+            box-shadow: 0 0 16px var(--border-glow);
+        }
+        .hud-title {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -0.2px;
+            color: var(--text-main);
+        }
+        .hud-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(5, 255, 161, 0.12);
+            border: 1px solid rgba(5, 255, 161, 0.35);
+            padding: 6px 14px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent-success);
+            font-family: 'JetBrains Mono', monospace;
+            transition: color 0.3s ease, border-color 0.3s ease;
+        }
+
+        /* Left Floating Director Controls */
+        .hud-left {
+            position: absolute;
+            top: 82px;
+            left: 16px;
+            width: 340px;
+            padding: 18px;
+        }
+        .form-row {
+            margin-bottom: 14px;
+        }
+        label {
+            display: block;
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.5px;
+        }
+        input, select {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input:focus, select:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 12px var(--border-glow);
+        }
+
+        button {
+            background: var(--bg-surface-elevated);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 9px 16px;
+            font-size: 12px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        button:focus-visible {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: 2px;
+        }
+        button.record {
+            background: linear-gradient(135deg, #ff0055, #ff5500);
+            color: #ffffff;
+            border: none;
+            font-weight: 800;
+            box-shadow: 0 4px 20px rgba(255, 0, 85, 0.4);
+            min-height: 42px;
+        }
+        button.record:hover {
+            box-shadow: 0 6px 26px rgba(255, 0, 85, 0.6);
+        }
+        button.record.active {
+            animation: pulse-record 1.2s infinite ease-in-out;
+            background: #ff0055;
+        }
+        @keyframes pulse-record {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.75; transform: scale(0.98); }
+        }
+
+        /* Bottom HUD */
+        .hud-bottom {
+            position: absolute;
+            bottom: 14px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+        }
+    </style>
 </head>
 <body>
     <div id="canvas-container"></div>
 
+    <!-- Top HUD Bar -->
     <div class="hud-top glass-panel">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:20px;">🎬</span>
+        <div class="hud-brand">
+            <div class="hud-logo">🎬</div>
             <div>
-                <strong style="color:#ffffff;">IRAM 3D Motion Graphics & Film Intro Studio</strong>
-                <div style="font-size:11px; color:#7982a9;">Cinematic WebGL Title Sequences for iram-video & Shorts</div>
+                <div class="hud-title">IRAM 3D Motion Graphics & Film Studio</div>
+                <div class="hud-subtitle">Cinematic WebGL Title Sequences for iram-video & Shorts</div>
             </div>
         </div>
-        <div id="record-status" style="font-size:11px; color:#05ffa1; font-weight:700;">● READY TO RENDER</div>
+        <div class="status-pill" id="record-status-pill">
+            <span style="display:inline-block;width:7px;height:7px;background:var(--accent-success);border-radius:50%;box-shadow:0 0 8px var(--accent-success);"></span>
+            <span id="record-status">READY TO RENDER</span>
+        </div>
     </div>
 
-    <!-- Left Controls -->
+    <!-- Left Director Controls -->
     <div class="hud-left glass-panel">
         <div class="form-row">
             <label>Title Headline</label>
@@ -99,6 +266,7 @@
                 <option value="crimson">Crimson Neon (#ff0055)</option>
                 <option value="gold">Cinema Gold (#ffb800)</option>
                 <option value="emerald">Matrix Emerald (#05ffa1)</option>
+                <option value="purple">Cosmic Purple (#b800ff)</option>
             </select>
         </div>
         <div class="form-row">
@@ -108,18 +276,18 @@
                 <option value="9:16">9:16 Vertical (Shorts / Reels)</option>
             </select>
         </div>
-        <button class="record" id="btn-record" style="width:100%; margin-top:8px;">
+        <button class="record" id="btn-record" style="width:100%; margin-top:6px;">
             ⏺ Record 3D Video Clip (5s WebM/MP4)
         </button>
     </div>
 
     <!-- Bottom HUD -->
     <div class="hud-bottom glass-panel">
-        <div style="font-size:11px; color:#7982a9;">
-            Integration: Connects directly with <strong style="color:#00f0ff;">iram-video --recipe</strong> & FFMPEG
+        <div style="font-size:11px; color:var(--text-muted); font-family:'JetBrains Mono', monospace;">
+            Integration: Connects directly with <strong style="color:var(--accent-primary);">iram-video --recipe</strong> & FFMPEG
         </div>
-        <div style="font-size:11px; color:#cdd6f4;">
-            Output: <span id="stat-res" style="color:#05ffa1; font-weight:700;">1920x1080 @ 60 FPS</span>
+        <div style="font-size:11px; color:var(--text-main); font-family:'JetBrains Mono', monospace;">
+            Output: <span id="stat-res" style="color:var(--accent-success); font-weight:700;">1920x1080 @ 60 FPS</span>
         </div>
     </div>
 
@@ -142,12 +310,12 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
             container.appendChild(renderer.domElement);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
-            // Lights
             scene.add(new THREE.AmbientLight(0xffffff, 0.5));
             pointLight1 = new THREE.PointLight(0x00f0ff, 3, 60);
             pointLight1.position.set(10, 15, 10);
@@ -157,7 +325,6 @@
             pointLight2.position.set(-10, -10, 10);
             scene.add(pointLight2);
 
-            // 3D Grid & Particle field
             gridFloor = new THREE.GridHelper(80, 40, 0x00f0ff, 0x1f263d);
             gridFloor.position.y = -6;
             scene.add(gridFloor);
@@ -169,8 +336,10 @@
             document.getElementById('input-title').oninput = updateTitle;
             document.getElementById('input-subhead').oninput = updateTitle;
             document.getElementById('select-color').onchange = updateColor;
+            document.getElementById('select-aspect').onchange = updateAspect;
             document.getElementById('btn-record').onclick = toggleRecord;
 
+            syncTheme();
             animate();
         }
 
@@ -189,7 +358,6 @@
         function buildTitle3D() {
             titleGroup = new THREE.Group();
 
-            // Central Monolith Plate
             const plateGeom = new THREE.BoxGeometry(16, 5.5, 0.6);
             const plateMat = new THREE.MeshStandardMaterial({
                 color: 0x0d111d,
@@ -201,7 +369,6 @@
             const plate = new THREE.Mesh(plateGeom, plateMat);
             titleGroup.add(plate);
 
-            // Kinetic Accents
             const ringGeom = new THREE.TorusGeometry(5, 0.15, 16, 64);
             const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
             const ring = new THREE.Mesh(ringGeom, ringMat);
@@ -213,9 +380,7 @@
         }
 
         function updateTitle() {
-            // Title reactive changes
             const text = document.getElementById('input-title').value;
-            // dynamically shifts scale
             titleGroup.scale.set(1 + text.length * 0.02, 1, 1);
         }
 
@@ -225,7 +390,8 @@
                 cyan: 0x00f0ff,
                 crimson: 0xff0055,
                 gold: 0xffb800,
-                emerald: 0x05ffa1
+                emerald: 0x05ffa1,
+                purple: 0xb800ff
             };
             const hex = colors[val] || 0x00f0ff;
             pointLight1.color.setHex(hex);
@@ -233,15 +399,28 @@
             particlesMesh.material.color.setHex(hex);
         }
 
+        function updateAspect(e) {
+            const aspect = e.target.value;
+            const resEl = document.getElementById('stat-res');
+            if (aspect === '9:16') {
+                resEl.textContent = '1080x1920 (Vertical Shorts) @ 60 FPS';
+            } else {
+                resEl.textContent = '1920x1080 (16:9 Cinema) @ 60 FPS';
+            }
+        }
+
         function toggleRecord() {
             if (isRecording) return;
             isRecording = true;
             const btn = document.getElementById('btn-record');
             const status = document.getElementById('record-status');
+            const statusPill = document.getElementById('record-status-pill');
+
             btn.classList.add('active');
             btn.textContent = 'Recording 3D Motion (5s)...';
-            status.textContent = '● RECORDING STREAM...';
-            status.style.color = '#ff0055';
+            status.textContent = 'RECORDING STREAM...';
+            statusPill.style.color = '#ff0055';
+            statusPill.style.borderColor = 'rgba(255, 0, 85, 0.4)';
 
             const stream = renderer.domElement.captureStream(60);
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
@@ -257,13 +436,36 @@
                 a.click();
                 btn.classList.remove('active');
                 btn.textContent = '⏺ Record 3D Video Clip (5s WebM/MP4)';
-                status.textContent = '● RENDER SAVED TO DOWNLOADS';
-                status.style.color = '#05ffa1';
+                status.textContent = 'RENDER SAVED TO DOWNLOADS';
+                statusPill.style.color = 'var(--accent-success)';
+                statusPill.style.borderColor = 'rgba(5, 255, 161, 0.35)';
                 isRecording = false;
             };
 
             mediaRecorder.start();
             setTimeout(() => mediaRecorder.stop(), 5000);
+        }
+
+        function syncTheme() {
+            fetch('http://127.0.0.1:8990/api/theme')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok && data.colors) {
+                        const c = data.colors;
+                        const root = document.documentElement;
+                        const bgMain = c.darker_background || c.background || '#07090e';
+                        const accent = c.accent || '#00f0ff';
+                        const success = c.green || '#05ffa1';
+
+                        root.style.setProperty('--bg-main', bgMain);
+                        root.style.setProperty('--accent-primary', accent);
+                        root.style.setProperty('--accent-success', success);
+                        root.style.setProperty('--border-glow', `${accent}44`);
+
+                        scene.fog.color.set(bgMain);
+                    }
+                })
+                .catch(() => {});
         }
 
         function onResize() {
