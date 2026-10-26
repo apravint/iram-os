@@ -1,85 +1,181 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# IRAM OS AI Agent Usage & Quota Collector (Inspired by Omarchy)
-# Collects rate limits, 5-hour session reset times, and token metrics across agents
+# IRAM OS AI Agent Usage & Quota Collector (Engineered for IRAM OS)
+# Collects live metrics, conversation states, and token telemetry across agents
 # Outputs structured JSON to ~/.local/state/iram/agents/usage/<agent>.json
 # ==============================================================================
 import json
 import os
 import sys
 import time
+import sqlite3
+import urllib.request
 from pathlib import Path
+from datetime import datetime, timezone
 
 USAGE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "iram/agents/usage"
 USAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 def collect_agy_usage():
-    # Antigravity CLI usage collector
+    """Live telemetry from Google Antigravity CLI."""
+    gemini_dir = Path.home() / ".gemini/antigravity-cli"
+    db_path = gemini_dir / "conversation_summaries.db"
+    settings_path = gemini_dir / "settings.json"
+    history_path = gemini_dir / "history.jsonl"
+
+    model_name = "Gemini 3.8 Flash (High)"
+    if settings_path.exists():
+        try:
+            with open(settings_path) as f:
+                cfg = json.load(f)
+                model_name = cfg.get("model", model_name)
+        except Exception:
+            pass
+
+    conv_count = 0
+    total_steps = 0
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("SELECT count(*), sum(step_count) FROM conversation_summaries")
+            row = c.fetchone()
+            conv_count = row[0] or 0
+            total_steps = row[1] or 0
+            conn.close()
+        except Exception:
+            pass
+
+    commands_executed = 0
+    if history_path.exists():
+        try:
+            with open(history_path, "r", encoding="utf-8", errors="ignore") as f:
+                commands_executed = sum(1 for _ in f)
+        except Exception:
+            pass
+
     record = {
         "agent": "agy",
         "name": "Google Antigravity",
         "updated_at": int(time.time()),
         "status": "online",
         "plan": "Pro / Infinite Workspace",
+        "active_model": model_name,
+        "metrics": {
+            "conversations": conv_count,
+            "total_steps": total_steps,
+            "history_entries": commands_executed
+        },
         "limits": [
-            {"type": "session_tokens", "used": 42000, "limit": 200000, "percent": 21.0, "resets_in": "3h 42m"},
-            {"type": "weekly_compute", "used": 15, "limit": 100, "percent": 15.0, "resets_in": "4d 12h"}
-        ],
-        "active_model": "gemini-2.5-pro"
+            {
+                "type": "workspace_steps",
+                "used": total_steps,
+                "limit": 100000,
+                "percent": round(min(100.0, (total_steps / 100000.0) * 100), 1),
+                "resets_in": "Rolling"
+            },
+            {
+                "type": "active_conversations",
+                "used": conv_count,
+                "limit": 50,
+                "percent": round(min(100.0, (conv_count / 50.0) * 100), 1),
+                "resets_in": "Managed"
+            }
+        ]
     }
     with open(USAGE_DIR / "agy.json", "w") as f:
         json.dump(record, f, indent=2)
     return record
 
+def collect_ollama_usage():
+    """Live telemetry from local Ollama runtime."""
+    ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+    models = []
+    status = "offline"
+    try:
+        req = urllib.request.Request(f"{ollama_url}/api/tags")
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode())
+            for m in data.get("models", []):
+                size_gb = round(m.get("size", 0) / (1024**3), 2)
+                models.append({"name": m.get("name"), "size_gb": size_gb})
+            status = "online"
+    except Exception:
+        status = "offline"
+
+    record = {
+        "agent": "ollama",
+        "name": "Local Ollama Runtime",
+        "updated_at": int(time.time()),
+        "status": status,
+        "endpoint": ollama_url,
+        "models_installed": [m["name"] for m in models],
+        "models_detail": models,
+        "active_model": models[0]["name"] if models else "None",
+        "limits": [
+            {
+                "type": "local_inference",
+                "used": len(models),
+                "limit": 20,
+                "percent": round((len(models) / 20.0) * 100, 1),
+                "resets_in": "Local (Uncapped)"
+            }
+        ]
+    }
+    with open(USAGE_DIR / "ollama.json", "w") as f:
+        json.dump(record, f, indent=2)
+    return record
+
 def collect_claude_usage():
-    # Claude Code usage collector
+    """Telemetry from Claude Code CLI."""
+    claude_bin = Path.home() / ".local/bin/claude"
     claude_dir = Path.home() / ".claude"
-    has_claude = claude_dir.exists()
+    is_installed = claude_bin.exists() or Path("/usr/local/bin/claude").exists()
+    
+    sessions_count = 0
+    if (claude_dir / "sessions").exists():
+        try:
+            sessions_count = len(list((claude_dir / "sessions").glob("*")))
+        except Exception:
+            pass
+
     record = {
         "agent": "claude",
         "name": "Claude Code",
         "updated_at": int(time.time()),
-        "status": "online" if has_claude else "standby",
-        "plan": "Claude Pro / Team",
+        "status": "ready" if is_installed else "standby",
+        "plan": "Claude CLI Tier",
+        "active_model": "claude-3-7-sonnet",
+        "metrics": {
+            "installed": is_installed,
+            "sessions": sessions_count
+        },
         "limits": [
-            {"type": "session_5h", "used": 12, "limit": 100, "percent": 12.0, "resets_in": "4h 15m"},
-            {"type": "weekly_sonnet", "used": 34, "limit": 100, "percent": 34.0, "resets_in": "3d 08h"}
-        ],
-        "active_model": "claude-3-7-sonnet"
+            {
+                "type": "session_allowance",
+                "used": sessions_count,
+                "limit": 50,
+                "percent": round(min(100.0, (sessions_count / 50.0) * 100), 1),
+                "resets_in": "5h rolling"
+            }
+        ]
     }
     with open(USAGE_DIR / "claude.json", "w") as f:
         json.dump(record, f, indent=2)
     return record
 
-def collect_codex_usage():
-    record = {
-        "agent": "codex",
-        "name": "OpenAI Codex",
-        "updated_at": int(time.time()),
-        "status": "online",
-        "plan": "OpenAI Tier 4",
-        "limits": [
-            {"type": "requests_per_min", "used": 5, "limit": 100, "percent": 5.0, "resets_in": "55s"},
-            {"type": "tokens_per_min", "used": 12000, "limit": 2000000, "percent": 0.6, "resets_in": "55s"}
-        ],
-        "active_model": "gpt-4o"
-    }
-    with open(USAGE_DIR / "codex.json", "w") as f:
-        json.dump(record, f, indent=2)
-    return record
-
 def main():
     agy = collect_agy_usage()
+    ollama = collect_ollama_usage()
     claude = collect_claude_usage()
-    codex = collect_codex_usage()
 
     if "--json" in sys.argv:
-        print(json.dumps({"agy": agy, "claude": claude, "codex": codex}, indent=2))
+        print(json.dumps({"agy": agy, "ollama": ollama, "claude": claude}, indent=2))
     else:
-        print(f"✓ AI agent usage metrics updated in: {USAGE_DIR}")
-        for r in [agy, claude, codex]:
-            p = r["limits"][0]["percent"]
-            print(f"  ● {r['name']}: {p}% used | Plan: {r['plan']}")
+        print(f"✓ IRAM OS AI Agent Telemetry synchronized in: {USAGE_DIR}")
+        print(f"  ● {agy['name']}: {agy['active_model']} ({agy['metrics']['total_steps']} steps, {agy['metrics']['conversations']} sessions)")
+        print(f"  ● {ollama['name']} ({ollama['status']}): {len(ollama['models_installed'])} models available ({', '.join(ollama['models_installed'][:3])})")
+        print(f"  ● {claude['name']}: {'Ready' if claude['status'] == 'ready' else 'Standby'}")
 
 if __name__ == "__main__":
     main()

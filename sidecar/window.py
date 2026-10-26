@@ -35,16 +35,25 @@ class SidecarWindow(Gtk.Window):
         self.set_default_size(960, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
 
-        # WebKit Settings
+        # Force GTK to Dark Theme
+        gtk_settings = Gtk.Settings.get_default()
+        if gtk_settings:
+            gtk_settings.set_property("gtk-application-prefer-dark-theme", True)
+
+        # WebKit Settings & Cache Policy
+        context = WebKit2.WebContext.get_default()
+        context.set_cache_model(WebKit2.CacheModel.DOCUMENT_VIEWER)
+
         settings = WebKit2.Settings()
         settings.set_enable_webgl(True)
         settings.set_enable_smooth_scrolling(True)
         settings.set_enable_javascript(True)
-        settings.set_enable_page_cache(True)
+        settings.set_enable_page_cache(False)
         settings.set_javascript_can_access_clipboard(True)
         settings.set_enable_webaudio(True)
 
-        self.webview = WebKit2.WebView.new_with_settings(settings)
+        self.webview = WebKit2.WebView.new_with_context(context)
+        self.webview.set_settings(settings)
         self.webview.load_uri(URL)
 
         # Keyboard shortcut: Escape to close
