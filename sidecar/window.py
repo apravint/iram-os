@@ -23,15 +23,15 @@ except Exception as e:
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
-GLib.set_prgname("IramGeminiSidecar")
-GLib.set_application_name("IRAM OS Gemini Sidecar")
+GLib.set_prgname("IramNexus")
+GLib.set_application_name("IRAM OS Nexus")
 
 PORT = int(os.environ.get("IRAM_SIDECAR_PORT", "8765"))
 URL = f"http://127.0.0.1:{PORT}"
 
 class SidecarWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="IRAM OS Gemini Sidecar")
+        super().__init__(title="IRAM OS Nexus")
         self.set_default_size(960, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
 

@@ -70,7 +70,7 @@
         "return-type": "json",
         "interval": 5,
         "exec": "~/.local/bin/iram-waybar-agent",
-        "on-click": "~/.local/bin/iram-sidecar",
+        "on-click": "~/.local/bin/iram-nexus",
         "on-click-right": "~/.local/bin/iram-models",
         "on-click-middle": "~/.local/bin/iram-health-agent"
     },

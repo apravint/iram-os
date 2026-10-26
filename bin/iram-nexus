@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Nexus Desktop Copilot Launcher
+# Sovereign intelligent command center connecting natural language, system tools,
+# desktop control, Ollama local models, and Google Gemini.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+SIDECAR_DIR="$REPO_DIR/sidecar"
+if [ ! -d "$SIDECAR_DIR" ]; then
+    SIDECAR_DIR="$HOME/iram-os/sidecar"
+fi
+
+# Sandboxed Flatpak or Native Profile
+PROFILE_DIR="$HOME/.config/iram/nexus-profile"
+if command -v flatpak >/dev/null 2>&1 && flatpak info com.google.Chrome >/dev/null 2>&1; then
+    PROFILE_DIR="$HOME/.var/app/com.google.Chrome/nexus-profile"
+fi
+mkdir -p "$PROFILE_DIR"
+
+PORT=8765
+
+# 1. Ensure the Nexus server daemon is running (Systemd or Background process)
+if ! curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+    if systemctl --user is-active --quiet iram-nexus.service 2>/dev/null; then
+        systemctl --user restart iram-nexus.service
+    elif systemctl --user is-active --quiet iram-sidecar.service 2>/dev/null; then
+        systemctl --user restart iram-sidecar.service
+    else
+        systemctl --user start iram-nexus.service 2>/dev/null || \
+        systemctl --user start iram-sidecar.service 2>/dev/null || \
+        nohup python3 "$SIDECAR_DIR/server.py" > /tmp/iram-nexus-server.log 2>&1 &
+    fi
+    for i in {1..25}; do
+        if curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.15
+    done
+fi
+
+# 2. Toggle or focus existing window if already open
+if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    TARGET_ADDR=$(hyprctl clients -j 2>/dev/null | jq -r '
+        .[] | select((.title | test("IRAM OS Nexus|IRAM OS Gemini Sidecar"; "i")) or (.class | test("IramNexus|IramGeminiSidecar"; "i"))) | .address' | head -n 1)
+
+    if [ -n "$TARGET_ADDR" ] && [ "$TARGET_ADDR" != "null" ]; then
+        ACTIVE_ADDR=$(hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty')
+        if [ "$ACTIVE_ADDR" = "$TARGET_ADDR" ]; then
+            # Already active: toggle close/hide
+            hyprctl dispatch closewindow "address:$TARGET_ADDR" >/dev/null 2>&1
+        else
+            # In background: bring to front and focus
+            hyprctl dispatch focuswindow "address:$TARGET_ADDR" >/dev/null 2>&1
+        fi
+        exit 0
+    fi
+fi
+
+# 3. Native WebKitGTK Wayland window runner (zero sandbox issues, instant Wayland floating window)
+if [ -f "$SIDECAR_DIR/window.py" ] && python3 -c "import gi; gi.require_version('WebKit2', '4.1'); from gi.repository import WebKit2" >/dev/null 2>&1; then
+    nohup python3 "$SIDECAR_DIR/window.py" >/dev/null 2>&1 &
+    disown
+    exit 0
+fi
+
+# 4. Detect browser fallback
+BROWSER=""
+for candidate in google-chrome brave-browser chromium; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        BROWSER="$candidate"
+        break
+    fi
+done
+
+if [ -n "$BROWSER" ]; then
+    nohup "$BROWSER" \
+        --app="http://127.0.0.1:$PORT" \
+        --class="IramNexus" \
+        --user-data-dir="$PROFILE_DIR" \
+        --window-size=960,720 \
+        --no-first-run \
+        --no-default-browser-check \
+        --disable-fre \
+        --disable-sync \
+        --disable-features=Translate \
+        "$@" >/dev/null 2>&1 &
+    disown
+    exit 0
+else
+    # Terminal Fallback
+    exec "$HOME/.local/bin/iram-agent-interactive"
+fi

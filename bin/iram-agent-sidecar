@@ -1,35 +1,4 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# IRAM OS - Gemini-Grade Sidecar Window (Super + Shift + A / Waybar Click)
-# Launches the Google Gemini graphical sidecar app with local tool execution
-# ==============================================================================
-set -euo pipefail
-
-export PATH="$HOME/.local/bin:$HOME/iram-os/bin:$PATH"
-
+# Compatibility wrapper for iram-agent-nexus
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GEMINI_SIDECAR="$HOME/.local/bin/iram-sidecar"
-if [ ! -x "$GEMINI_SIDECAR" ]; then
-    GEMINI_SIDECAR="$SCRIPT_DIR/iram-sidecar"
-fi
-
-# Always prioritize the Gemini WebApp Sidecar
-if [ -x "$GEMINI_SIDECAR" ]; then
-    exec "$GEMINI_SIDECAR" "$@"
-fi
-
-# Fallback only if Gemini sidecar is missing
-INTERACTIVE_BIN="$HOME/.local/bin/iram-agent-interactive"
-if [ ! -f "$INTERACTIVE_BIN" ]; then
-    INTERACTIVE_BIN="$SCRIPT_DIR/iram-agent-interactive"
-fi
-
-if command -v alacritty >/dev/null 2>&1; then
-    alacritty --title "Iram Agent Sidecar" \
-              --class "IramSidecar" \
-              --option "window.dimensions.columns=95" \
-              --option "window.dimensions.lines=32" \
-              -e "$INTERACTIVE_BIN"
-else
-    "$INTERACTIVE_BIN"
-fi
+exec "$SCRIPT_DIR/iram-agent-nexus" "$@"

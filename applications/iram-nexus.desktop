@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🌌 IRAM Nexus
+Comment=Sovereign AI Desktop Copilot & System Command Center (Super + Shift + A)
+Exec=/home/apravint/.local/bin/iram-nexus
+Icon=iram-nexus
+Terminal=false
+Categories=Utility;ArtificialIntelligence;System;
+StartupNotify=true
+StartupWMClass=IramNexus

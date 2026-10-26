@@ -71,6 +71,30 @@ def get_last_trace():
             pass
     return None
 
+def get_agent_usage_summary():
+    usage_dir = os.path.expanduser("~/.local/state/iram/agents/usage")
+    agy_info = ""
+    ollama_info = ""
+    try:
+        agy_path = os.path.join(usage_dir, "agy.json")
+        if os.path.exists(agy_path):
+            with open(agy_path) as f:
+                d = json.load(f)
+                m = d.get("metrics", {})
+                agy_info = f"• Antigravity: {d.get('active_model')} ({m.get('total_steps', 0):,} steps, {m.get('conversations', 0)} sessions)\n"
+    except Exception:
+        pass
+    try:
+        ollama_path = os.path.join(usage_dir, "ollama.json")
+        if os.path.exists(ollama_path):
+            with open(ollama_path) as f:
+                d = json.load(f)
+                count = len(d.get("models_installed", []))
+                ollama_info = f"• Ollama ({d.get('status')}): {count} local models installed\n"
+    except Exception:
+        pass
+    return agy_info + ollama_info
+
 def main():
     api_key = get_api_key()
     active_model = get_current_model()
@@ -118,14 +142,16 @@ def main():
     if last_trace:
         last_span_info = f"{last_trace.get('span')} ({last_trace.get('duration_ms')}ms) [{last_trace.get('status')}]"
 
+    usage_summary = get_agent_usage_summary()
+
     tooltip = (
         f"🤖 Iram Agentic OS HUD\n"
         f"• State: {agent_state.upper()} {f'({details})' if details else ''}\n"
         f"• Model: {default_name}\n"
-        f"• Engine: {engine_name}\n"
+        f"{usage_summary}"
         f"• Graphiti Memory: {entities} entities, {edges} edges\n"
         f"• Last Trace: {last_span_info}\n\n"
-        f"🖱️ Left-Click: Open Agent Interactive Sidecar\n"
+        f"🖱️ Left-Click: Open IRAM Nexus Copilot\n"
         f"🖱️ Right-Click: AI Model Manager\n"
         f"🖱️ Middle-Click: Phoenix Observability UI"
     )

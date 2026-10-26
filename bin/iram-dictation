@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# IRAM OS - Universal Push-to-Talk Voice Dictation (iram-dictation)
+# Records PipeWire microphone audio, transcribes speech with sub-second latency,
+# and types text directly into the active Wayland window via Hyprland sendshortcut.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+import os
+import sys
+import time
+import json
+import signal
+import base64
+import subprocess
+import urllib.request
+from pathlib import Path
+
+RUNTIME_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
+PID_FILE = RUNTIME_DIR / "iram_dictation.pid"
+AUDIO_FILE = RUNTIME_DIR / "iram_dictation.wav"
+
+def notify(title: str, message: str, icon: str = "audio-input-microphone", timeout_ms: int = 2000):
+    try:
+        subprocess.run(["notify-send", "-a", "IRAM OS Dictation", title, message, "-i", icon, "-t", str(timeout_ms)], check=False)
+    except Exception:
+        pass
+
+def is_recording() -> bool:
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            os.kill(pid, 0)
+            return True
+        except Exception:
+            PID_FILE.unlink(missing_ok=True)
+    return False
+
+def start_recording():
+    if is_recording():
+        return
+
+    if AUDIO_FILE.exists():
+        AUDIO_FILE.unlink(missing_ok=True)
+
+    # Use PipeWire native recorder
+    if subprocess.run(["which", "pw-record"], capture_output=True).returncode == 0:
+        proc = subprocess.Popen(["pw-record", "--rate=16000", "--channels=1", str(AUDIO_FILE)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif subprocess.run(["which", "parec"], capture_output=True).returncode == 0:
+        proc = subprocess.Popen(["parec", "--rate=16000", "--channels=1", "--file-format=wav", str(AUDIO_FILE)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        proc = subprocess.Popen(["ffmpeg", "-y", "-f", "alsa", "-i", "default", "-ar", "16000", "-ac", "1", str(AUDIO_FILE)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    PID_FILE.write_text(str(proc.pid))
+    notify("🎙️ Voice Dictation Active", "Listening... Press shortcut again to finish", "audio-input-microphone", 3000)
+
+def transcribe_audio(audio_path: Path) -> str:
+    """Transcribes audio file using Gemini audio API with sub-second latency."""
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        env_conf = Path.home() / ".config/environment.d/20-gemini.conf"
+        if env_conf.exists():
+            for line in env_conf.read_text().splitlines():
+                if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+
+    if not api_key or not audio_path.exists() or audio_path.stat().st_size < 1000:
+        return ""
+
+    with open(audio_path, "rb") as f:
+        audio_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": "Transcribe the spoken speech in this audio exactly as uttered. Output ONLY the raw transcribed text with proper capitalization and punctuation. Do not add quotes, notes, explanations, or conversational filler."
+                    },
+                    {
+                        "inlineData": {
+                            "mimeType": "audio/wav",
+                            "data": audio_b64
+                        }
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.0,
+            "maxOutputTokens": 256
+        }
+    }
+
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"}
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            candidates = data.get("candidates", [])
+            if candidates:
+                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                return text.strip()
+    except Exception as e:
+        print(f"Transcription error: {e}", file=sys.stderr)
+    return ""
+
+def inject_text_into_active_window(text: str):
+    if not text:
+        return
+
+    # Put on clipboard
+    subprocess.run(["wl-copy", text], check=True)
+
+    # Detect active window class to pick paste shortcut
+    is_terminal = False
+    try:
+        active_proc = subprocess.run(["hyprctl", "activewindow", "-j"], capture_output=True, text=True)
+        if active_proc.returncode == 0:
+            win = json.loads(active_proc.stdout)
+            wclass = win.get("class", "").lower()
+            if any(term in wclass for term in ["foot", "alacritty", "kitty", "terminal"]):
+                is_terminal = True
+    except Exception:
+        pass
+
+    time.sleep(0.05)
+    if is_terminal:
+        subprocess.run(["hyprctl", "dispatch", "sendshortcut", "CTRL SHIFT,V,activewindow"], check=False)
+    else:
+        subprocess.run(["hyprctl", "dispatch", "sendshortcut", "CTRL,V,activewindow"], check=False)
+
+def stop_recording():
+    if not is_recording():
+        return
+
+    try:
+        pid = int(PID_FILE.read_text().strip())
+        os.kill(pid, signal.SIGINT)
+        time.sleep(0.15)
+        if is_recording():
+            os.kill(pid, signal.SIGTERM)
+    except Exception:
+        pass
+    finally:
+        PID_FILE.unlink(missing_ok=True)
+
+    notify("⚡ Transcribing Speech...", "Processing audio...", "audio-ready", 1500)
+    text = transcribe_audio(AUDIO_FILE)
+
+    if text:
+        inject_text_into_active_window(text)
+        preview = (text[:45] + "...") if len(text) > 45 else text
+        notify("✓ Injected into Window", f'"{preview}"', "accessories-text-editor", 2500)
+    else:
+        notify("⚠️ No Speech Detected", "Audio was silent or could not be transcribed", "dialog-warning", 2000)
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "toggle"
+
+    if cmd == "start":
+        start_recording()
+    elif cmd == "stop":
+        stop_recording()
+    elif cmd == "toggle":
+        if is_recording():
+            stop_recording()
+        else:
+            start_recording()
+    elif cmd == "status":
+        print("recording" if is_recording() else "idle")
+    else:
+        print("Usage: iram-dictation <start|stop|toggle|status>")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

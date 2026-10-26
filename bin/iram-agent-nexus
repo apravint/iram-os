@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Nexus Desktop Copilot Window (Super + Shift + A / Waybar Click)
+# Launches the sovereign IRAM Nexus app with local tool execution
+# ==============================================================================
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:$HOME/iram-os/bin:$PATH"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NEXUS_BIN="$HOME/.local/bin/iram-nexus"
+if [ ! -x "$NEXUS_BIN" ]; then
+    NEXUS_BIN="$SCRIPT_DIR/iram-nexus"
+fi
+
+if [ -x "$NEXUS_BIN" ]; then
+    exec "$NEXUS_BIN" "$@"
+fi
+
+# Fallback only if Nexus GUI is missing
+INTERACTIVE_BIN="$HOME/.local/bin/iram-agent-interactive"
+if [ ! -f "$INTERACTIVE_BIN" ]; then
+    INTERACTIVE_BIN="$SCRIPT_DIR/iram-agent-interactive"
+fi
+
+if command -v alacritty >/dev/null 2>&1; then
+    alacritty --title "IRAM OS Nexus (Terminal)" \
+              --class "IramNexus" \
+              --option "window.dimensions.columns=95" \
+              --option "window.dimensions.lines=32" \
+              -e "$INTERACTIVE_BIN"
+else
+    "$INTERACTIVE_BIN"
+fi

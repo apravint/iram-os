@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IRAM OS Gemini Sidecar</title>
+  <title>IRAM OS Nexus</title>
   
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1021,7 +1021,7 @@
         </svg>
       </div>
       <div class="brand-title-wrap">
-        <div class="brand-title">Gemini Sidecar · IRAM OS</div>
+        <div class="brand-title">IRAM Nexus</div>
         <div class="system-hud-pill">
           <div class="live-dot"></div>
           <span id="hud-ram">RAM: --%</span>
@@ -1109,7 +1109,7 @@
   <!-- Chat History Stream -->
   <main id="chat-stream">
     <div class="welcome-container" id="welcome-view">
-      <h1 class="welcome-title">Welcome to Gemini Sidecar</h1>
+      <h1 class="welcome-title">Welcome to IRAM Nexus</h1>
       <p class="welcome-subtitle">Ask anything in natural language, control your desktop, monitor networks, or inspect system health.</p>
       
       <!-- Categorized Starter Tabs -->
@@ -1235,7 +1235,7 @@
         <div style="display:flex; justify-content:space-between;"><span>New Line</span><kbd style="background:#282a2d; padding:2px 8px; border-radius:4px;">Shift + Enter</kbd></div>
         <div style="display:flex; justify-content:space-between;"><span>Clear / New Chat</span><kbd style="background:#282a2d; padding:2px 8px; border-radius:4px;">Ctrl + L</kbd></div>
         <div style="display:flex; justify-content:space-between;"><span>Slash Commands</span><kbd style="background:#282a2d; padding:2px 8px; border-radius:4px;">/</kbd></div>
-        <div style="display:flex; justify-content:space-between;"><span>Toggle Sidecar Window</span><kbd style="background:#282a2d; padding:2px 8px; border-radius:4px;">Super + Shift + A</kbd></div>
+        <div style="display:flex; justify-content:space-between;"><span>Toggle Nexus Window</span><kbd style="background:#282a2d; padding:2px 8px; border-radius:4px;">Super + Shift + A</kbd></div>
       </div>
     </div>
   </div>
@@ -1883,7 +1883,7 @@
         alert('No conversation to export.');
         return;
       }
-      let md = '# IRAM OS Gemini Sidecar Conversation\n\n';
+      let md = '# IRAM OS Nexus Conversation\n\n';
       md += `*Exported on ${new Date().toLocaleString()}*\n\n---\n\n`;
       for (const turn of conversationHistory) {
         const role = turn.role === 'user' ? '### 👤 User' : '### ✨ Gemini';

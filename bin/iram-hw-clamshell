@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Laptop Clamshell & Display Collision Guard (iram-hw-clamshell)
+# Intelligently disables internal eDP-1 display when lid is closed on external monitors,
+# or sleeps safely when standalone. Re-enables internal monitor instantly on lid open.
+# Inspired by Omarchy 4.5
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+ACTION="${1:-toggle}"
+
+INTERNAL_MONITOR="eDP-1"
+
+has_external_monitor() {
+    local count
+    count=$(hyprctl monitors -j 2>/dev/null | jq '[.[] | select(.name != "'"$INTERNAL_MONITOR"'")] | length' 2>/dev/null || echo 0)
+    [ "$count" -gt 0 ]
+}
+
+case "$ACTION" in
+    close)
+        if has_external_monitor; then
+            echo "External monitor detected. Disabling internal $INTERNAL_MONITOR for clamshell mode..."
+            hyprctl keyword monitor "$INTERNAL_MONITOR, disable" >/dev/null 2>&1 || true
+            notify-send -a "IRAM OS" "💻 Clamshell Mode Activated" "Internal display disabled. Workspaces migrated to external monitor." -i "video-display" -t 2000
+        else
+            echo "No external monitor detected. Sleeping system..."
+            systemctl suspend || true
+        fi
+        ;;
+    open)
+        echo "Lid opened. Restoring internal monitor $INTERNAL_MONITOR..."
+        hyprctl keyword monitor "$INTERNAL_MONITOR, preferred, auto, 1" >/dev/null 2>&1 || true
+        if [ -f "$HOME/.config/hypr/monitors.conf" ]; then
+            hyprctl reload >/dev/null 2>&1 || true
+        fi
+        notify-send -a "IRAM OS" "💻 Display Restored" "Internal display re-enabled." -i "video-display" -t 2000
+        ;;
+    *)
+        echo "Usage: iram-hw-clamshell <close|open>"
+        exit 1
+        ;;
+esac

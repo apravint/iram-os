@@ -41,7 +41,7 @@ show_help() {
     echo -e "${BOLD}CORE COMMAND GROUPS:${NC}"
     echo -e "  ${CYAN}hub${NC} [dashboard]           Sovereign Command Hub (3D, Voice, Agent Swarm & System)"
     echo -e "  ${CYAN}agent${NC} [prompt|account|usage] Autonomous coding agent, direct prompting & multi-account failover"
-    echo -e "  ${CYAN}sidecar${NC}                   Toggle AI sidecar HUD floating assistant"
+    echo -e "  ${CYAN}nexus${NC} [gui|3d]              Toggle IRAM Nexus floating desktop intelligence (or 'sidecar')"`
     echo -e "  ${CYAN}openclaw${NC} [cmd]            OpenClaw multi-channel gateway & agent daemon"
     echo -e "  ${CYAN}video${NC} [prompt] [opts]     Universal Film & Video Studio (Shorts, Film, Cinema)"
     echo -e "  ${CYAN}voice${NC} [speak|clone|design] Open-source VoiceStudio engine (cloning, design & dubbing)"
@@ -170,11 +170,11 @@ case "$cmd" in
                 ;;
         esac
         ;;
-    sidecar)
+    nexus|sidecar)
         if [ "${1:-}" = "--3d" ] || [ "${1:-}" = "3d" ] || [ "${1:-}" = "graph" ]; then
             exec "$LOCAL_BIN/iram-agent-graph"
         fi
-        exec "$LOCAL_BIN/iram-agent-sidecar" "$@"
+        exec "$LOCAL_BIN/iram-agent-nexus" "$@"
         ;;
     openclaw)
         exec "$LOCAL_BIN/openclaw" "$@"
