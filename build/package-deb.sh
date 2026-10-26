@@ -111,7 +111,7 @@ Priority: optional
 Architecture: ${ARCH}
 Maintainer: Pravin <apravint@gmail.com>
 Depends: hyprland, waybar, wofi, swaybg, swaylock, mako-notifier, grim, slurp, wl-clipboard, cliphist, playerctl, alacritty, btop, tesseract-ocr, ripgrep, fd-find, tmux, fzf, zoxide, eza, bat, jq, curl, wlsunset, python3, python3-pip, python3-gi, gir1.2-gtk-3.0, pavucontrol, blueman, polkit-kde-agent-1, socat
-Recommends: ollama, mpv, fastmcp, qdrant-client
+Recommends: ollama, mpv, fastmcp, qdrant-client, brightnessctl, ddcutil
 Homepage: https://github.com/apravint/iram-os
 Description: IRAM OS Desktop - Sovereign Autonomous Agentic Linux
  IRAM OS is an agentic Linux operating environment built on Ubuntu 26.10

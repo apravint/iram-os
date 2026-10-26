@@ -41,7 +41,7 @@ show_help() {
     echo -e "${BOLD}CORE COMMAND GROUPS:${NC}"
     echo -e "  ${CYAN}hub${NC} [dashboard]           Sovereign Command Hub (3D, Voice, Agent Swarm & System)"
     echo -e "  ${CYAN}agent${NC} [prompt|account|usage] Autonomous coding agent, direct prompting & multi-account failover"
-    echo -e "  ${CYAN}nexus${NC} [gui|3d]              Toggle IRAM Nexus floating desktop intelligence (or 'sidecar')"`
+    echo -e "  ${CYAN}nexus${NC} [gui|3d]              Toggle IRAM Nexus floating desktop intelligence (or 'sidecar')"
     echo -e "  ${CYAN}openclaw${NC} [cmd]            OpenClaw multi-channel gateway & agent daemon"
     echo -e "  ${CYAN}video${NC} [prompt] [opts]     Universal Film & Video Studio (Shorts, Film, Cinema)"
     echo -e "  ${CYAN}voice${NC} [speak|clone|design] Open-source VoiceStudio engine (cloning, design & dubbing)"
@@ -56,6 +56,9 @@ show_help() {
     echo -e "  ${CYAN}webapp${NC} [install|list|rm]  Isolated desktop PWA generation with Launch-or-Focus"
     echo -e "  ${CYAN}capture${NC} [qr|text|webcam]  Desktop intelligence: local QR decode, OCR & webcam PiP"
     echo -e "  ${CYAN}display${NC}                  Multi-monitor arrangement & refresh rate GUI"
+    echo -e "  ${CYAN}brightness${NC} [+5%|-5%|N%]   Internal panel & external DDC/CI monitor brightness"
+    echo -e "  ${CYAN}dictation${NC} [toggle|start|stop] Push-to-talk universal voice dictation (Super+D)"
+    echo -e "  ${CYAN}clamshell${NC} [close|open|status] Laptop lid event handler & external display migration"
     echo -e "  ${CYAN}clipboard${NC}                Clipboard history and fuzzy search"
     echo -e "  ${CYAN}default${NC} agent [name]     Select default AI coding agent (agy, openclaw, claude...)"
     echo -e "  ${CYAN}memory${NC}                   Embedded Qdrant vector retrieval & conversation memory"
@@ -523,6 +526,15 @@ case "$cmd" in
         ;;
     display|displays)
         exec "$LOCAL_BIN/iram-displays-gui"
+        ;;
+    brightness)
+        exec "$LOCAL_BIN/iram-brightness" "$@"
+        ;;
+    dictation|dictate)
+        exec "$LOCAL_BIN/iram-dictation" "$@"
+        ;;
+    clamshell)
+        exec "$LOCAL_BIN/iram-hw-clamshell" "$@"
         ;;
     capture)
         sub="${1:-menu}"

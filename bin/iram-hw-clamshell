@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS Laptop Clamshell & Display Collision Guard (iram-hw-clamshell)
-# Intelligently disables internal eDP-1 display when lid is closed on external monitors,
+# Intelligently disables internal eDP-1/LVDS display when lid is closed on external monitors,
 # or sleeps safely when standalone. Re-enables internal monitor instantly on lid open.
 # Inspired by Omarchy 4.5
 # https://github.com/apravint/iram-os
 # ==============================================================================
 set -euo pipefail
 
-ACTION="${1:-toggle}"
+ACTION="${1:-status}"
 
-INTERNAL_MONITOR="eDP-1"
+detect_internal_monitor() {
+    local detected
+    detected=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)")) | .name' 2>/dev/null | head -n 1 || true)
+    if [[ -n "$detected" && "$detected" != "null" ]]; then
+        echo "$detected"
+    else
+        echo "eDP-1"
+    fi
+}
+
+INTERNAL_MONITOR="$(detect_internal_monitor)"
 
 has_external_monitor() {
     local count
@@ -23,7 +33,7 @@ case "$ACTION" in
         if has_external_monitor; then
             echo "External monitor detected. Disabling internal $INTERNAL_MONITOR for clamshell mode..."
             hyprctl keyword monitor "$INTERNAL_MONITOR, disable" >/dev/null 2>&1 || true
-            notify-send -a "IRAM OS" "💻 Clamshell Mode Activated" "Internal display disabled. Workspaces migrated to external monitor." -i "video-display" -t 2000
+            notify-send -a "IRAM OS" "💻 Clamshell Mode Activated" "Internal display ($INTERNAL_MONITOR) disabled. Workspaces migrated to external monitor." -i "video-display" -t 2000
         else
             echo "No external monitor detected. Sleeping system..."
             systemctl suspend || true
@@ -35,10 +45,18 @@ case "$ACTION" in
         if [ -f "$HOME/.config/hypr/monitors.conf" ]; then
             hyprctl reload >/dev/null 2>&1 || true
         fi
-        notify-send -a "IRAM OS" "💻 Display Restored" "Internal display re-enabled." -i "video-display" -t 2000
+        notify-send -a "IRAM OS" "💻 Display Restored" "Internal display ($INTERNAL_MONITOR) re-enabled." -i "video-display" -t 2000
+        ;;
+    status)
+        echo "Internal Monitor Target: $INTERNAL_MONITOR"
+        if has_external_monitor; then
+            echo "External Monitors: Connected"
+        else
+            echo "External Monitors: None"
+        fi
         ;;
     *)
-        echo "Usage: iram-hw-clamshell <close|open>"
+        echo "Usage: iram-hw-clamshell <close|open|status>"
         exit 1
         ;;
 esac
