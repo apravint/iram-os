@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Do Not Disturb (DND) / Notification Silencing Toggle
+# Silences desktop notifications via Mako mode switching.
+# Inspired by Omarchy 4.5
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+is_dnd() {
+    makoctl mode 2>/dev/null | grep -qw "dnd"
+}
+
+ACTION="${1:-toggle}"
+
+case "$ACTION" in
+    on|enable|silence)
+        makoctl mode -a dnd 2>/dev/null || true
+        notify-send -a "IRAM OS" "🔕 Do Not Disturb: ON" "Desktop notifications are silenced" -i "notifications-disabled" -t 2000
+        echo "dnd: enabled"
+        ;;
+    off|disable|restore)
+        makoctl mode -r dnd 2>/dev/null || true
+        notify-send -a "IRAM OS" "🔔 Do Not Disturb: OFF" "Desktop notifications restored" -i "dialog-information" -t 2000
+        echo "dnd: disabled"
+        ;;
+    status)
+        if is_dnd; then
+            echo "enabled"
+        else
+            echo "disabled"
+        fi
+        ;;
+    toggle|*)
+        if is_dnd; then
+            makoctl mode -r dnd 2>/dev/null || true
+            notify-send -a "IRAM OS" "🔔 Do Not Disturb: OFF" "Desktop notifications restored" -i "dialog-information" -t 2000
+            echo "dnd: disabled"
+        else
+            makoctl mode -a dnd 2>/dev/null || true
+            notify-send -a "IRAM OS" "🔕 Do Not Disturb: ON" "Desktop notifications are silenced" -i "notifications-disabled" -t 2000
+            echo "dnd: enabled"
+        fi
+        ;;
+esac

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Waybar Status Bar Visibility Toggle
+# Hides or reveals Waybar instantly via SIGUSR1 signal.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+if ! pgrep -x waybar >/dev/null; then
+    echo "Starting Waybar..."
+    waybar >/dev/null 2>&1 &
+    notify-send -a "IRAM OS" "📊 Status Bar" "Waybar started" -i "dialog-information" -t 1500
+else
+    killall -SIGUSR1 waybar 2>/dev/null || true
+    echo "Toggled Waybar visibility"
+fi

@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Universal Audio Output Switcher & Stream Migrator
+# Cycles through available PipeWire playback sinks, migrates active streams,
+# unmutes, and displays rich desktop notifications with volume feedback.
+# Inspired by Omarchy 4.5 & Tailored for IRAM OS
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+MODE="${1:-cycle}"
+
+get_usable_sinks() {
+    pactl -f json list sinks 2>/dev/null | jq -c '[.[] | select(.name | test("dummy") | not)]'
+}
+
+current_sink=$(pactl get-default-sink 2>/dev/null || true)
+
+cycle_sink() {
+    local sinks
+    sinks=$(get_usable_sinks)
+    local count
+    count=$(jq 'length' <<<"$sinks")
+
+    if (( count == 0 )); then
+        notify-send -a "IRAM Audio" "No Audio Sinks Found" "No usable audio outputs available" -i "dialog-warning"
+        exit 1
+    fi
+
+    local current_idx
+    current_idx=$(jq -r --arg cur "$current_sink" 'map(.name) | index($cur)' <<<"$sinks")
+    local next_idx=0
+    if [[ "$current_idx" != "null" && -n "$current_idx" ]]; then
+        next_idx=$(( (current_idx + 1) % count ))
+    fi
+
+    local target_sink
+    target_sink=$(jq -r ".[$next_idx].name" <<<"$sinks")
+    local target_desc
+    target_desc=$(jq -r ".[$next_idx].description // .[$next_idx].name" <<<"$sinks")
+
+    apply_sink "$target_sink" "$target_desc"
+}
+
+apply_sink() {
+    local sink="$1"
+    local desc="$2"
+
+    pactl set-default-sink "$sink" 2>/dev/null || true
+    pactl set-sink-mute "$sink" 0 2>/dev/null || true
+
+    # Move active playback streams onto target sink
+    local inputs
+    inputs=$(pactl list sink-inputs short 2>/dev/null | awk '{print $1}')
+    for in_id in $inputs; do
+        pactl move-sink-input "$in_id" "$sink" 2>/dev/null || true
+    done
+
+    # Resolve appropriate icon
+    local icon="audio-speakers"
+    local lower_desc
+    lower_desc=$(echo "$desc" | tr '[:upper:]' '[:lower:]')
+    if [[ "$lower_desc" == *"tv"* || "$lower_desc" == *"hdmi"* ]]; then
+        icon="tv"
+    elif [[ "$lower_desc" == *"headphone"* || "$lower_desc" == *"headset"* ]]; then
+        icon="audio-headphones"
+    elif [[ "$lower_desc" == *"combined"* || "$lower_desc" == *"all displays"* ]]; then
+        icon="audio-card"
+    fi
+
+    local vol
+    vol=$(pactl get-sink-volume "$sink" 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if($i ~ /%$/){sub("%","",$i); print $i; exit}}' || echo "100")
+
+    notify-send -a "IRAM Audio" \
+                -h "int:value:${vol:-100}" \
+                -h "string:synchronous:audio-sink" \
+                -i "$icon" \
+                -t 2000 \
+                "Audio Output Switched" "$desc" 2>/dev/null || true
+
+    echo "Switched to: $desc ($sink)"
+}
+
+menu_sink() {
+    local sinks
+    sinks=$(get_usable_sinks)
+    local choices
+    choices=$(jq -r '.[] | "\(.description // .name) [\(.name)]"' <<<"$sinks")
+
+    local selected
+    selected=$(echo "$choices" | wofi --dmenu --prompt "Select Audio Output" --insensitive 2>/dev/null || true)
+    [[ -n "$selected" ]] || exit 0
+
+    local target_sink
+    target_sink=$(echo "$selected" | sed -n 's/.*\[\(.*\)\].*/\1/p')
+    local target_desc
+    target_desc=$(echo "$selected" | sed -n 's/^\(.*\) \[.*\]/\1/p')
+
+    if [[ -n "$target_sink" ]]; then
+        apply_sink "$target_sink" "$target_desc"
+    fi
+}
+
+list_sinks() {
+    local sinks
+    sinks=$(get_usable_sinks)
+    jq -r '.[] | "\(.name)  \t  \(.description // "Unknown")"' <<<"$sinks"
+}
+
+case "$MODE" in
+    cycle|next|"")
+        cycle_sink
+        ;;
+    menu|gui)
+        menu_sink
+        ;;
+    list)
+        list_sinks
+        ;;
+    set)
+        target="${2:-}"
+        [[ -n "$target" ]] || { echo "Usage: iram-audio-switch set <sink-name>" >&2; exit 1; }
+        desc=$(get_usable_sinks | jq -r --arg s "$target" '.[] | select(.name == $s) | .description // .name' | head -n 1)
+        apply_sink "$target" "${desc:-$target}"
+        ;;
+    *)
+        cycle_sink
+        ;;
+esac

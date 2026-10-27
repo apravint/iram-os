@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# IRAM OS - Sovereign Generative Cyber Screensaver
+# Renders responsive cyber-stream digital rain and ambient typography.
+# Auto-exits instantly on any keyboard input or mouse motion.
+# Inspired by Omarchy 4.5 & Tailored for IRAM OS
+# https://github.com/apravint/iram-os
+# ==============================================================================
+import os
+import sys
+import time
+import random
+import signal
+import termios
+import tty
+import select
+import shutil
+
+GLYPHS = list("0123456789ABCDEFλπΣΩアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヰヱヲン✦✧▲▼◈◉◆◇")
+
+# Color themes: Matrix Green, Cyber Cyan, Tokyo Purple, Alpora Gold
+COLOR_PALETTES = [
+    # [lead_color, stream_color, dim_color]
+    ("\033[1;97m", "\033[38;5;48m", "\033[38;5;28m"),   # Neon Emerald
+    ("\033[1;97m", "\033[38;5;45m", "\033[38;5;24m"),   # Cyber Cyan
+    ("\033[1;97m", "\033[38;5;141m", "\033[38;5;55m"),  # Tokyo Purple
+    ("\033[1;97m", "\033[38;5;220m", "\033[38;5;130m"), # Alpora Gold
+]
+
+def restore_terminal(orig_attr=None):
+    sys.stdout.write("\033[?25h\033[0m\033[2J\033[H")
+    sys.stdout.flush()
+    if orig_attr:
+        try:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, orig_attr)
+        except Exception:
+            pass
+
+def main():
+    if not sys.stdin.isatty():
+        sys.exit(0)
+
+    orig_attr = termios.tcgetattr(sys.stdin)
+    tty.setcbreak(sys.stdin.fileno())
+
+    def sig_handler(sig, frame):
+        restore_terminal(orig_attr)
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
+
+    # Hide cursor, clear screen
+    sys.stdout.write("\033[?25l\033[2J")
+    sys.stdout.flush()
+
+    palette = random.choice(COLOR_PALETTES)
+    lead_col, main_col, dim_col = palette
+
+    cols, rows = shutil.get_terminal_size()
+    drops = [random.randint(-rows, 0) for _ in range(cols)]
+    speeds = [random.choice([1, 1, 2]) for _ in range(cols)]
+    chars = [random.choice(GLYPHS) for _ in range(cols)]
+
+    frame = 0
+    title_frame = 0
+
+    try:
+        while True:
+            # Check for any keystroke to exit immediately
+            rlist, _, _ = select.select([sys.stdin], [], [], 0.04)
+            if rlist:
+                break
+
+            frame += 1
+            if frame % 100 == 0:
+                new_cols, new_rows = shutil.get_terminal_size()
+                if new_cols != cols or new_rows != rows:
+                    cols, rows = new_cols, new_rows
+                    drops = [random.randint(-rows, 0) for _ in range(cols)]
+                    speeds = [random.choice([1, 1, 2]) for _ in range(cols)]
+                    chars = [random.choice(GLYPHS) for _ in range(cols)]
+                    sys.stdout.write("\033[2J")
+
+            out = []
+            for c in range(cols):
+                if frame % speeds[c] != 0:
+                    continue
+
+                row = drops[c]
+
+                # Clear tail
+                tail_row = row - 16
+                if 1 <= tail_row <= rows:
+                    out.append(f"\033[{tail_row};{c+1}H ")
+
+                # Dim trailing chars
+                dim_row = row - 8
+                if 1 <= dim_row <= rows:
+                    out.append(f"\033[{dim_row};{c+1}H{dim_col}{chars[c]}")
+
+                # Mid body
+                mid_row = row - 1
+                if 1 <= mid_row <= rows:
+                    out.append(f"\033[{mid_row};{c+1}H{main_col}{chars[c]}")
+
+                # Head leading glow
+                if 1 <= row <= rows:
+                    chars[c] = random.choice(GLYPHS)
+                    out.append(f"\033[{row};{c+1}H{lead_col}{chars[c]}")
+
+                drops[c] += 1
+                if drops[c] - 16 > rows:
+                    drops[c] = random.randint(-5, 0)
+                    speeds[c] = random.choice([1, 1, 2])
+
+            # Ambient center emblem
+            if rows > 10 and cols > 40:
+                mid_y = rows // 2
+                mid_x = (cols - 28) // 2
+                if mid_x > 0:
+                    out.append(f"\033[{mid_y};{mid_x}H\033[1;97m[ IRAM OS • AMBIENT SPACE ]\033[0m")
+                    out.append(f"\033[{mid_y+1};{mid_x+2}H\033[38;5;244mPress any key to resume\033[0m")
+
+            sys.stdout.write("".join(out))
+            sys.stdout.flush()
+
+    finally:
+        restore_terminal(orig_attr)
+
+if __name__ == "__main__":
+    main()

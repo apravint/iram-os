@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Unified Toggle Switchboard & Desktop HUD (iram-toggle-menu)
+# Quick interactive glassmorphic menu for system states and hardware toggles.
+# Inspired by Omarchy 4.5
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+# Query current states for dynamic labels
+nightlight_state="Off"
+if pgrep -x wlsunset >/dev/null || pgrep -x hyprsunset >/dev/null; then
+    nightlight_state="On (4200K)"
+fi
+
+idle_state="Normal"
+if [[ -f "$HOME/.local/state/iram/toggles/stay-awake" ]] || ! pgrep -x hypridle >/dev/null; then
+    idle_state="Stay Awake (Inhibited)"
+fi
+
+dnd_state="Normal"
+if makoctl mode 2>/dev/null | grep -qw "dnd"; then
+    dnd_state="Active (Silenced)"
+fi
+
+anim_state="Smooth"
+if [[ "$(hyprctl getoption animations:enabled 2>/dev/null | awk '/int:/ {print $2}')" == "0" ]]; then
+    anim_state="Performance (Off)"
+fi
+
+cur_sink="$(pactl get-default-sink 2>/dev/null | awk -F. '{print $NF}')"
+
+MENU_ITEMS=(
+    "🌙  Night Light                [$nightlight_state]"
+    "☕  Stay Awake / Caffeine      [$idle_state]"
+    "🔕  Do Not Disturb             [$dnd_state]"
+    "⚡  Window Animations          [$anim_state]"
+    "📊  Status Bar (Waybar)        [Toggle Visibility]"
+    "🔊  Audio Output Switcher      [Current: ${cur_sink:-Default}]"
+    "🎙️  Voice Dictation (Super+D)  [Push-to-Talk]"
+    "💻  Laptop Clamshell Mode      [Check / Toggle]"
+    "🖥️  Ambient Screensaver        [Launch Cyber Rain]"
+    "🎨  Theme Switcher             [Zero-Restart Palettes]"
+    "🔋  Power & Session Menu       [Lock / Sleep / Reboot]"
+)
+
+CHOICE=$(printf "%s\n" "${MENU_ITEMS[@]}" | wofi --dmenu --prompt "IRAM System Toggles (Super+Ctrl+O)" --lines 12 --insensitive 2>/dev/null || true)
+
+[[ -n "$CHOICE" ]] || exit 0
+
+case "$CHOICE" in
+    *"Night Light"*)
+        ~/.local/bin/iram-toggle-nightlight
+        ;;
+    *"Stay Awake"*)
+        ~/.local/bin/iram-toggle-idle
+        ;;
+    *"Do Not Disturb"*)
+        ~/.local/bin/iram-toggle-dnd
+        ;;
+    *"Window Animations"*)
+        ~/.local/bin/iram-toggle-animations
+        ;;
+    *"Status Bar"*)
+        ~/.local/bin/iram-toggle-bar
+        ;;
+    *"Audio Output"*)
+        ~/.local/bin/iram-audio-switch cycle
+        ;;
+    *"Voice Dictation"*)
+        ~/.local/bin/iram-dictation toggle
+        ;;
+    *"Laptop Clamshell"*)
+        ~/.local/bin/iram-hw-clamshell status
+        ;;
+    *"Ambient Screensaver"*)
+        ~/.local/bin/iram-screensaver-launch &
+        ;;
+    *"Theme Switcher"*)
+        ~/.local/bin/iram-theme-switch &
+        ;;
+    *"Power & Session"*)
+        ~/.local/bin/iram-power-menu &
+        ;;
+esac

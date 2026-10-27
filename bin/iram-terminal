@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Context-Aware Terminal Launcher
+# Launches the user's terminal emulator preserving the working directory
+# of the currently active window or shell.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CWD="$("$SCRIPT_DIR/iram-terminal-cwd" 2>/dev/null || echo "$HOME")"
+
+# Detect preferred terminal emulator
+TERMINAL_BIN="alacritty"
+if command -v alacritty >/dev/null 2>&1; then
+    TERMINAL_BIN="alacritty"
+elif command -v kitty >/dev/null 2>&1; then
+    TERMINAL_BIN="kitty"
+elif command -v foot >/dev/null 2>&1; then
+    TERMINAL_BIN="foot"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    TERMINAL_BIN="x-terminal-emulator"
+fi
+
+case "$TERMINAL_BIN" in
+    alacritty)
+        exec alacritty --working-directory "$CWD" "$@"
+        ;;
+    kitty)
+        exec kitty --directory "$CWD" "$@"
+        ;;
+    foot)
+        exec foot -D "$CWD" "$@"
+        ;;
+    *)
+        cd "$CWD" 2>/dev/null || true
+        exec "$TERMINAL_BIN" "$@"
+        ;;
+esac

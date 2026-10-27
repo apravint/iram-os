@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Unified System Toggle Dispatcher
+# Dispatches toggle actions via CLI and script invocation.
+# Inspired by Omarchy 4.5
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+TARGET="${1:-menu}"
+shift 2>/dev/null || true
+
+case "$TARGET" in
+    nightlight)
+        exec ~/.local/bin/iram-toggle-nightlight "$@"
+        ;;
+    idle|caffeine|stay-awake)
+        exec ~/.local/bin/iram-toggle-idle "$@"
+        ;;
+    dnd|notifications|silence)
+        exec ~/.local/bin/iram-toggle-dnd "$@"
+        ;;
+    animations|anim|performance)
+        exec ~/.local/bin/iram-toggle-animations "$@"
+        ;;
+    bar|waybar)
+        exec ~/.local/bin/iram-toggle-bar "$@"
+        ;;
+    audio)
+        exec ~/.local/bin/iram-audio-switch "${1:-cycle}"
+        ;;
+    dictation|voice)
+        exec ~/.local/bin/iram-dictation toggle
+        ;;
+    clamshell)
+        exec ~/.local/bin/iram-hw-clamshell "${1:-status}"
+        ;;
+    screensaver)
+        exec ~/.local/bin/iram-screensaver-launch
+        ;;
+    menu|gui|"")
+        exec ~/.local/bin/iram-toggle-menu
+        ;;
+    *)
+        echo "Usage: iram toggle [menu|nightlight|idle|dnd|animations|bar|audio|dictation|screensaver]"
+        exit 1
+        ;;
+esac

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Screensaver Fullscreen Launcher
+# Launches the ambient screensaver in a dedicated fullscreen terminal window.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN="${SCRIPT_DIR}/iram-screensaver"
+
+if command -v alacritty >/dev/null 2>&1; then
+    exec alacritty --class iram-screensaver --title "IRAM OS Screensaver" -e "$BIN"
+elif command -v kitty >/dev/null 2>&1; then
+    exec kitty --class iram-screensaver --start-as=fullscreen "$BIN"
+else
+    exec "$BIN"
+fi

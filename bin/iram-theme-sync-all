@@ -172,6 +172,9 @@ padding=10,14
 default-timeout=4000
 width=360
 height=140
+
+[mode=dnd]
+invisible=1
 """
     with open(mako_conf, "w", encoding="utf-8") as f:
         f.write(mako_content)

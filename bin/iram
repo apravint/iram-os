@@ -55,6 +55,9 @@ show_help() {
     echo -e "  ${CYAN}lifecycle${NC} [dispatch|list] System hooks dispatcher (theme-set, battery-low, post-update)"
     echo -e "  ${CYAN}webapp${NC} [install|list|rm]  Isolated desktop PWA generation with Launch-or-Focus"
     echo -e "  ${CYAN}capture${NC} [qr|text|webcam]  Desktop intelligence: local QR decode, OCR & webcam PiP"
+    echo -e "  ${CYAN}toggle${NC} [nightlight|dnd|idle|anim] Quick system state switchboard (Super+Ctrl+O)"
+    echo -e "  ${CYAN}screensaver${NC}               Ambient generative cyber screensaver (Super+Ctrl+S)"
+    echo -e "  ${CYAN}terminal${NC}                  Context-aware terminal preserving active window CWD"
     echo -e "  ${CYAN}display${NC}                  Multi-monitor arrangement & refresh rate GUI"
     echo -e "  ${CYAN}brightness${NC} [+5%|-5%|N%]   Internal panel & external DDC/CI monitor brightness"
     echo -e "  ${CYAN}dictation${NC} [toggle|start|stop] Push-to-talk universal voice dictation (Super+D)"
@@ -502,6 +505,15 @@ case "$cmd" in
             tuning)
                 exec "$LOCAL_BIN/iram-audio-tuning" "$@"
                 ;;
+            switch|cycle)
+                exec "$LOCAL_BIN/iram-audio-switch" "${1:-cycle}"
+                ;;
+            menu|select)
+                exec "$LOCAL_BIN/iram-audio-switch" menu
+                ;;
+            list)
+                exec "$LOCAL_BIN/iram-audio-switch" list
+                ;;
             toggle)
                 exec "$LOCAL_BIN/iram-audio-toggle"
                 ;;
@@ -535,6 +547,15 @@ case "$cmd" in
         ;;
     clamshell)
         exec "$LOCAL_BIN/iram-hw-clamshell" "$@"
+        ;;
+    toggle|toggles)
+        exec "$LOCAL_BIN/iram-toggle" "$@"
+        ;;
+    screensaver|matrix)
+        exec "$LOCAL_BIN/iram-screensaver-launch" "$@"
+        ;;
+    terminal|term)
+        exec "$LOCAL_BIN/iram-terminal" "$@"
         ;;
     capture)
         sub="${1:-menu}"

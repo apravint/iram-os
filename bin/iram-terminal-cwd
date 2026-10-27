@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Active Window Context Working Directory Resolver
+# Inspects the active Hyprland window and resolves the current working directory
+# of the active shell or process, falling back cleanly to $HOME.
+# Inspired by Omarchy 4.5
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+pid="${1:-}"
+
+if [[ -z "$pid" ]]; then
+    pid="$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty' 2>/dev/null || true)"
+fi
+
+if [[ -z "$pid" || "$pid" == "null" || "$pid" -le 0 ]]; then
+    echo "$HOME"
+    exit 0
+fi
+
+cwd=""
+
+# 1. Search immediate children (active shells or editor child processes)
+children=$(pgrep -P "$pid" 2>/dev/null || true)
+if [[ -n "$children" ]]; then
+    for child in $children; do
+        c="$(readlink -f "/proc/$child/cwd" 2>/dev/null || true)"
+        if [[ -n "$c" && -d "$c" ]]; then
+            cwd="$c"
+        fi
+    done
+fi
+
+# 2. Fall back to process's own cwd
+if [[ -z "$cwd" ]]; then
+    cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+fi
+
+if [[ -n "$cwd" && -d "$cwd" ]]; then
+    echo "$cwd"
+else
+    echo "$HOME"
+fi
