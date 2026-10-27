@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# IRAM OS - Waybar Top Bar Active Indicators Module (iram-waybar-indicators)
+# Displays clean, unobtrusive status glyphs next to the clock for active modes:
+# Voice Dictation, Stay Awake/Caffeine, Do Not Disturb, Night Light, and Reminders.
+# Inspired by Omarchy 4.5
+# https://github.com/apravint/iram-os
+# ==============================================================================
+import os
+import sys
+import json
+import time
+import subprocess
+from pathlib import Path
+
+def main():
+    glyphs = []
+    tooltips = []
+    classes = []
+
+    runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
+    home_dir = Path.home()
+
+    # 1. Voice Dictation
+    pid_file = runtime_dir / "iram_dictation.pid"
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, 0)
+            glyphs.append("🎙️")
+            tooltips.append("• Voice Dictation: Actively Recording (Super+D to finish)")
+            classes.append("recording")
+        except Exception:
+            pid_file.unlink(missing_ok=True)
+
+    # 2. Stay Awake / Caffeine
+    stay_awake_file = home_dir / ".local/state/iram/toggles/stay-awake"
+    if stay_awake_file.exists():
+        glyphs.append("☕")
+        tooltips.append("• Stay Awake: Screen idle lock & sleep inhibited")
+        classes.append("caffeine")
+
+    # 3. Do Not Disturb (DND)
+    try:
+        mako_out = subprocess.check_output(["makoctl", "mode"], text=True, timeout=0.5)
+        if "dnd" in mako_out:
+            glyphs.append("🔕")
+            tooltips.append("• Do Not Disturb: Notifications silenced")
+            classes.append("dnd")
+    except Exception:
+        pass
+
+    # 4. Night Light
+    try:
+        wlsunset_running = subprocess.run(["pgrep", "-x", "wlsunset"], stdout=subprocess.DEVNULL).returncode == 0
+        hyprsunset_running = subprocess.run(["pgrep", "-x", "hyprsunset"], stdout=subprocess.DEVNULL).returncode == 0
+        if wlsunset_running or hyprsunset_running:
+            glyphs.append("🌙")
+            tooltips.append("• Night Light: Active (Warm 4200K)")
+            classes.append("nightlight")
+    except Exception:
+        pass
+
+    # 5. Active Countdown Reminders
+    try:
+        now = time.time()
+        res = subprocess.check_output(
+            ["systemctl", "--user", "list-timers", "--all", "--output=json", "iram-reminder-*.timer"],
+            text=True,
+            timeout=0.8
+        )
+        timers = json.loads(res)
+        rem_mins = []
+        for t in timers:
+            next_us = t.get("next")
+            if next_us:
+                next_s = next_us / 1000000.0
+                if next_s > now:
+                    rem_mins.append(int((next_s - now + 59) // 60))
+        if rem_mins:
+            closest = min(rem_mins)
+            glyphs.append(f"⏰ {closest}m")
+            tooltips.append(f"• Reminders: {len(rem_mins)} pending (next in {closest}m)")
+            classes.append("reminder")
+    except Exception:
+        pass
+
+    if glyphs:
+        text = "  ".join(glyphs)
+        tooltip = "⚡ IRAM Active Desktop Modes\n" + "\n".join(tooltips) + "\n\n🖱️ Click: Open Toggle Menu"
+        css_class = " ".join(classes)
+    else:
+        text = ""
+        tooltip = "IRAM OS Toggles (Super+Ctrl+O)"
+        css_class = "empty"
+
+    print(json.dumps({
+        "text": text,
+        "tooltip": tooltip,
+        "class": css_class
+    }))
+
+if __name__ == "__main__":
+    main()

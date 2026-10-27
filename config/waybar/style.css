@@ -72,6 +72,33 @@ window#waybar {
     color: @muted;
 }
 
+#custom-indicators {
+    padding: 0 10px;
+    margin: 0 2px;
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 700;
+    color: @accent;
+    border-bottom: 2px solid @accent;
+    transition: all 0.15s ease;
+}
+
+#custom-indicators.empty {
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border-bottom: none;
+}
+
+#custom-indicators.recording {
+    background: rgba(235, 77, 75, 0.25);
+    color: #ff5252;
+    border-bottom: 2px solid #ff5252;
+}
+
+#custom-indicators:hover {
+    background: @accent_rgba;
+}
+
 #clock {
     padding: 0 14px;
     margin: 0 1px;

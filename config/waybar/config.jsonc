@@ -14,6 +14,7 @@
         "hyprland/window"
     ],
     "modules-center": [
+        "custom/indicators",
         "clock",
         "custom/weather",
         "mpris"
@@ -49,6 +50,14 @@
         "max-length": 45,
         "separate-outputs": true,
         "tooltip": false
+    },
+
+    "custom/indicators": {
+        "format": "{}",
+        "return-type": "json",
+        "interval": 2,
+        "exec": "~/.local/bin/iram-waybar-indicators",
+        "on-click": "~/.local/bin/iram-toggle-menu"
     },
 
     "clock": {
