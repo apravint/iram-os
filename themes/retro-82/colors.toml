@@ -29,3 +29,5 @@ bright_green = "#028391"
 bright_cyan = "#8cbfb8"
 bright_blue = "#faa968"
 bright_magenta = "#3f8f8a"
+
+hyprland_active_border = "rgba(faa968ee) rgba(3f8f8aee) 45deg"

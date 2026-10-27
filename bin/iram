@@ -384,8 +384,8 @@ case "$cmd" in
                 fi
             fi
 
-            # Native IRAM Theme Application (fallback or standalone)
-            if [ "$applied_via_omarchy" != true ] && [ -n "$match" ]; then
+            # Synchronize IRAM Theme Assets into ~/.local/state/iram/current/theme
+            if [ -n "$match" ]; then
                 local current_dir="$HOME/.local/state/iram/current"
                 mkdir -p "$current_dir/next-theme"
                 rm -rf "$current_dir/next-theme"/*

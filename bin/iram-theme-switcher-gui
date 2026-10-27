@@ -16,6 +16,7 @@ import os
 import sys
 import shutil
 import random
+import colorsys
 import threading
 import subprocess
 import gi
@@ -1025,16 +1026,39 @@ class ThemeSwitcherApp(Gtk.Window):
     def _compute_border(self, theme_name):
         t_data = self.theme_map.get(theme_name)
         if not t_data:
-            return "rgba(00f0ffee) rgba(7000ffaa) 45deg"
+            return "rgba(7aa2f7ee) rgba(bb9af7ee) 45deg"
         colors = t_data.get('colors', {})
         border = colors.get('hyprland_active_border', '')
-        if not border:
-            acc = colors.get('accent', '#7aa2f7')
-            sec = colors.get('secondary', colors.get('selection', '#3b4261'))
-            r1, g1, b1 = hex_to_rgb(acc)
-            r2, g2, b2 = hex_to_rgb(sec)
-            border = f"rgba({r1:02x}{g1:02x}{b1:02x}ee) rgba({r2:02x}{g2:02x}{b2:02x}aa) 45deg"
-        return border
+        if border:
+            if 'deg' not in border and ' ' in border:
+                border += ' 45deg'
+            return border
+
+        acc = colors.get('accent', '#7aa2f7')
+        candidates = [
+            "secondary", "bright_magenta", "magenta", "bright_cyan", "cyan",
+            "bright_blue", "blue", "bright_yellow", "yellow", "orange",
+            "bright_green", "green", "bright_red", "red"
+        ]
+        sec = None
+        acc_lower = acc.lower()
+        for k in candidates:
+            val = colors.get(k)
+            if val and isinstance(val, str) and val.startswith('#') and len(val) == 7:
+                if val.lower() != acc_lower:
+                    sec = val.lower()
+                    break
+
+        if not sec:
+            r, g, b = hex_to_rgb(acc)
+            h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            h2 = (h + 0.15) % 1.0
+            r2, g2, b2 = colorsys.hsv_to_rgb(h2, max(s, 0.65), max(v, 0.85))
+            sec = f"#{int(r2 * 255):02x}{int(g2 * 255):02x}{int(b2 * 255):02x}"
+
+        r1, g1, b1 = hex_to_rgb(acc)
+        r2, g2, b2 = hex_to_rgb(sec)
+        return f"rgba({r1:02x}{g1:02x}{b1:02x}ee) rgba({r2:02x}{g2:02x}{b2:02x}ee) 45deg"
 
     def preview_theme_live(self, theme_name):
         border = self._compute_border(theme_name)
