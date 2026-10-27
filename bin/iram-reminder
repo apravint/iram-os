@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Zero-Overhead Systemd User Reminder Engine
+# Schedules, displays, and manages persistent countdown reminders
+# without background sleep loops or polling.
+# Inspired by Omarchy 4.5 & Enhanced for IRAM OS
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+REMINDER_DIR="${XDG_RUNTIME_DIR:-/tmp}/iram-reminders"
+mkdir -p "$REMINDER_DIR"
+
+notify() {
+    local title="$1"
+    local body="$2"
+    local icon="${3:-alarm}"
+    notify-send -a "IRAM Reminder" -i "$icon" "$title" "$body" 2>/dev/null || true
+}
+
+active_timers() {
+    local now
+    now=$(date +%s)
+    systemctl --user list-timers --all --output=json "iram-reminder-*.timer" 2>/dev/null | \
+        jq -r --argjson now "$now" '
+            .[]? | 
+            select((.next / 1000000) > $now) | 
+            "\(.unit)\t\(.next / 1000000 | floor)"
+        ' 2>/dev/null || true
+}
+
+show_reminders() {
+    local now
+    now=$(date +%s)
+    local found=0
+    local output=""
+
+    while IFS=$'\t' read -r unit next; do
+        [[ -z "$unit" || -z "$next" ]] && continue
+        found=1
+        local rem_seconds=$(( next - now ))
+        local rem_mins=$(( (rem_seconds + 59) / 60 ))
+        local at_time
+        at_time=$(date -d "@$next" +%H:%M 2>/dev/null || date -r "$next" +%H:%M 2>/dev/null || echo "$next")
+
+        local msg_file="$REMINDER_DIR/${unit%.timer}.message"
+        local msg="Reminder"
+        if [[ -f "$msg_file" ]]; then
+            msg=$(cat "$msg_file")
+        fi
+
+        local line="• $msg — in ${rem_mins}m (at $at_time)"
+        output+="${line}\n"
+        echo "$line"
+    done < <(active_timers)
+
+    if (( found == 0 )); then
+        echo "No upcoming reminders."
+        notify "⏰ Upcoming Reminders" "No active reminders set." "dialog-information"
+    else
+        notify "⏰ Upcoming Reminders" "$(printf "%b" "$output")" "alarm"
+    fi
+}
+
+clear_reminders() {
+    local units
+    units=$(systemctl --user list-timers --all --no-legend --no-pager "iram-reminder-*.timer" 2>/dev/null | awk '{print $(NF-1), $NF}' || true)
+    if [[ -n "$units" ]]; then
+        xargs -r systemctl --user stop <<<"$units" 2>/dev/null || true
+    fi
+    rm -f "$REMINDER_DIR"/iram-reminder-*.message 2>/dev/null || true
+    echo "All reminders cleared."
+    notify "⏰ Reminders Cleared" "All scheduled countdown timers cancelled." "dialog-information"
+}
+
+open_interactive() {
+    exec ~/.local/bin/iram-reminder-menu
+}
+
+usage() {
+    echo "Usage: iram reminder <minutes> [message]"
+    echo "       iram reminder show | list"
+    echo "       iram reminder clear"
+    echo "       iram reminder -i | menu"
+    exit 1
+}
+
+cmd="${1:-}"
+
+case "$cmd" in
+    -i|--interactive|menu)
+        open_interactive
+        ;;
+    show|list)
+        show_reminders
+        exit 0
+        ;;
+    clear)
+        clear_reminders
+        exit 0
+        ;;
+    "")
+        usage
+        ;;
+esac
+
+minutes="$1"
+shift || true
+message="$*"
+[[ -n "$message" ]] || message="Timer finished ($minutes min)"
+
+if [[ ! "$minutes" =~ ^[0-9]+$ ]] || (( minutes <= 0 )); then
+    echo "Error: Minutes must be a positive integer." >&2
+    usage
+fi
+
+set_at=$(date +%s)
+remind_at=$(date -d "+${minutes} minutes" +%H:%M 2>/dev/null || echo "+${minutes}m")
+unit="iram-reminder-${minutes}m-${set_at}"
+msg_file="$REMINDER_DIR/${unit}.message"
+printf "%s" "$message" > "$msg_file"
+
+systemd-run --user --quiet --collect --on-active="${minutes}m" --unit="$unit" \
+    bash -c 'notify-send -a "IRAM Reminder" -i "alarm" -u critical "⏰ Reminder" "$1"; rm -f "$2"' bash "$message" "$msg_file"
+
+notify "⏰ Reminder Set ($minutes min)" "Will remind at $remind_at: $message"
+echo "✓ Reminder set for $minutes minutes ($remind_at): $message"

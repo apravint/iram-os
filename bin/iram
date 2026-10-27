@@ -61,6 +61,7 @@ show_help() {
     echo -e "  ${CYAN}display${NC}                  Multi-monitor arrangement & refresh rate GUI"
     echo -e "  ${CYAN}brightness${NC} [+5%|-5%|N%]   Internal panel & external DDC/CI monitor brightness"
     echo -e "  ${CYAN}dictation${NC} [toggle|start|stop] Push-to-talk universal voice dictation (Super+D)"
+    echo -e "  ${CYAN}reminder${NC} <mins> [msg]     Systemd user countdown timer & notification (Super+Ctrl+R)"
     echo -e "  ${CYAN}clamshell${NC} [close|open|status] Laptop lid event handler & external display migration"
     echo -e "  ${CYAN}clipboard${NC}                Clipboard history and fuzzy search"
     echo -e "  ${CYAN}default${NC} agent [name]     Select default AI coding agent (agy, openclaw, claude...)"
@@ -345,6 +346,14 @@ case "$cmd" in
             [ -n "$target" ] || return 1
             local slug=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 
+            # Remember current background before switching away
+            local prev_theme=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || true)
+            local cur_bg=$(readlink -f "$HOME/.local/state/iram/current/background" 2>/dev/null || true)
+            if [ -n "$prev_theme" ] && [ -f "$cur_bg" ] && [[ "$cur_bg" != *"preview"* ]]; then
+                mkdir -p "$HOME/.local/state/iram/theme-backgrounds"
+                echo "$cur_bg" > "$HOME/.local/state/iram/theme-backgrounds/$prev_theme"
+            fi
+
             # Search locations for theme
             local match=""
             local search_dirs=(
@@ -394,9 +403,12 @@ case "$cmd" in
                 # Store normalized slug
                 echo "$slug" > "$current_dir/theme.name"
 
-                # Choose desktop wallpaper (prioritize actual wallpaper in backgrounds/)
+                # Choose desktop wallpaper (check per-theme memory first, then backgrounds/)
                 local bg_file=""
-                if [ -d "$current_dir/theme/backgrounds" ]; then
+                local remembered_bg="$HOME/.local/state/iram/theme-backgrounds/$slug"
+                if [ -f "$remembered_bg" ] && [ -f "$(cat "$remembered_bg" 2>/dev/null)" ]; then
+                    bg_file=$(cat "$remembered_bg")
+                elif [ -d "$current_dir/theme/backgrounds" ]; then
                     bg_file=$(find "$current_dir/theme/backgrounds" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | sort | head -n 1)
                 fi
                 if [ -z "$bg_file" ]; then
@@ -424,6 +436,26 @@ case "$cmd" in
             # Sync GNOME / GTK mode if available
             if [ -x "/usr/share/omarchy/bin/omarchy-theme-set-gnome" ]; then
                 /usr/share/omarchy/bin/omarchy-theme-set-gnome 2>/dev/null || true
+            fi
+
+            # Live broadcast ANSI OSC 10/11 escape sequences to all active terminals
+            if [ -x "$LOCAL_BIN/iram-theme-osc" ]; then
+                "$LOCAL_BIN/iram-theme-osc" "$HOME/.local/state/iram/current/theme/colors.toml" 2>/dev/null || true
+            fi
+
+            # Sync Claude Code CLI
+            if [ -x "$LOCAL_BIN/iram-theme-set-claude" ]; then
+                "$LOCAL_BIN/iram-theme-set-claude" 2>/dev/null || true
+            fi
+
+            # Sync Obsidian Vaults
+            if [ -x "$LOCAL_BIN/iram-theme-set-obsidian" ]; then
+                "$LOCAL_BIN/iram-theme-set-obsidian" 2>/dev/null || true
+            fi
+
+            # Sync Browser frame
+            if [ -x "$LOCAL_BIN/iram-theme-set-browser" ]; then
+                "$LOCAL_BIN/iram-theme-set-browser" 2>/dev/null || true
             fi
 
             # Synchronize desktop styling across Hyprland, Waybar, Wofi, Mako, and Swaybg
@@ -556,6 +588,9 @@ case "$cmd" in
         ;;
     terminal|term)
         exec "$LOCAL_BIN/iram-terminal" "$@"
+        ;;
+    reminder|reminders)
+        exec "$LOCAL_BIN/iram-reminder" "$@"
         ;;
     capture)
         sub="${1:-menu}"
