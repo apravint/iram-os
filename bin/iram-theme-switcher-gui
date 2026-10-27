@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-IRAM OS Sovereign Theme Studio & Visual Switcher (Enhanced)
-===========================================================
+IRAM OS Sovereign Theme Studio & Visual Switcher
+================================================
 High-performance Wayland/Hyprland theme selector with:
-- 43 curated palettes (Modern Suite, Cyberpunk, Earth, Minimal OLED, Light)
+- 54 sovereign palettes (Modern Suite, Cyberpunk, Earth, Minimal OLED, Light)
 - Live color swatches on every card (Background, Selection, Accent, Secondary, Tertiary)
 - Instant live desktop preview mode (Hyprland window borders & Waybar acrylic)
-- Theme wallpaper carousel & cycling inside the switcher
+- Theme wallpaper carousel & cycling inside the switcher with live thumbnail update
 - Category filter pills with dynamic count badges
 - Instant keyboard navigation (Arrows, Enter, Space, Tab, / for search, Esc)
+- Single instance toggle & active workspace placement
 """
 
 import os
@@ -27,45 +28,52 @@ GLib.set_prgname("iram-theme-switcher-gui")
 GLib.set_application_name("IRAM Theme Studio")
 
 MODERN_THEME_IDS = [
-    "ryoku-crimson",
-    "cyberpunk-neon",
     "dracula",
-    "one-dark",
+    "tokyo-night",
+    "tokyo-storm",
     "catppuccin-mocha",
     "catppuccin",
-    "tokyo-storm",
-    "tokyo-night",
     "nord-frost",
+    "one-dark",
+    "cyberpunk-neon",
+    "cyberpunk-pro-max",
+    "starship",
+    "jade-horse",
     "kanagawa-wave",
-    "night-owl",
-    "synthwave-84",
-    "oxocarbon",
-    "vesper",
+    "alpora-timeline",
+    "alpora-northern-lights",
+    "alpora-moon-lake",
+    "alpora-rose-sunset",
     "poimandres",
     "moonlight",
-    "github-dark",
-    "ayu-mirage",
-    "material-ocean",
+    "vesper",
+    "oxocarbon",
     "aura-dark",
     "rose-pine-moon",
     "monokai-pro",
     "solarized-dark",
-    "starship",
-    "jade-horse"
+    "material-ocean",
+    "ayu-mirage",
+    "night-owl",
+    "synthwave-84",
+    "ryoku-crimson",
+    "ethereal"
 ]
 
 CATEGORY_MAP = {
     "cyber": [
-        "cyberpunk-neon", "synthwave-84", "hackerman", "oxocarbon", "starship",
-        "poimandres", "ryoku-crimson", "tokyo-night", "tokyo-storm", "dracula"
+        "cyberpunk-neon", "cyberpunk-pro-max", "synthwave-84", "hackerman",
+        "oxocarbon", "starship", "poimandres", "ryoku-crimson", "tokyo-night",
+        "tokyo-storm", "dracula", "retro-82", "alpora-moon-lake", "alpora-northern-lights"
     ],
     "earth": [
         "everforest", "gruvbox", "kanagawa", "kanagawa-wave", "jade-horse",
-        "osaka-jade", "rose-pine", "rose-pine-moon", "ristretto", "miasma"
+        "osaka-jade", "rose-pine", "rose-pine-moon", "ristretto", "miasma",
+        "alpora-alpine", "alpora-forest-mist", "alpora-warm-desert", "alpora-rose-sunset"
     ],
     "minimal": [
         "vesper", "vantablack", "matte-black", "nord", "nord-frost",
-        "solitude", "lumon", "lupine", "last-horizon"
+        "solitude", "lumon", "lupine", "last-horizon", "alpora-frost", "ethereal"
     ],
     "light": [
         "catppuccin-latte", "flexoki-light", "white"
@@ -87,16 +95,36 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 def hex_to_rgb_float(hex_code):
+    if not hex_code:
+        return 0.5, 0.5, 0.5
     hex_code = hex_code.lstrip("#")
-    if len(hex_code) == 6:
-        return int(hex_code[0:2], 16) / 255.0, int(hex_code[2:4], 16) / 255.0, int(hex_code[4:6], 16) / 255.0
+    if len(hex_code) in (6, 8):
+        try:
+            return int(hex_code[0:2], 16) / 255.0, int(hex_code[2:4], 16) / 255.0, int(hex_code[4:6], 16) / 255.0
+        except ValueError:
+            pass
+    elif len(hex_code) == 3:
+        try:
+            return int(hex_code[0]*2, 16) / 255.0, int(hex_code[1]*2, 16) / 255.0, int(hex_code[2]*2, 16) / 255.0
+        except ValueError:
+            pass
     return 0.5, 0.5, 0.5
 
 
 def hex_to_rgb(hex_code):
+    if not hex_code:
+        return 26, 27, 38
     hex_code = hex_code.lstrip("#")
-    if len(hex_code) == 6:
-        return int(hex_code[0:2], 16), int(hex_code[2:4], 16), int(hex_code[4:6], 16)
+    if len(hex_code) in (6, 8):
+        try:
+            return int(hex_code[0:2], 16), int(hex_code[2:4], 16), int(hex_code[4:6], 16)
+        except ValueError:
+            pass
+    elif len(hex_code) == 3:
+        try:
+            return int(hex_code[0]*2, 16), int(hex_code[1]*2, 16), int(hex_code[2]*2, 16)
+        except ValueError:
+            pass
     return 26, 27, 38
 
 
@@ -149,15 +177,16 @@ def find_theme_preview(theme_path):
         except Exception:
             pass
 
-    for name in ['preview.png', 'preview.jpg', 'preview.jpeg', 'preview.webp']:
-        p = os.path.join(theme_path, name)
-        if os.path.isfile(p):
-            return p
     bg_dir = os.path.join(theme_path, 'backgrounds')
     if os.path.isdir(bg_dir):
         for f in sorted(os.listdir(bg_dir)):
             if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
                 return os.path.join(bg_dir, f)
+
+    for name in ['preview.png', 'preview.jpg', 'preview.jpeg', 'preview.webp']:
+        p = os.path.join(theme_path, name)
+        if os.path.isfile(p):
+            return p
     return None
 
 
@@ -202,13 +231,18 @@ def get_all_themes():
                 if mode == "light" or entry in CATEGORY_MAP["light"]:
                     cats.append("light")
 
-                primary_tag = "MODERN" if "modern" in cats else ("LIGHT" if "light" in cats else "LEGACY")
-                if "cyber" in cats and "modern" not in cats:
+                if mode == "light" or entry in CATEGORY_MAP["light"]:
+                    primary_tag = "LIGHT"
+                elif "modern" in cats:
+                    primary_tag = "MODERN"
+                elif "cyber" in cats:
                     primary_tag = "CYBER"
-                elif "earth" in cats and "modern" not in cats:
+                elif "earth" in cats:
                     primary_tag = "EARTH"
-                elif "minimal" in cats and "modern" not in cats:
+                elif "minimal" in cats:
                     primary_tag = "OLED"
+                else:
+                    primary_tag = "PALETTE"
 
                 themes[entry] = {
                     'name': entry,
@@ -252,7 +286,7 @@ class ColorSwatches(Gtk.DrawingArea):
         for hex_code in self.hex_colors:
             r, g, b = hex_to_rgb_float(hex_code)
             cr.set_source_rgb(r, g, b)
-            cr.arc(x, y, radius, 0, 2 * 3.14159)
+            cr.arc(x, y, radius, 0, 2 * 3.14159265)
             cr.fill_preserve()
 
             # Subtle rim border
@@ -265,7 +299,7 @@ class ColorSwatches(Gtk.DrawingArea):
 
 
 class ThemeCard(Gtk.FlowBoxChild):
-    def __init__(self, theme_data, is_active=False):
+    def __init__(self, theme_data, is_active=False, on_focus_callback=None):
         super().__init__()
         self.theme_data = theme_data
         self.theme_name = theme_data['name']
@@ -273,6 +307,8 @@ class ThemeCard(Gtk.FlowBoxChild):
         self.categories = theme_data['categories']
         self.primary_tag = theme_data['primary_tag']
         self.is_active = is_active
+        self.on_focus_callback = on_focus_callback
+        self.set_can_focus(True)
 
         # Card container
         self.card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -302,6 +338,10 @@ class ThemeCard(Gtk.FlowBoxChild):
             tag_badge.get_style_context().add_class("light-badge")
         elif self.primary_tag == "CYBER":
             tag_badge.get_style_context().add_class("cyber-badge")
+        elif self.primary_tag == "EARTH":
+            tag_badge.get_style_context().add_class("earth-badge")
+        elif self.primary_tag == "OLED":
+            tag_badge.get_style_context().add_class("oled-badge")
         else:
             tag_badge.get_style_context().add_class("generic-badge")
         row1.pack_start(tag_badge, False, False, 2)
@@ -323,22 +363,32 @@ class ThemeCard(Gtk.FlowBoxChild):
         row2.pack_start(self.swatches_widget, False, False, 4)
 
         wp_count = len(self.theme_data['wallpapers'])
-        wp_label = Gtk.Label(label=f"🖼️ {wp_count} WP" if wp_count > 1 else "")
-        wp_label.get_style_context().add_class("wp-badge")
-        row2.pack_end(wp_label, False, False, 4)
+        self.wp_label = Gtk.Label(label=f"🖼️ {wp_count} WP" if wp_count > 1 else "")
+        self.wp_label.get_style_context().add_class("wp-badge")
+        row2.pack_end(self.wp_label, False, False, 4)
 
         self.card.pack_start(row2, False, False, 2)
+
+        self.connect("focus-in-event", self.on_card_focus)
+
+    def on_card_focus(self, widget, event):
+        if self.on_focus_callback:
+            self.on_focus_callback(self)
+        return False
 
     def load_thumbnail(self):
         w, h = 280, 150
         cache_file = os.path.join(CACHE_DIR, f"{self.theme_name}.png")
 
-        # Load from disk cache if fresh
+        # Load from disk cache if fresh and source hasn't changed
         if os.path.isfile(cache_file):
             try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file(cache_file)
-                self.img_widget.set_from_pixbuf(pixbuf)
-                return
+                cache_mtime = os.path.getmtime(cache_file)
+                source_mtime = os.path.getmtime(self.preview_path) if (self.preview_path and os.path.isfile(self.preview_path)) else 0
+                if cache_mtime >= source_mtime:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file(cache_file)
+                    self.img_widget.set_from_pixbuf(pixbuf)
+                    return
             except Exception:
                 pass
 
@@ -356,10 +406,55 @@ class ThemeCard(Gtk.FlowBoxChild):
             except Exception as e:
                 print(f"Preview load error for {self.theme_name}: {e}", file=sys.stderr)
 
-        # Fallback dark placeholder
-        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, w, h)
-        pixbuf.fill(0x1a1c28ff)
-        self.img_widget.set_from_pixbuf(pixbuf)
+        # Fallback stylish palette placeholder
+        self.render_fallback_thumbnail(w, h)
+
+    def update_thumbnail(self, image_path, wp_idx_str=None):
+        w, h = 280, 150
+        if image_path and os.path.isfile(image_path):
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    image_path, w, h, False
+                )
+                self.img_widget.set_from_pixbuf(pixbuf)
+            except Exception:
+                pass
+        if wp_idx_str:
+            self.wp_label.set_text(wp_idx_str)
+
+    def render_fallback_thumbnail(self, w, h):
+        try:
+            surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+            cr = cairo.Context(surface)
+            bg_hex = self.theme_data['swatches'][0] if self.theme_data['swatches'] else "#161824"
+            acc_hex = self.theme_data['swatches'][2] if len(self.theme_data['swatches']) > 2 else "#00f0ff"
+            r1, g1, b1 = hex_to_rgb_float(bg_hex)
+            r2, g2, b2 = hex_to_rgb_float(acc_hex)
+
+            pat = cairo.LinearGradient(0, 0, w, h)
+            pat.add_color_stop_rgb(0, r1 * 0.8, g1 * 0.8, b1 * 0.8)
+            pat.add_color_stop_rgb(1, r2 * 0.3, g2 * 0.3, b2 * 0.3)
+            cr.set_source(pat)
+            cr.rectangle(0, 0, w, h)
+            cr.fill()
+
+            # Accent grid overlay
+            cr.set_source_rgba(r2, g2, b2, 0.15)
+            cr.set_line_width(1.0)
+            for gx in range(0, w, 24):
+                cr.move_to(gx, 0)
+                cr.line_to(gx, h)
+            for gy in range(0, h, 24):
+                cr.move_to(0, gy)
+                cr.line_to(w, gy)
+            cr.stroke()
+
+            pixbuf = Gdk.pixbuf_get_from_surface(surface, 0, 0, w, h)
+            self.img_widget.set_from_pixbuf(pixbuf)
+        except Exception:
+            pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, w, h)
+            pixbuf.fill(0x161824ff)
+            self.img_widget.set_from_pixbuf(pixbuf)
 
     def set_active_state(self, active):
         self.is_active = active
@@ -376,18 +471,19 @@ class ThemeCard(Gtk.FlowBoxChild):
 class ThemeSwitcherApp(Gtk.Window):
     def __init__(self):
         super().__init__(title="IRAM OS Sovereign Theme Studio")
-        self.set_default_size(1020, 740)
+        self.set_default_size(1040, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_border_width(16)
 
         self.category_filter = "all"
         self.live_preview_enabled = False
+        self.is_applying = False
         self.original_theme = get_current_theme()
         self.current_theme = self.original_theme
         self.selected_theme_name = self.current_theme
-        self.selected_wallpaper_idx = 0
         self.cards = {}
         self.theme_map = {}
+        self.theme_wp_indices = {}
 
         self.apply_custom_css()
         self.build_ui()
@@ -465,7 +561,7 @@ class ThemeSwitcherApp(Gtk.Window):
             color: {colors["muted"]};
             border: 1px solid {colors["border"]};
             border-radius: 8px;
-            padding: 6px 16px;
+            padding: 6px 14px;
             font-size: 12px;
             font-weight: 700;
             transition: all 150ms ease;
@@ -541,6 +637,22 @@ class ThemeSwitcherApp(Gtk.Window):
         .cyber-badge {{
             background-color: rgba(255, 0, 128, 0.2);
             color: #ff3399;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 6px;
+        }}
+        .earth-badge {{
+            background-color: rgba(90, 200, 120, 0.2);
+            color: #5ac878;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 6px;
+        }}
+        .oled-badge {{
+            background-color: rgba(160, 170, 200, 0.2);
+            color: #b0c0f0;
             font-size: 10px;
             font-weight: 800;
             padding: 2px 7px;
@@ -622,7 +734,7 @@ class ThemeSwitcherApp(Gtk.Window):
         title_box.pack_start(title_label, False, False, 0)
 
         disp_curr = self.current_theme.replace('-', ' ').title()
-        self.sub_label = Gtk.Label(label=f"Active palette: {disp_curr} • 43 Curated Palettes")
+        self.sub_label = Gtk.Label(label=f"Active palette: {disp_curr} • Loading...")
         self.sub_label.get_style_context().add_class("header-subtitle")
         self.sub_label.set_xalign(0)
         title_box.pack_start(self.sub_label, False, False, 0)
@@ -642,6 +754,8 @@ class ThemeSwitcherApp(Gtk.Window):
         self.search_entry.set_placeholder_text("🔍 Search themes (/)...")
         self.search_entry.set_width_chars(22)
         self.search_entry.connect("search-changed", self.on_search_changed)
+        self.search_entry.connect("activate", self.on_search_activate)
+        self.search_entry.connect("key-press-event", self.on_search_key_press)
         tools_box.pack_start(self.search_entry, False, False, 0)
 
         top_box.pack_end(tools_box, False, False, 0)
@@ -672,15 +786,15 @@ class ThemeSwitcherApp(Gtk.Window):
         # Live Preview Toggle Switch
         self.btn_live_preview = Gtk.Button(label="👁️ Live Preview: OFF")
         self.btn_live_preview.get_style_context().add_class("action-tool-btn")
-        self.btn_live_preview.set_tooltip_text("Instant desktop border & accent preview on selection")
+        self.btn_live_preview.set_tooltip_text("Instant desktop border & accent preview on selection (Space)")
         self.btn_live_preview.connect("clicked", self.toggle_live_preview)
         nav_row.pack_end(self.btn_live_preview, False, False, 0)
 
         main_box.pack_start(nav_row, False, False, 0)
 
         # Scrolled FlowBox Grid
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scrolled = Gtk.ScrolledWindow()
+        self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
 
         self.flowbox = Gtk.FlowBox()
         self.flowbox.set_valign(Gtk.Align.START)
@@ -693,8 +807,8 @@ class ThemeSwitcherApp(Gtk.Window):
         self.flowbox.connect("child-activated", self.on_child_activated)
         self.flowbox.connect("selected-children-changed", self.on_selection_changed)
 
-        scrolled.add(self.flowbox)
-        main_box.pack_start(scrolled, True, True, 0)
+        self.scrolled.add(self.flowbox)
+        main_box.pack_start(self.scrolled, True, True, 0)
 
         # Bottom Action Bar
         bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -733,18 +847,18 @@ class ThemeSwitcherApp(Gtk.Window):
         themes = get_all_themes()
         selected_child = None
         cur_slug = self.current_theme.lower().replace(' ', '-')
+        total_count = len(themes)
 
-        # Update category counts on pills
-        counts = {"all": 0, "modern": 0, "cyber": 0, "earth": 0, "minimal": 0, "light": 0}
+        counts = {"all": total_count, "modern": 0, "cyber": 0, "earth": 0, "minimal": 0, "light": 0}
 
         for t in themes:
             self.theme_map[t['name']] = t
             for c in t['categories']:
-                if c in counts:
+                if c in counts and c != "all":
                     counts[c] += 1
 
             is_active = (t['name'].lower().replace(' ', '-') == cur_slug)
-            card = ThemeCard(t, is_active=is_active)
+            card = ThemeCard(t, is_active=is_active, on_focus_callback=self.on_card_focused)
             self.cards[t['name']] = card
             self.flowbox.add(card)
             if is_active:
@@ -763,9 +877,29 @@ class ThemeSwitcherApp(Gtk.Window):
             if cid in pill_titles:
                 btn.set_label(pill_titles[cid])
 
+        disp_curr = self.current_theme.replace('-', ' ').title()
+        self.sub_label.set_text(f"Active palette: {disp_curr} • {total_count} Sovereign Palettes")
+
         self.flowbox.show_all()
         if selected_child:
             self.flowbox.select_child(selected_child)
+            selected_child.grab_focus()
+
+            def scroll_to_active():
+                adj = self.scrolled.get_vadjustment()
+                alloc = selected_child.get_allocation()
+                page_size = adj.get_page_size()
+                if alloc.y + alloc.height <= page_size:
+                    adj.set_value(0.0)
+                else:
+                    adj.set_value(max(0.0, alloc.y - 12))
+                return False
+
+            GLib.idle_add(scroll_to_active)
+
+    def on_card_focused(self, card):
+        # When card receives keyboard/tab focus, auto-select it
+        self.flowbox.select_child(card)
 
     def set_category_filter(self, cat):
         self.category_filter = cat
@@ -783,10 +917,30 @@ class ThemeSwitcherApp(Gtk.Window):
         query = self.search_entry.get_text().strip().lower()
         if not query:
             return True
-        return query in child.theme_name.lower() or query in child.primary_tag.lower()
+        return (query in child.theme_name.lower() or
+                query in child.primary_tag.lower() or
+                any(query in c.lower() for c in child.categories))
 
     def on_search_changed(self, entry):
         self.flowbox.invalidate_filter()
+
+    def on_search_activate(self, entry):
+        # Enter pressed inside search box: select and apply the first visible theme
+        for child in self.flowbox.get_children():
+            if child.get_child_visible():
+                self.flowbox.select_child(child)
+                self.apply_theme(child.theme_name)
+                break
+
+    def on_search_key_press(self, widget, event):
+        if event.keyval in (Gdk.KEY_Down, Gdk.KEY_Page_Down):
+            # Down arrow moves focus from search bar to grid
+            for child in self.flowbox.get_children():
+                if child.get_child_visible():
+                    child.grab_focus()
+                    self.flowbox.select_child(child)
+                    return True
+        return False
 
     def on_selection_changed(self, flowbox):
         selected = flowbox.get_selected_children()
@@ -795,9 +949,12 @@ class ThemeSwitcherApp(Gtk.Window):
             self.selected_theme_name = card.theme_name
             disp_name = card.theme_name.replace('-', ' ').title()
             t_data = self.theme_map.get(card.theme_name, {})
-            wp_len = len(t_data.get('wallpapers', []))
+            wps = t_data.get('wallpapers', [])
+            wp_len = len(wps)
+            cur_idx = self.theme_wp_indices.get(card.theme_name, 0)
 
-            self.info_label.set_text(f"Selected: {disp_name} • {t_data.get('primary_tag', '')} ({wp_len} Wallpapers)")
+            wp_info = f" • Wallpaper {cur_idx + 1}/{wp_len}" if wp_len > 1 else ""
+            self.info_label.set_text(f"Selected: {disp_name} [{t_data.get('primary_tag', '')}]{wp_info}")
 
             if self.live_preview_enabled:
                 self.preview_theme_live(card.theme_name)
@@ -818,25 +975,39 @@ class ThemeSwitcherApp(Gtk.Window):
             card.grab_focus()
 
     def on_cycle_wallpaper_clicked(self, button):
-        if self.selected_theme_name:
-            t_data = self.theme_map.get(self.selected_theme_name)
-            if t_data and t_data.get('wallpapers'):
-                wps = t_data['wallpapers']
-                self.selected_wallpaper_idx = (self.selected_wallpaper_idx + 1) % len(wps)
-                chosen = wps[self.selected_wallpaper_idx]
-                self.info_label.set_text(f"🖼️ Wallpaper: {os.path.basename(chosen)} ({self.selected_wallpaper_idx + 1}/{len(wps)})")
+        if not self.selected_theme_name:
+            return
+        t_data = self.theme_map.get(self.selected_theme_name)
+        if not t_data or not t_data.get('wallpapers'):
+            return
 
-                # If selected theme is currently active, apply wallpaper immediately
-                if self.selected_theme_name == self.current_theme or self.live_preview_enabled:
-                    subprocess.run(['iram-theme-bg-set', chosen], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    subprocess.run(['iram-theme-sync-all'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    state_dir = os.path.expanduser("~/.local/state/iram/theme-backgrounds")
-                    os.makedirs(state_dir, exist_ok=True)
-                    try:
-                        with open(os.path.join(state_dir, self.selected_theme_name), "w") as sf:
-                            sf.write(chosen)
-                    except Exception:
-                        pass
+        wps = t_data['wallpapers']
+        cur_idx = self.theme_wp_indices.get(self.selected_theme_name, 0)
+        next_idx = (cur_idx + 1) % len(wps)
+        self.theme_wp_indices[self.selected_theme_name] = next_idx
+        chosen = wps[next_idx]
+
+        disp_name = self.selected_theme_name.replace('-', ' ').title()
+        self.info_label.set_text(f"🖼️ Wallpaper: {os.path.basename(chosen)} ({next_idx + 1}/{len(wps)})")
+
+        # Update thumbnail card in the GUI immediately
+        card = self.cards.get(self.selected_theme_name)
+        if card:
+            card.update_thumbnail(chosen, f"🖼️ {next_idx + 1}/{len(wps)} WP")
+
+        # Save per-theme wallpaper memory
+        state_dir = os.path.expanduser("~/.local/state/iram/theme-backgrounds")
+        os.makedirs(state_dir, exist_ok=True)
+        try:
+            with open(os.path.join(state_dir, self.selected_theme_name), "w") as sf:
+                sf.write(chosen)
+        except Exception:
+            pass
+
+        # If selected theme is currently active or live preview is on, update desktop live
+        if self.selected_theme_name == self.current_theme or self.live_preview_enabled:
+            subprocess.run(['iram-theme-bg-set', chosen], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['iram-theme-sync-all'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def toggle_live_preview(self, button):
         self.live_preview_enabled = not self.live_preview_enabled
@@ -851,34 +1022,37 @@ class ThemeSwitcherApp(Gtk.Window):
             self.btn_live_preview.set_label("👁️ Live Preview: OFF")
             self.restore_original_theme_preview()
 
-    def preview_theme_live(self, theme_name):
+    def _compute_border(self, theme_name):
         t_data = self.theme_map.get(theme_name)
         if not t_data:
-            return
+            return "rgba(00f0ffee) rgba(7000ffaa) 45deg"
         colors = t_data.get('colors', {})
-        acc = colors.get('accent', '#7aa2f7')
         border = colors.get('hyprland_active_border', '')
         if not border:
-            r, g, b = hex_to_rgb(acc)
-            border = f"rgba({r:02x}{g:02x}{b:02x}ee) rgba({r:02x}{g:02x}{b:02x}aa) 45deg"
+            acc = colors.get('accent', '#7aa2f7')
+            sec = colors.get('secondary', colors.get('selection', '#3b4261'))
+            r1, g1, b1 = hex_to_rgb(acc)
+            r2, g2, b2 = hex_to_rgb(sec)
+            border = f"rgba({r1:02x}{g1:02x}{b1:02x}ee) rgba({r2:02x}{g2:02x}{b2:02x}aa) 45deg"
+        return border
 
+    def preview_theme_live(self, theme_name):
+        border = self._compute_border(theme_name)
         if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
             subprocess.run(["hyprctl", "keyword", "general:col.active_border", border],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def restore_original_theme_preview(self):
-        t_data = self.theme_map.get(self.original_theme)
-        if t_data:
-            colors = t_data.get('colors', {})
-            border = colors.get('hyprland_active_border', '')
-            if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
-                subprocess.run(["hyprctl", "keyword", "general:col.active_border", border],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        border = self._compute_border(self.original_theme)
+        if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+            subprocess.run(["hyprctl", "keyword", "general:col.active_border", border],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def apply_theme(self, theme_name):
-        if not theme_name:
+        if self.is_applying or not theme_name:
             return
 
+        self.is_applying = True
         disp_name = theme_name.replace('-', ' ').title()
         self.apply_btn.set_sensitive(False)
         self.info_label.set_text(f"⏳ Applying {disp_name}...")
@@ -888,6 +1062,7 @@ class ThemeSwitcherApp(Gtk.Window):
             subprocess.run([iram_bin, 'theme', 'set', theme_name], check=False)
 
             def on_done():
+                self.is_applying = False
                 self.apply_btn.set_sensitive(True)
                 theme_slug = theme_name.lower().replace(' ', '-')
                 for name, card in self.cards.items():
@@ -895,7 +1070,8 @@ class ThemeSwitcherApp(Gtk.Window):
 
                 self.current_theme = theme_slug
                 self.original_theme = theme_slug
-                self.sub_label.set_text(f"Active palette: {disp_name} • 43 Curated Palettes")
+                total = len(self.theme_map)
+                self.sub_label.set_text(f"Active palette: {disp_name} • {total} Sovereign Palettes")
                 self.info_label.set_text(f"✅ Applied {disp_name} successfully!")
 
                 osd_bin = shutil.which('iram-osd') or shutil.which('omarchy-osd')
@@ -916,18 +1092,24 @@ class ThemeSwitcherApp(Gtk.Window):
 
     def on_key_press(self, widget, event):
         if event.keyval == Gdk.KEY_Escape:
+            if self.search_entry.has_focus() or self.search_entry.get_text():
+                self.search_entry.set_text("")
+                self.flowbox.grab_focus()
+                return True
             self.close()
             return True
         elif event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-            if self.selected_theme_name:
+            if not self.search_entry.has_focus() and self.selected_theme_name:
                 self.apply_theme(self.selected_theme_name)
                 return True
         elif event.keyval == Gdk.KEY_space:
-            self.toggle_live_preview(None)
-            return True
+            if not self.search_entry.has_focus():
+                self.toggle_live_preview(None)
+                return True
         elif event.keyval == Gdk.KEY_slash:
-            self.search_entry.grab_focus()
-            return True
+            if not self.search_entry.has_focus():
+                self.search_entry.grab_focus()
+                return True
         return False
 
     def on_window_close(self, widget):

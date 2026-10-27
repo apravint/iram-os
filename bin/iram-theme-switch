@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Iram Visual Theme Switcher (with full previews)
+# Iram Visual Theme Switcher (with full previews & workspace intelligence)
 set -euo pipefail
 
 # If random explicitly requested
@@ -32,6 +32,28 @@ if [[ -n "${1:-}" && "${1:-}" != "--dmenu" && "${1:-}" != "--wofi" && "${1:-}" !
         exit 0
     fi
 fi
+
+# Hyprland active-workspace & single-instance toggle integration
+if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    active_class=$(hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' 2>/dev/null || true)
+    existing_addr=$(hyprctl clients -j 2>/dev/null | jq -r '.[] | select(.class == "iram-theme-switcher-gui") | .address' 2>/dev/null | head -n 1)
+
+    if [[ -n "$existing_addr" && "$existing_addr" != "null" ]]; then
+        if [[ "$active_class" == "iram-theme-switcher-gui" ]]; then
+            # If currently focused, toggle close
+            hyprctl dispatch closewindow address:"$existing_addr" >/dev/null 2>&1 || true
+            exit 0
+        else
+            # Bring to active workspace and focus
+            hyprctl dispatch movetoworkspace current,address:"$existing_addr" >/dev/null 2>&1 || true
+            hyprctl dispatch focuswindow address:"$existing_addr" >/dev/null 2>&1 || true
+            exit 0
+        fi
+    fi
+fi
+
+# Clean up any lingering background headless process
+pkill -f "iram-theme-switcher-gui" 2>/dev/null || true
 
 # Launch the visual card-grid preview GUI
 exec "$HOME/.local/bin/iram-theme-switcher-gui" "$@"
