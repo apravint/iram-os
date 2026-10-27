@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS - Sovereign Developer Shell Suite & Workflow Accelerators
-# Features: Tmux Dev Layouts (tdl/tds/tsl), Git Worktrees (ga/gd),
+# Features: Tmux Dev Layouts (tdl/tds/tsl), Git Worktrees (gwa/gwd/gwl),
 # Fast Compression, SSH Port Forwarding, and Background Rsync Watchers.
 # Inspired by Omarchy 4.5 & Enhanced for IRAM OS
 # https://github.com/apravint/iram-os
@@ -28,11 +28,11 @@ decompress() {
 }
 
 # ------------------------------------------------------------------------------
-# 2. GIT WORKTREE ACCELERATORS
+# 2. GIT WORKTREE ACCELERATORS (gwa = Git Worktree Add, gwd = Git Worktree Delete)
 # ------------------------------------------------------------------------------
-ga() {
+gwa() {
     if [[ -z "${1:-}" ]]; then
-        echo "Usage: ga <branch-name>" >&2
+        echo "Usage: gwa <branch-name>" >&2
         return 1
     fi
 
@@ -46,7 +46,7 @@ ga() {
     cd "$wt_path"
 }
 
-gd() {
+gwd() {
     local cwd
     cwd="$(pwd)"
     local worktree
@@ -60,8 +60,9 @@ gd() {
         return 1
     fi
 
-    read -p "Remove worktree '$worktree' and delete branch '$branch'? [y/N] " -n 1 -r
-    echo
+    printf "Remove worktree '%s' and delete branch '%s'? [y/N] " "$worktree" "$branch"
+    local REPLY
+    read -r REPLY
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         cd "../$root"
         git worktree remove "$cwd" --force || return 1
@@ -69,6 +70,15 @@ gd() {
         echo "Worktree and branch '$branch' removed."
     fi
 }
+
+gwl() {
+    git worktree list
+}
+
+# Worktree helper aliases
+alias gwt-add=gwa
+alias gwt-del=gwd
+alias gwt-list=gwl
 
 # ------------------------------------------------------------------------------
 # 3. TMUX AI & DEVELOPER LAYOUTS
@@ -144,23 +154,24 @@ tsl() {
     fi
 
     local current_dir="${PWD}"
-    local -a panes=("$TMUX_PANE")
+    local root_pane="$TMUX_PANE"
+    local -a panes=("$root_pane")
 
-    tmux rename-window -t "$TMUX_PANE" "swarm-$(basename "$current_dir")"
+    tmux rename-window -t "$root_pane" "swarm-$(basename "$current_dir")"
 
     while (( ${#panes[@]} < count )); do
         local split_target="${panes[-1]}"
         local new_pane
         new_pane=$(tmux split-window -h -t "$split_target" -c "$current_dir" -P -F '#{pane_id}')
         panes+=("$new_pane")
-        tmux select-layout -t "${panes[0]}" tiled
+        tmux select-layout -t "$root_pane" tiled
     done
 
     for pane in "${panes[@]}"; do
         tmux send-keys -t "$pane" "$cmd" C-m
     done
 
-    tmux select-pane -t "${panes[0]}"
+    tmux select-pane -t "$root_pane"
 }
 
 # ------------------------------------------------------------------------------
