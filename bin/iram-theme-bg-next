@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Cycle Next Background in Active Theme
+# Cycles through all wallpapers in ~/.local/state/iram/current/theme/backgrounds
+# ==============================================================================
+set -euo pipefail
+
+CURRENT_THEME_DIR="$HOME/.local/state/iram/current/theme"
+CURRENT_BG_LINK="$HOME/.local/state/iram/current/background"
+THEME_NAME_FILE="$HOME/.local/state/iram/current/theme.name"
+THEME_BG_STATE_DIR="$HOME/.local/state/iram/theme-backgrounds"
+
+BG_DIR="$CURRENT_THEME_DIR/backgrounds"
+if [ ! -d "$BG_DIR" ]; then
+    BG_DIR="$CURRENT_THEME_DIR"
+fi
+
+mapfile -t BACKGROUNDS < <(
+    find -L "$BG_DIR" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+      ! -name '*preview*' | sort
+)
+
+if [ ${#BACKGROUNDS[@]} -eq 0 ]; then
+    echo "No wallpapers found for active theme." >&2
+    exit 0
+fi
+
+CURRENT_BG=$(readlink -f "$CURRENT_BG_LINK" 2>/dev/null || true)
+CURRENT_BG_BASE=$(basename "$CURRENT_BG")
+INDEX=-1
+for i in "${!BACKGROUNDS[@]}"; do
+    if [ "$(basename "${BACKGROUNDS[$i]}")" = "$CURRENT_BG_BASE" ]; then
+        INDEX=$i
+        break
+    fi
+done
+
+NEXT_INDEX=$(( (INDEX + 1) % ${#BACKGROUNDS[@]} ))
+NEXT_BG="${BACKGROUNDS[$NEXT_INDEX]}"
+
+# Apply background
+iram-theme-bg-set "$NEXT_BG"
+
+# Save state for this theme
+if [ -f "$THEME_NAME_FILE" ]; then
+    THEME_NAME=$(cat "$THEME_NAME_FILE")
+    mkdir -p "$THEME_BG_STATE_DIR"
+    echo "$NEXT_BG" > "$THEME_BG_STATE_DIR/$THEME_NAME"
+fi
+
+echo "Cycled wallpaper to: $(basename "$NEXT_BG") ($((NEXT_INDEX + 1))/${#BACKGROUNDS[@]})"

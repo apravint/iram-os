@@ -500,7 +500,9 @@ case "$cmd" in
                 shift 2>/dev/null || true
                 case "$sub_bg" in
                     next)
-                        if [ -x "/usr/local/bin/omarchy-theme-bg-next" ]; then
+                        if [ -x "$LOCAL_BIN/iram-theme-bg-next" ]; then
+                            "$LOCAL_BIN/iram-theme-bg-next"
+                        elif [ -x "/usr/local/bin/omarchy-theme-bg-next" ]; then
                             /usr/local/bin/omarchy-theme-bg-next
                         fi
                         "$LOCAL_BIN/iram-theme-sync-all" 2>/dev/null || true

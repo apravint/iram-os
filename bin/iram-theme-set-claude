@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Claude Code Theme Synchronizer
+# Syncs current desktop theme colors to Claude Code CLI
+# ==============================================================================
+set -euo pipefail
+
+CURRENT_THEME_DIR="$HOME/.local/state/iram/current/theme"
+CLAUDE_SOURCE_PATH="$CURRENT_THEME_DIR/claude.json"
+CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CLAUDE_THEME_PATH="$CLAUDE_CONFIG_DIR/themes/iram.json"
+CLAUDE_SETTINGS_PATH="$CLAUDE_CONFIG_DIR/settings.json"
+
+if [ ! -f "$CLAUDE_SOURCE_PATH" ]; then
+    exit 0
+fi
+
+if [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
+    exit 0
+fi
+
+mkdir -p "$(dirname "$CLAUDE_THEME_PATH")"
+cp "$CLAUDE_SOURCE_PATH" "$CLAUDE_THEME_PATH"
+
+if [ -f "$CLAUDE_SETTINGS_PATH" ] && command -v jq >/dev/null 2>&1; then
+    tmp=$(mktemp)
+    if jq '.theme = "custom:iram"' "$CLAUDE_SETTINGS_PATH" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$CLAUDE_SETTINGS_PATH"
+    else
+        rm -f "$tmp"
+    fi
+fi

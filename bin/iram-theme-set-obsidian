@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Obsidian Vault Theme Synchronizer
+# Syncs current desktop theme colors to all Obsidian vaults
+# ==============================================================================
+set -euo pipefail
+
+CURRENT_THEME_DIR="$HOME/.local/state/iram/current/theme"
+OBSIDIAN_CSS="$CURRENT_THEME_DIR/obsidian.css"
+OBSIDIAN_CONF="$HOME/.config/obsidian/obsidian.json"
+
+if [ ! -f "$OBSIDIAN_CSS" ] || [ ! -f "$OBSIDIAN_CONF" ] || ! command -v jq >/dev/null 2>&1; then
+    exit 0
+fi
+
+jq -r '.vaults | values[].path' "$OBSIDIAN_CONF" 2>/dev/null | while read -r vault_path; do
+    [ -d "$vault_path/.obsidian" ] || continue
+
+    theme_dir="$vault_path/.obsidian/themes/IRAM"
+    mkdir -p "$theme_dir"
+
+    cat > "$theme_dir/manifest.json" << 'EOF'
+{
+  "name": "IRAM",
+  "version": "1.0.0",
+  "minAppVersion": "0.16.0",
+  "description": "Auto-syncs with your current IRAM OS theme palette",
+  "author": "IRAM OS",
+  "authorUrl": "https://github.com/apravint/iram-os"
+}
+EOF
+
+    cp "$OBSIDIAN_CSS" "$theme_dir/theme.css"
+done

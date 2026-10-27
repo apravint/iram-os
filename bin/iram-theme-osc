@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - ANSI OSC Live Terminal Retinter
+Broadcasts OSC 10/11/4 escape sequences to all active terminals and PTYs
+so open shells immediately adapt their background and palette without restarting.
+https://github.com/apravint/iram-os
+"""
+
+import os
+import sys
+import glob
+import re
+
+def parse_colors(toml_path):
+    colors = {
+        "foreground": "#f8f8f2",
+        "background": "#1e1f29",
+        "dark_background": "#191a21",
+        "bright_foreground": "#ffffff",
+        "selection": "#44475a",
+        "accent": "#bd93f9",
+        "muted": "#6272a4",
+        "red": "#ff5555",
+        "green": "#50fa7b",
+        "yellow": "#f1fa8c",
+        "blue": "#bd93f9",
+        "magenta": "#ff79c6",
+        "cyan": "#8be9fd",
+        "bright_red": "#ff6e6e",
+        "bright_green": "#69ff94",
+        "bright_yellow": "#ffffa5",
+        "bright_blue": "#d1b2ff",
+        "bright_magenta": "#ff92df",
+        "bright_cyan": "#a4ffff",
+    }
+    if os.path.exists(toml_path):
+        try:
+            with open(toml_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    m = re.match(r'^([a-zA-Z0-9_]+)\s*=\s*["\']([^"\']+)["\']', line)
+                    if m:
+                        colors[m.group(1)] = m.group(2)
+        except Exception:
+            pass
+    return colors
+
+def build_osc_payload(colors):
+    fg = colors.get("foreground", "#f8f8f2")
+    bg = colors.get("background", "#1e1f29")
+    cursor = colors.get("bright_foreground", colors.get("accent", fg))
+    sel_bg = colors.get("selection", "#44475a")
+    sel_fg = colors.get("bright_foreground", "#ffffff")
+
+    palette = [
+        colors.get("dark_background", colors.get("background", "#191a21")), # 0
+        colors.get("red", "#ff5555"),                                        # 1
+        colors.get("green", "#50fa7b"),                                      # 2
+        colors.get("yellow", "#f1fa8c"),                                     # 3
+        colors.get("blue", "#bd93f9"),                                       # 4
+        colors.get("magenta", "#ff79c6"),                                    # 5
+        colors.get("cyan", "#8be9fd"),                                       # 6
+        colors.get("foreground", "#f8f8f2"),                                 # 7
+        colors.get("muted", "#6272a4"),                                      # 8
+        colors.get("bright_red", colors.get("red", "#ff6e6e")),              # 9
+        colors.get("bright_green", colors.get("green", "#69ff94")),          # 10
+        colors.get("bright_yellow", colors.get("yellow", "#ffffa5")),        # 11
+        colors.get("bright_blue", colors.get("blue", "#d1b2ff")),            # 12
+        colors.get("bright_magenta", colors.get("magenta", "#ff92df")),      # 13
+        colors.get("bright_cyan", colors.get("cyan", "#a4ffff")),            # 14
+        colors.get("bright_foreground", "#ffffff")                           # 15
+    ]
+
+    seqs = []
+    seqs.append(f"\033]10;{fg}\007")
+    seqs.append(f"\033]11;{bg}\007")
+    seqs.append(f"\033]12;{cursor}\007")
+    seqs.append(f"\033]17;{sel_bg}\007")
+    seqs.append(f"\033]19;{sel_fg}\007")
+
+    for i, col in enumerate(palette):
+        seqs.append(f"\033]4;{i};{col}\007")
+
+    return "".join(seqs)
+
+def broadcast_osc(payload):
+    # 1. Output to current stdout if it's a tty
+    if sys.stdout.isatty():
+        sys.stdout.write(payload)
+        sys.stdout.flush()
+
+    # 2. Broadcast to all accessible /dev/pts terminals
+    uid = os.getuid()
+    for pty in glob.glob("/dev/pts/[0-9]*"):
+        try:
+            st = os.stat(pty)
+            if st.st_uid == uid and (st.st_mode & 0o200):
+                with open(pty, "w", encoding="utf-8", errors="ignore") as f:
+                    f.write(payload)
+        except Exception:
+            pass
+
+    # 3. Tmux broadcast if active
+    if os.environ.get("TMUX"):
+        try:
+            import subprocess
+            subprocess.run(["tmux", "set", "-g", "window-style", "default"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+def main():
+    theme_file = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/.local/state/iram/current/theme/colors.toml")
+    colors = parse_colors(theme_file)
+    payload = build_osc_payload(colors)
+    broadcast_osc(payload)
+
+if __name__ == "__main__":
+    main()

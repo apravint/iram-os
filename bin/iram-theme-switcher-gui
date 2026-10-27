@@ -49,16 +49,18 @@ MODERN_THEME_IDS = [
     "aura-dark",
     "rose-pine-moon",
     "monokai-pro",
-    "solarized-dark"
+    "solarized-dark",
+    "starship",
+    "jade-horse"
 ]
 
 CATEGORY_MAP = {
     "cyber": [
-        "cyberpunk-neon", "synthwave-84", "hackerman", "oxocarbon",
+        "cyberpunk-neon", "synthwave-84", "hackerman", "oxocarbon", "starship",
         "poimandres", "ryoku-crimson", "tokyo-night", "tokyo-storm", "dracula"
     ],
     "earth": [
-        "everforest", "gruvbox", "kanagawa", "kanagawa-wave",
+        "everforest", "gruvbox", "kanagawa", "kanagawa-wave", "jade-horse",
         "osaka-jade", "rose-pine", "rose-pine-moon", "ristretto", "miasma"
     ],
     "minimal": [
