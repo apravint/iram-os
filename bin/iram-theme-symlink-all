@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Theme Symlink & Directory Synchronizer
+# Ensures all sovereign themes in ~/iram-os/themes are linked into
+# ~/.config/omarchy/themes and system caches remain synchronized.
+# ==============================================================================
+set -euo pipefail
+
+IRAM_DIR="${IRAM_DIR:-$HOME/iram-os}"
+THEMES_SRC="$IRAM_DIR/themes"
+OMARCHY_THEMES_DEST="$HOME/.config/omarchy/themes"
+
+if [ ! -d "$THEMES_SRC" ]; then
+    echo "IRAM themes directory not found at: $THEMES_SRC" >&2
+    exit 1
+fi
+
+mkdir -p "$OMARCHY_THEMES_DEST"
+
+count=0
+for theme_dir in "$THEMES_SRC"/*; do
+    if [ -d "$theme_dir" ]; then
+        theme_name="$(basename "$theme_dir")"
+        target="$OMARCHY_THEMES_DEST/$theme_name"
+        
+        # If target exists and is an ordinary directory (not a symlink), back it up
+        if [ -d "$target" ] && [ ! -L "$target" ]; then
+            mv "$target" "${target}.bak.$(date +%s)"
+        fi
+        
+        ln -sfn "$theme_dir" "$target"
+        count=$((count + 1))
+    fi
+done
+
+echo "✓ Synchronized $count IRAM sovereign themes to $OMARCHY_THEMES_DEST"

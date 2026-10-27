@@ -513,6 +513,16 @@ case "$cmd" in
                         ;;
                 esac
                 ;;
+            sync)
+                if [ -x "$LOCAL_BIN/iram-theme-symlink-all" ]; then
+                    "$LOCAL_BIN/iram-theme-symlink-all"
+                elif [ -x "${IRAM_PATH:-$HOME/iram-os}/bin/iram-theme-symlink-all" ]; then
+                    "${IRAM_PATH:-$HOME/iram-os}/bin/iram-theme-symlink-all"
+                fi
+                if [ -x "$LOCAL_BIN/iram-theme-sync-all" ]; then
+                    "$LOCAL_BIN/iram-theme-sync-all"
+                fi
+                ;;
             timeline)
                 exec "$LOCAL_BIN/iram-theme-timeline" "$@"
                 ;;
