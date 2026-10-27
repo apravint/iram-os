@@ -50,7 +50,7 @@ You have FULL authority to use tools and run bash commands on this computer to i
 AVAILABLE BUILT-IN TOOLS:
 - `iram network [scan|watch|info]` : Wi-Fi radar (scans, identifies all devices on Wi-Fi, MAC vendors, and new device alerts).
 - `iram quant [all|us|in]` : Algorithmic stock market leader scanner (momentum ranking, 200 SMA regime filter, ATR position sizing).
-- `iram theme [list|current|set <name>|next]` : 43 sovereign curated desktop themes with live zero-restart hot-reloading.
+- `iram theme [list|current|set <name>|next]` : 54 sovereign curated desktop themes with live zero-restart hot-reloading.
 - `iram info` : OS status HUD (kernel, distribution, theme, memory, compositor).
 - `iram audit` : Adversarial security audit engine.
 - `iram craft <app>` : Storytold creative apps (photo, vector, film, sound, cad, word, grid, deck, pdf).
@@ -165,7 +165,7 @@ def show_help_menu():
     print(f"  {YELLOW}/net{NC} [scan|watch|info]    Scan or monitor all Wi-Fi connected devices")
     print(f"  {YELLOW}/quant{NC} [us|in|all]        Run algorithmic stock market leader scanner")
     print(f"  {YELLOW}/info{NC}                      Display live OS, kernel, theme, and memory HUD")
-    print(f"  {YELLOW}/theme{NC} [name|list|next]    List or switch among 43 sovereign desktop themes")
+    print(f"  {YELLOW}/theme{NC} [name|list|next]    List or switch among 54 sovereign desktop themes")
     print(f"  {YELLOW}/tools{NC}                     Browse all 40+ native IRAM OS CLI utilities")
     print(f"  {YELLOW}/search{NC} <query>            Live internet search (DuckDuckGo)")
     print(f"  {YELLOW}/model{NC} [name]             Inspect or switch active LLM model")

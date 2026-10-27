@@ -51,7 +51,7 @@ case "$route" in
     ;;
   *)
     # Root menu
-    CHOICE=$(printf "🚀 Applications Launcher (All Apps)\n🌐 WorldMonitor Planetary Radar\n🛡️ Adversarial Security Audit\n📈 Financial Valuation (DCF)\n⚡ Visual Architecture Map\n🔬 Reverse Engineer Binary (REA)\n🧠 Long-Term Memory (Hindsight)\n🖥️ Display and Monitor Settings\n🔊 Sound and Audio Control (Pavucontrol)\n⚙️ System Settings\n🎨 Theme Switcher (43 Curated Themes)\n🔤 Font Switcher\n🖱️ Cursor Theme Switcher\n🖼️ Next Background Wallpaper\n⌨️ Keybindings Cheat Sheet\n⏱️ Set Reminder\n📸 Screenshot and Screen Recording\n📋 Clipboard History\n📶 Network and Wi-Fi Settings\n󰂯 Bluetooth Devices\n󰃝 Toggle Nightlight (Eye Care)\n⏻ Power Menu (Lock, Sleep, Shutdown)" | wofi --dmenu --prompt "Iram Menu:" --lines 18 --style ~/.config/wofi/style.css -i)
+    CHOICE=$(printf "🚀 Applications Launcher (All Apps)\n🌐 WorldMonitor Planetary Radar\n🛡️ Adversarial Security Audit\n📈 Financial Valuation (DCF)\n⚡ Visual Architecture Map\n🔬 Reverse Engineer Binary (REA)\n🧠 Long-Term Memory (Hindsight)\n🖥️ Display and Monitor Settings\n🔊 Sound and Audio Control (Pavucontrol)\n⚙️ System Settings\n🎨 Theme Switcher (54 Sovereign Themes)\n🔤 Font Switcher\n🖱️ Cursor Theme Switcher\n🖼️ Next Background Wallpaper\n⌨️ Keybindings Cheat Sheet\n⏱️ Set Reminder\n📸 Screenshot and Screen Recording\n📋 Clipboard History\n📶 Network and Wi-Fi Settings\n󰂯 Bluetooth Devices\n󰃝 Toggle Nightlight (Eye Care)\n⏻ Power Menu (Lock, Sleep, Shutdown)" | wofi --dmenu --prompt "Iram Menu:" --lines 18 --style ~/.config/wofi/style.css -i)
     
     [[ -z "$CHOICE" ]] && exit 0
     
