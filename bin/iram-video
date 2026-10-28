@@ -103,6 +103,39 @@ def upscale_video(input_path: str, output_path: str = "", scale: int = 2):
 
     print(f"✅ Upscaled video saved: {output_path}")
 
+def clip_video(target: str, provider: str = "", style: str = "", ratio: str = "9:16", max_clips: int = 0, centre_crop: bool = False):
+    """Invokes AutoClip to transform long-form video or YouTube links into vertical clips."""
+    autoclip_bin = shutil.which("autoclip") or os.path.expanduser("~/.local/bin/autoclip")
+    if not os.path.exists(autoclip_bin):
+        print("Error: autoclip executable not found. Ensure ~/autoclip is installed.", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [autoclip_bin, "clip", target]
+    if provider:
+        cmd.extend(["--provider", provider])
+    if style:
+        cmd.extend(["--style", style])
+    if ratio:
+        cmd.extend(["--ratio", ratio])
+    if max_clips > 0:
+        cmd.extend(["--max-clips", str(max_clips)])
+    if centre_crop:
+        cmd.append("--centre-crop")
+
+    print(f"🎬 Running IRAM AutoClip Pipeline on: {target}")
+    subprocess.run(cmd)
+
+def launch_clip_studio(port: int = 8000):
+    """Launches the AutoClip Web Studio."""
+    autoclip_bin = shutil.which("autoclip") or os.path.expanduser("~/.local/bin/autoclip")
+    if not os.path.exists(autoclip_bin):
+        print("Error: autoclip executable not found. Ensure ~/autoclip is installed.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"🎬 Launching AutoClip Web Studio on http://localhost:{port}...")
+    subprocess.Popen(["bash", "-c", f"sleep 1.5 && xdg-open http://localhost:{port} 2>/dev/null || true"])
+    subprocess.run([autoclip_bin, "serve", "--port", str(port)])
+
 def list_videos():
     os.makedirs(VIDEO_DIR, exist_ok=True)
     files = sorted(os.listdir(VIDEO_DIR))
@@ -114,7 +147,8 @@ def list_videos():
 
 def main():
     # If invoked with full engine commands (e.g. prompt, --montage, pipelines, backlot, --real, --film, --help, etc.), delegate to full engine
-    if len(sys.argv) > 1 and sys.argv[1] not in ("studio", "render", "upscale", "list"):
+    handled_cmds = ("studio", "render", "upscale", "list", "clip", "autoclip", "clip-studio")
+    if len(sys.argv) > 1 and sys.argv[1] not in handled_cmds:
         full_engine = os.path.expanduser("~/iram-video/bin/iram-video")
         if os.path.exists(full_engine) and os.access(full_engine, os.X_OK):
             os.execv(full_engine, [full_engine] + sys.argv[1:])
@@ -135,6 +169,17 @@ def main():
     upscale_parser.add_argument("-o", "--output", help="Output video filename")
     upscale_parser.add_argument("--scale", type=int, default=2, help="Scaling multiplier (default: 2)")
 
+    clip_parser = subparsers.add_parser("clip", help="Turn long video into vertical shorts via AutoClip")
+    clip_parser.add_argument("target", help="YouTube URL or local video file path")
+    clip_parser.add_argument("--provider", "-p", default="", help="LLM provider: 'gemini', 'ollama', etc.")
+    clip_parser.add_argument("--style", "-s", default="bold_pop", choices=["bold_pop", "karaoke_fill", "clean_lower", "boxed"], help="Caption style preset")
+    clip_parser.add_argument("--ratio", "-r", default="9:16", choices=["9:16", "1:1", "16:9"], help="Output aspect ratio")
+    clip_parser.add_argument("--max-clips", "-n", type=int, default=0, help="Max clips to generate (0 for auto)")
+    clip_parser.add_argument("--centre-crop", action="store_true", help="Skip face tracking and centre crop")
+
+    studio_parser = subparsers.add_parser("clip-studio", help="Launch AutoClip Web Studio")
+    studio_parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8000)")
+
     subparsers.add_parser("list", help="List rendered video files")
 
     args = parser.parse_args()
@@ -145,6 +190,10 @@ def main():
         render_code_to_video(args.spec, args.output, args.fps, args.duration)
     elif args.command == "upscale":
         upscale_video(args.video, args.output, args.scale)
+    elif args.command == "clip":
+        clip_video(args.target, args.provider, args.style, args.ratio, args.max_clips, args.centre_crop)
+    elif args.command == "clip-studio":
+        launch_clip_studio(args.port)
     elif args.command == "list":
         list_videos()
 
