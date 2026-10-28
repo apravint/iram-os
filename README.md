@@ -149,6 +149,12 @@ Switching themes via `Super + T` or `iram theme` dynamically re-skins Hyprland b
 - New to dynamic tiling? Toggle instantly between **Strict Tiling Mode** and **Traditional Floating Desktop** with taskbars using `Super + Alt + L` or `iram layout`.
 - Ships with an interactive **Welcome Onboarding GUI** (`iram welcome`) to customize themes, monitors, and audio devices on first launch.
 
+### 8. 🎬 Universal Film & PersonaLive Avatar Studio (`iram video`)
+- **Real 1080p/4K YouTube Documentaries**: Generates broadcast-grade documentary videos with real B-roll, acoustic score, and zero hallucinations (`iram video "<topic>" --real`).
+- **PersonaLive Real-Time Streamable Avatars**: CVPR 2026 streamable portrait diffusion framework generating infinite-length digital human presenters from a single photo on consumer GPUs (~12GB VRAM, $0.00 cloud costs).
+- **OpenMontage 12-Pipeline Hub**: Autonomous multi-agent film directing across documentaries, explainer animations, and talking-head productions (`iram video montage`).
+- **Headless Remotion React Renderer**: Production-quality motion graphics and charts rendered headlessly via Chrome Headless Shell.
+
 ---
 
 ## 🤖 The Autonomous Agentic Toolchain
@@ -161,6 +167,8 @@ IRAM OS embeds an exhaustive suite of autonomous engineering binaries in `bin/` 
 | **Agent Dispatcher** | `iram agent` (`Super + A`) | Hierarchical agent tree (Architect reasoning $\rightarrow$ Coordinator $\rightarrow$ Worker fleet) |
 | **Agent Sidecar** | `iram-agent-sidecar` | Floating companion window providing persistent desktop assistance |
 | **Model Context Protocol** | `iram-mcp-server` | FastMCP 2.0 server bridging Hyprland, audio, and system actions to LLMs |
+| **Universal Film Studio** | `iram video` | Real 1080p/4K YouTube Documentary generator, Remotion React engine & OpenMontage |
+| **PersonaLive Avatar** | `iram video avatar` | Real-time streamable portrait diffusion (CVPR 2026), 12GB VRAM infinite-duration avatars |
 | **Rootless Code Sandbox**| `iram-code-agent` | AST Python executor powered by smolagents inside Bubblewrap containment |
 | **Context Compressor** | `iram-context-condenser` | 98% BM25 context compression engine for coding agent sessions |
 | **Episodic Memory** | `iram-memory` | Temporal memory with recency decay (`agent-hindsight`) and Qdrant vector store |
