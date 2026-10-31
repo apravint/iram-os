@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# iram:summary=Returns a formatted weather status string with temperature and wind speed.
+
+set -eo pipefail
+
+place=$(iram-weather-location 2>/dev/null || echo "Chennai")
+
+if [[ -z $place ]]; then
+  echo "Chennai · Temp 29°C"
+  exit 0
+fi
+
+if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+  echo "$place · Temp 29°C"
+  exit 0
+fi
+
+query=$(jq -rn --arg place "$place" '$place | @uri' 2>/dev/null || echo "$place")
+weather=$(curl -fsS --max-time 4 "https://wttr.in/${query}?format=%t|%w" 2>/dev/null | tr -d '\n' || true)
+
+if [[ -z $weather ]]; then
+  echo "$place · Temp 29°C"
+  exit 0
+fi
+
+IFS='|' read -r temperature wind <<< "$weather"
+place=${place^}
+temperature=${temperature#+}
+
+echo "$place · Temp $temperature · Wind $wind"

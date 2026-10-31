@@ -9,6 +9,10 @@ fi
 
 # If text/dmenu mode explicitly requested, use wofi
 if [[ "${1:-}" == "--dmenu" || "${1:-}" == "--wofi" || "${1:-}" == "--text" ]]; then
+    if ! command -v wofi >/dev/null 2>&1; then
+        notify-send -u critical "Theme Switcher" "wofi is not installed." 2>/dev/null || echo "wofi not installed" >&2
+        exit 1
+    fi
     THEMES=$(iram theme list)
     CURRENT=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "None")
     SELECTED=$(echo "$THEMES" | wofi --dmenu --prompt "Theme (Current: $CURRENT):" --width 380 --height 450)

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Iram Clipboard History Menu
-set -e
+set -euo pipefail
 
-SELECTED=$(cliphist list | wofi --dmenu --prompt "Clipboard History:" --width 650 --height 450)
+if ! command -v cliphist >/dev/null 2>&1 || ! command -v wofi >/dev/null 2>&1; then
+    notify-send -u critical "Clipboard Menu" "cliphist or wofi is not installed." 2>/dev/null || echo "cliphist or wofi not installed" >&2
+    exit 1
+fi
+
+SELECTED=$(cliphist list | wofi --dmenu --prompt "Clipboard History:" --width 650 --height 450 || true)
 
 if [[ -n "$SELECTED" ]]; then
     echo "$SELECTED" | cliphist decode | wl-copy

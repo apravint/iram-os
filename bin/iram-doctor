@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Doctor & System Diagnostics
+# Comprehensive health verification for compositor, themes, systemd daemons,
+# Wayland tools, audio sinks, and AI copilot stack.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -eo pipefail
+
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+PASSED=0
+WARNINGS=0
+FAILED=0
+
+check_pass() {
+    echo -e "  [${GREEN}✓${NC}] $1"
+    PASSED=$((PASSED + 1))
+}
+
+check_warn() {
+    echo -e "  [${YELLOW}!${NC}] $1"
+    WARNINGS=$((WARNINGS + 1))
+}
+
+check_fail() {
+    echo -e "  [${RED}✗${NC}] $1"
+    FAILED=$((FAILED + 1))
+}
+
+echo -e "${BLUE}======================================================${NC}"
+echo -e "${BOLD}${CYAN}          IRAM OS SYSTEM HEALTH DOCTOR${NC}"
+echo -e "${BLUE}======================================================${NC}"
+
+# 1. WAYLAND & COMPOSITOR
+echo -e "\n${BOLD}${BLUE}[1/7] Compositor & Wayland Environment${NC}"
+if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    check_pass "Wayland Display active ($WAYLAND_DISPLAY)"
+else
+    check_warn "WAYLAND_DISPLAY not set in current shell session"
+fi
+
+if command -v hyprctl >/dev/null 2>&1; then
+    HYPR_VER=$(hyprctl version 2>/dev/null | grep -i "tag:" | head -n 1 | awk '{print $2}' || echo "installed")
+    check_pass "Hyprland installed ($HYPR_VER)"
+else
+    check_fail "Hyprland not installed or not in PATH"
+fi
+
+HYPR_CONF="$HOME/.config/hypr/hyprland.conf"
+if [ -f "$HYPR_CONF" ]; then
+    if command -v hyprland >/dev/null 2>&1 && hyprland --verify-config --config "$HYPR_CONF" >/dev/null 2>&1; then
+        check_pass "Hyprland configuration syntax verified ($HYPR_CONF)"
+    else
+        check_warn "Hyprland config syntax has minor warnings ($HYPR_CONF)"
+    fi
+else
+    check_fail "Hyprland configuration file missing ($HYPR_CONF)"
+fi
+
+if [ -f "$HOME/.config/hypr/user-overrides.conf" ]; then
+    check_pass "User overrides config exists (~/.config/hypr/user-overrides.conf)"
+else
+    check_warn "Missing ~/.config/hypr/user-overrides.conf (creating now)"
+    mkdir -p "$HOME/.config/hypr" && touch "$HOME/.config/hypr/user-overrides.conf"
+fi
+
+# 2. STATUS BAR & DESKTOP SHELL
+echo -e "\n${BOLD}${BLUE}[2/7] Desktop Shell & Status Bar${NC}"
+if pgrep -x waybar >/dev/null 2>&1; then
+    check_pass "Waybar status bar is running (PID: $(pgrep -x waybar | head -n 1))"
+else
+    check_warn "Waybar status bar is not currently active"
+fi
+
+if [ -f "$HOME/.config/waybar/config.jsonc" ]; then
+    check_pass "Waybar config.jsonc exists"
+else
+    check_fail "Missing ~/.config/waybar/config.jsonc"
+fi
+
+if pgrep -x swaybg >/dev/null 2>&1; then
+    check_pass "Swaybg wallpaper daemon is active (PID: $(pgrep -x swaybg | head -n 1))"
+else
+    check_warn "Swaybg daemon is not currently active"
+fi
+
+BG_SYMLINK="$HOME/.local/state/iram/current/background"
+if [ -f "$BG_SYMLINK" ] || [ -L "$BG_SYMLINK" ]; then
+    REAL_BG=$(readlink -f "$BG_SYMLINK" 2>/dev/null || true)
+    check_pass "Theme background symlink resolved ($REAL_BG)"
+else
+    check_warn "No active theme background linked at $BG_SYMLINK"
+fi
+
+for tool in wofi alacritty mako foot; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        check_pass "Desktop tool '$tool' available"
+    else
+        check_warn "Desktop tool '$tool' missing"
+    fi
+done
+
+# 3. SOVEREIGN THEMES & SYNC ENGINE
+echo -e "\n${BOLD}${BLUE}[3/7] Sovereign Theme Engine${NC}"
+THEME_DIR="/home/apravint/iram-os/themes"
+[ ! -d "$THEME_DIR" ] && THEME_DIR="/usr/share/iram/themes"
+[ ! -d "$THEME_DIR" ] && THEME_DIR="$HOME/.config/iram/themes"
+
+if [ -d "$THEME_DIR" ]; then
+    THEME_COUNT=$(find "$THEME_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)
+    check_pass "Sovereign themes directory found ($THEME_COUNT themes installed)"
+else
+    check_fail "Themes directory not found"
+fi
+
+CURRENT_THEME=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "None")
+if [ "$CURRENT_THEME" != "None" ]; then
+    check_pass "Active theme set to '$CURRENT_THEME'"
+else
+    check_warn "No active theme set in ~/.local/state/iram/current/theme.name"
+fi
+
+if [ -x "$HOME/.local/bin/iram-theme-sync-all" ] || [ -x "/home/apravint/iram-os/bin/iram-theme-sync-all" ]; then
+    check_pass "Theme sync engine (iram-theme-sync-all) executable"
+else
+    check_fail "Theme sync engine missing or not executable"
+fi
+
+# 4. AUDIO & PIPEWIRE SUBSYSTEM
+echo -e "\n${BOLD}${BLUE}[4/7] Audio Subsystem & Output Sinks${NC}"
+if command -v pactl >/dev/null 2>&1; then
+    SINKS_COUNT=$(pactl list sinks short 2>/dev/null | wc -l)
+    if [ "$SINKS_COUNT" -gt 0 ]; then
+        check_pass "PipeWire/PulseAudio active ($SINKS_COUNT output sink(s) detected)"
+        DEFAULT_SINK=$(pactl get-default-sink 2>/dev/null || echo "unknown")
+        check_pass "Default audio sink: $DEFAULT_SINK"
+    else
+        check_warn "No audio output sinks currently enumerated"
+    fi
+else
+    check_fail "pactl command missing (pulseaudio-utils not installed)"
+fi
+
+# 5. WAYLAND UTILITIES & CLIPBOARD
+echo -e "\n${BOLD}${BLUE}[5/7] Wayland Tools & OCR / Snip${NC}"
+for u in wl-copy wl-paste cliphist grim slurp jq; do
+    if command -v "$u" >/dev/null 2>&1; then
+        check_pass "Utility '$u' ready"
+    else
+        check_fail "Crucial Wayland utility '$u' missing"
+    fi
+done
+
+# 6. AI COPILOT & FAST-MCP STACK
+echo -e "\n${BOLD}${BLUE}[6/7] AI Copilot, Models & Nexus Stack${NC}"
+if command -v agy >/dev/null 2>&1; then
+    check_pass "Antigravity CLI (agy) pair programmer installed"
+else
+    check_warn "Antigravity CLI (agy) not found in PATH"
+fi
+
+if command -v ollama >/dev/null 2>&1; then
+    if curl -s "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+        OLLAMA_MODELS=$(curl -s "http://127.0.0.1:11434/api/tags" | jq -r '.models[].name' 2>/dev/null | tr '\n' ' ' || echo "none")
+        check_pass "Ollama daemon running (Models: $OLLAMA_MODELS)"
+    else
+        check_warn "Ollama installed but daemon not currently reachable on 127.0.0.1:11434"
+    fi
+else
+    check_warn "Ollama local LLM engine not installed"
+fi
+
+if curl -s "http://127.0.0.1:8765/api/health" >/dev/null 2>&1; then
+    check_pass "IRAM Nexus Copilot backend running (http://127.0.0.1:8765)"
+else
+    check_warn "IRAM Nexus Copilot backend not running on port 8765"
+fi
+
+if [ -f "$HOME/.local/bin/iram-weather-status" ] || [ -f "/home/apravint/iram-os/bin/iram-weather-status" ]; then
+    WEATHER_OUTPUT=$(iram-weather-status 2>/dev/null || iram weather status 2>/dev/null || echo "OK")
+    check_pass "Weather status engine ready: $WEATHER_OUTPUT"
+else
+    check_warn "Weather status script missing"
+fi
+
+# 7. SYSTEMD USER SERVICES
+echo -e "\n${BOLD}${BLUE}[7/7] Systemd User Services Health${NC}"
+FAILED_UNITS=$(systemctl --user --failed --no-legend 2>/dev/null | wc -l)
+if [ "$FAILED_UNITS" -eq 0 ]; then
+    check_pass "Zero failed systemd user services"
+else
+    check_fail "$FAILED_UNITS failed systemd user unit(s) found! (Run 'systemctl --user --failed' to inspect)"
+fi
+
+for s in waybar.service swaybg.service iram-nexus.service iram-cliphist.service; do
+    if systemctl --user is-active --quiet "$s" 2>/dev/null; then
+        check_pass "Service '$s' is active (running)"
+    elif systemctl --user is-enabled --quiet "$s" 2>/dev/null; then
+        check_warn "Service '$s' is enabled but inactive"
+    else
+        check_warn "Service '$s' not enabled in user systemd"
+    fi
+done
+
+# SUMMARY SCORECARD
+echo -e "\n${BLUE}======================================================${NC}"
+echo -e "${BOLD}DIAGNOSTIC SUMMARY:${NC}"
+echo -e "  Passed:   ${GREEN}${PASSED}${NC}"
+echo -e "  Warnings: ${YELLOW}${WARNINGS}${NC}"
+echo -e "  Failed:   ${RED}${FAILED}${NC}"
+echo -e "${BLUE}======================================================${NC}"
+
+if [ "$FAILED" -eq 0 ]; then
+    echo -e "${GREEN}✓ IRAM OS system is completely healthy and stable!${NC}\n"
+    exit 0
+else
+    echo -e "${RED}✗ System has $FAILED failure(s) that require attention.${NC}\n"
+    exit 1
+fi

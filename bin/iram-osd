@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# iram:summary=Show the IRAM OS On-Screen Display (OSD) or notifications
+# iram:args=[-i|--icon <icon>] [-m|--message <text>] [-p|--progress <0-100>] [-d|--duration <ms>]
+
+set -eo pipefail
+
+icon=""
+message=""
+progress=""
+progress_text=""
+max="100"
+duration=""
+
+while (($#)); do
+  case $1 in
+    -i|--icon) icon="${2:-}"; shift 2 ;;
+    -m|--message) message="${2:-}"; shift 2 ;;
+    -p|--progress) progress="${2:-}"; shift 2 ;;
+    -d|--duration) duration="${2:-}"; shift 2 ;;
+    -h|--help)
+      echo "Usage: iram-osd [-i icon] [-m message] [-p progress (0-100)] [-d duration_ms]"
+      exit 0
+      ;;
+    *) echo "Unknown OSD option: $1" >&2; exit 1 ;;
+  esac
+done
+
+if [[ -n $progress ]]; then
+  progress_text="${progress}%"
+fi
+
+# Try quickshell / iram-shell / omarchy-shell if available
+if command -v iram-shell >/dev/null 2>&1 && pgrep -x iram-shell >/dev/null 2>&1; then
+  if command -v jq >/dev/null 2>&1; then
+    payload=$(jq -cn \
+      --arg icon "$icon" \
+      --arg message "$message" \
+      --arg value "$progress" \
+      --arg progressText "$progress_text" \
+      --arg max "$max" \
+      --arg duration "$duration" \
+      '{icon:$icon,message:$message,value:$value,progressText:$progressText,max:$max,duration:$duration}')
+    iram-shell -q osd show "$payload" 2>/dev/null && exit 0
+  fi
+fi
+
+if command -v omarchy-shell >/dev/null 2>&1 && pgrep -x omarchy-shell >/dev/null 2>&1; then
+  if command -v jq >/dev/null 2>&1; then
+    payload=$(jq -cn \
+      --arg icon "$icon" \
+      --arg message "$message" \
+      --arg value "$progress" \
+      --arg progressText "$progress_text" \
+      --arg max "$max" \
+      --arg duration "$duration" \
+      '{icon:$icon,message:$message,value:$value,progressText:$progressText,max:$max,duration:$duration}')
+    omarchy-shell -q osd show "$payload" 2>/dev/null && exit 0
+  fi
+fi
+
+# Fallback: desktop notification via notify-send
+if command -v notify-send >/dev/null 2>&1; then
+  notify_args=("-h" "string:x-canonical-private-synchronous:iram-osd")
+  if [[ -n $icon ]]; then
+    notify_args+=("-i" "$icon")
+  fi
+  if [[ -n $progress ]]; then
+    notify_args+=("-h" "int:value:$progress")
+  fi
+  if [[ -n $duration ]]; then
+    notify_args+=("-t" "$duration")
+  fi
+  title="${message:-OSD}"
+  body="${progress_text:-}"
+  notify-send "${notify_args[@]}" "$title" "$body" 2>/dev/null || true
+fi

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# iram:summary=IRAM OS Sovereign Nexus Copilot Backend Server
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
+for dir in "$REPO_DIR/sidecar" "$HOME/.local/share/iram/sidecar" "$HOME/iram-os/sidecar" "/usr/share/iram/sidecar"; do
+    if [[ -f "$dir/server.py" ]]; then
+        exec /usr/bin/python3 "$dir/server.py"
+    fi
+done
+
+echo "iram-nexus-server: server.py not found in sidecar directory." >&2
+exit 1

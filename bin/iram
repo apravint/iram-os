@@ -660,16 +660,19 @@ case "$cmd" in
         shift 2>/dev/null || true
         case "$sub" in
             icon)
-                /usr/local/bin/omarchy-weather-icon 2>/dev/null || echo ""
+                iram-weather-icon 2>/dev/null || /usr/local/bin/omarchy-weather-icon 2>/dev/null || echo ""
                 ;;
             status)
-                /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
+                iram-weather-status 2>/dev/null || /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
+                ;;
+            location)
+                iram-weather-location "$@" 2>/dev/null || /usr/local/bin/omarchy-weather-location "$@" 2>/dev/null || echo "Chennai"
                 ;;
             notify|notification)
                 exec "$LOCAL_BIN/iram-notification-weather"
                 ;;
             *)
-                /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
+                iram-weather-status 2>/dev/null || /usr/local/bin/omarchy-weather-status 2>/dev/null || echo "Chennai  ·  Temp 29°C"
                 ;;
         esac
         ;;
@@ -702,6 +705,9 @@ case "$cmd" in
         ;;
     update)
         exec "$LOCAL_BIN/iram-update" "$@"
+        ;;
+    doctor|diagnose|health)
+        exec "$LOCAL_BIN/iram-doctor" "$@"
         ;;
     pkg|package)
         sub="${1:-deb}"

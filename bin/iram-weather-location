@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# iram:summary=Show or set the location used for weather reports
+# State lives in ~/.local/state/iram/settings/weather.json (with fallback to ~/.local/state/omarchy/settings/weather.json)
+
+set -euo pipefail
+
+LOC_DIR="$HOME/.local/state/iram/settings"
+LOC_FILE="$LOC_DIR/weather.json"
+LEGACY_LOC_FILE="$HOME/.local/state/omarchy/settings/weather.json"
+COORDS_PATTERN='^(-?[0-9]+(\.[0-9]+)?),(-?[0-9]+(\.[0-9]+)?)$'
+
+case "${1:-}" in
+"")
+  name=""
+  if [[ -f $LOC_FILE ]]; then
+    name=$(jq -r '.name // "" | if type == "string" then . else "" end' "$LOC_FILE" 2>/dev/null || true)
+  elif [[ -f $LEGACY_LOC_FILE ]]; then
+    name=$(jq -r '.name // "" | if type == "string" then . else "" end' "$LEGACY_LOC_FILE" 2>/dev/null || true)
+  fi
+  if [[ -z $name ]]; then
+    if command -v curl >/dev/null 2>&1; then
+      name=$(curl -fsS --max-time 4 "https://wttr.in/?format=%l" 2>/dev/null || true)
+      name=${name%%,*}
+    fi
+  fi
+  [[ -n $name ]] && echo "$name" || echo "Chennai"
+  ;;
+--set)
+  [[ -n ${2:-} ]] || { echo "Usage: iram-weather-location --set <name> [lat,lon]" >&2; exit 1; }
+  mkdir -p "$LOC_DIR"
+  if [[ -n ${3:-} ]]; then
+    [[ ${3} =~ $COORDS_PATTERN ]] || { echo "Invalid coordinates: $3 (expected lat,lon)" >&2; exit 1; }
+    location=$(jq -n --arg name "$2" --argjson latitude "${3%,*}" --argjson longitude "${3#*,}" '{$name, $latitude, $longitude}')
+  else
+    location=$(jq -n --arg name "$2" '{$name}')
+  fi
+  echo "$location" > "$LOC_FILE"
+  ;;
+--clear)
+  rm -f "$LOC_FILE"
+  ;;
+*)
+  echo "Usage: iram-weather-location [--set <name> [lat,lon]|--clear]" >&2
+  exit 1
+  ;;
+esac

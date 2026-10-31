@@ -75,6 +75,11 @@ sudo apt install -y \
     blueman \
     network-manager-gnome \
     polkit-kde-agent-1 \
+    libnotify-bin \
+    pulseaudio-utils \
+    pipewire \
+    wireplumber \
+    xdg-desktop-portal-gtk \
     git \
     socat
 
@@ -172,6 +177,13 @@ done
 mkdir -p "$HOME/.config/mcp" "$HOME/.config/hypr"
 cp -r "$REPO_DIR/config/"* "$HOME/.config/"
 touch "$HOME/.config/hypr/monitors.conf"
+touch "$HOME/.config/hypr/user-overrides.conf"
+
+# Install systemd user units
+mkdir -p "$HOME/.config/systemd/user"
+if [ -d "$REPO_DIR/systemd/user" ]; then
+    cp -a "$REPO_DIR/systemd/user/"* "$HOME/.config/systemd/user/" 2>/dev/null || true
+fi
 
 # Copy scripts & make executable
 cp -a "$REPO_DIR/bin/"* "$HOME/.local/bin/"
@@ -200,6 +212,7 @@ if ! grep -q "IRAM_PATH" "$HOME/.bashrc" 2>/dev/null; then
     cat << 'EOF' >> "$HOME/.bashrc"
 
 # IRAM OS Environment & Shell Tools
+export PATH="$HOME/.local/bin:$PATH"
 export IRAM_PATH=/usr/share/iram
 export EDITOR=nvim
 export VISUAL=nvim

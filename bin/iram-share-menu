@@ -1,7 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Iram Share Menu via LocalSend
+set -euo pipefail
 
-CHOICE=$(printf "📋 Share Clipboard\n📄 Share File\n📁 Share Folder\n📥 Open LocalSend (Receive)" | wofi --dmenu --prompt "Share via LocalSend:" --lines 4 -i)
+if ! command -v wofi >/dev/null 2>&1; then
+    notify-send -u critical "Share Menu" "wofi is not installed." 2>/dev/null || echo "wofi not installed" >&2
+    exit 1
+fi
+
+CHOICE=$(printf "📋 Share Clipboard\n📄 Share File\n📁 Share Folder\n📥 Open LocalSend (Receive)" | wofi --dmenu --prompt "Share via LocalSend:" --lines 4 -i || true)
 
 [[ -z "$CHOICE" ]] && exit 0
 

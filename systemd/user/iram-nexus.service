@@ -1,0 +1,16 @@
+[Unit]
+Description=IRAM OS Sovereign Nexus Copilot Daemon
+After=network.target graphical-session.target
+Alias=iram-sidecar.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/iram-nexus-server
+Restart=on-failure
+RestartSec=2s
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=PYTHONUNBUFFERED=1
+PassEnvironment=WAYLAND_DISPLAY XDG_RUNTIME_DIR HYPRLAND_INSTANCE_SIGNATURE
+
+[Install]
+WantedBy=default.target

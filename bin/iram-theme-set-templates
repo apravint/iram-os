@@ -7,8 +7,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 IRAM_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 TEMPLATES_DIR="${IRAM_PATH:-$IRAM_DIR}/default/themed"
-if [ ! -d "$TEMPLATES_DIR" ] && [ -d "/usr/share/omarchy/default/themed" ]; then
-  TEMPLATES_DIR="/usr/share/omarchy/default/themed"
+if [ ! -d "$TEMPLATES_DIR" ]; then
+  if [ -d "/usr/share/iram/default/themed" ]; then
+    TEMPLATES_DIR="/usr/share/iram/default/themed"
+  elif [ -d "/usr/share/omarchy/default/themed" ]; then
+    TEMPLATES_DIR="/usr/share/omarchy/default/themed"
+  fi
 fi
 
 USER_TEMPLATES_DIR="${HOME}/.config/iram/themed"

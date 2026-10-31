@@ -1,0 +1,16 @@
+[Unit]
+Description=Waybar Status Bar
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=15
+
+[Service]
+Type=simple
+ExecStartPre=/bin/bash -c 'for i in {1..30}; do hyprctl monitors 2>/dev/null | grep -q "Monitor " && exit 0; sleep 1; done; exit 0'
+ExecStart=/usr/bin/waybar
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=graphical-session.target

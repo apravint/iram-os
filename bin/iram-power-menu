@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Iram Power Menu via Wofi
-set -e
+set -euo pipefail
+
+if ! command -v wofi >/dev/null 2>&1; then
+    notify-send -u critical "Power Menu" "wofi is not installed." 2>/dev/null || echo "wofi not installed" >&2
+    exit 1
+fi
 
 OPTIONS="🔒 Lock
 💤 Suspend
@@ -8,7 +13,7 @@ OPTIONS="🔒 Lock
 🔄 Reboot
 🛑 Shutdown"
 
-CHOICE=$(echo -e "$OPTIONS" | wofi --dmenu --prompt "System:" --width 250 --height 270)
+CHOICE=$(echo -e "$OPTIONS" | wofi --dmenu --prompt "System:" --width 250 --height 270 || true)
 
 case "$CHOICE" in
     *"Lock"*)
