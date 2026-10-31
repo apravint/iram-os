@@ -56,7 +56,9 @@ jobs:
             isolinux \
             syslinux-utils \
             zstd \
-            xz-utils
+            xz-utils \
+            qemu-system-x86 \
+            ovmf
 
       - name: Run ISO Builder
         env:
@@ -69,6 +71,10 @@ jobs:
         run: |
           sudo chmod -R 777 out/ 2>/dev/null || true
           ls -lh out/
+
+      - name: Verify ISO Integrity & Headless Smoke Boot
+        run: |
+          sudo bash build/verify-iso.sh
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
