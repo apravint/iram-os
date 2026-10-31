@@ -8,10 +8,28 @@ import urllib.request
 import subprocess
 import os
 
+def count_mcp_tools():
+    for candidate in [
+        os.path.expanduser("~/.local/bin/iram-mcp-server"),
+        "/home/apravint/iram-os/bin/iram-mcp-server",
+        "/usr/local/bin/iram-mcp-server",
+        "/usr/share/iram/bin/iram-mcp-server"
+    ]:
+        if os.path.isfile(candidate):
+            try:
+                import re
+                with open(candidate, "r", encoding="utf-8") as f:
+                    tools = re.findall(r"@mcp\.tool\(\)\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)", f.read())
+                    if tools:
+                        return len(tools)
+            except Exception:
+                pass
+    return 38
+
 def main():
     hub_url = "http://127.0.0.1:8990/api/status"
     mcp_active = False
-    tools_count = 23
+    tools_count = count_mcp_tools()
     cpu = 0
     ram_gb = 0
 

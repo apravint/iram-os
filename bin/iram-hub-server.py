@@ -175,18 +175,34 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
                 out = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
                 response_data = {"ok": True, "result": out, "url": "/arch"}
             elif path == "/api/mcp":
+                tools = []
+                mcp_server_path = resolve_bin("iram-mcp-server")
+                if os.path.isfile(mcp_server_path):
+                    try:
+                        import re
+                        with open(mcp_server_path, "r", encoding="utf-8") as f:
+                            tools = re.findall(r"@mcp\.tool\(\)\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)", f.read())
+                    except Exception:
+                        pass
+                if not tools:
+                    tools = [
+                        "get_windows", "focus_window", "dispatch_hyprland", "get_monitors",
+                        "get_system_health", "heal_system", "set_iram_theme", "get_audio_status",
+                        "toggle_audio_sink", "qdrant_search_code", "qdrant_index_path",
+                        "graphiti_query_entity", "graphiti_record_fact", "crawl_web_markdown",
+                        "pack_repository", "desktop_notify", "voice_speak", "voice_clone",
+                        "voice_design", "list_voices", "open_3d_inspector", "open_agent_swarm_graph",
+                        "open_3d_theme_studio", "run_harness_workflow", "condense_context",
+                        "memory_retain", "memory_recall", "memory_reflect", "security_audit_repo",
+                        "reverse_engineer_target", "financial_dcf", "get_world_radar",
+                        "generate_architecture_map", "open_paperclip_team_board", "run_swarm_workflow",
+                        "render_code_video", "synthesize_music_track", "upscale_video_gpu"
+                    ]
                 response_data = {
                     "ok": True,
                     "server": "iram-mcp-server",
-                    "tools": [
-                        "get_windows", "focus_window", "dispatch_hyprland", "get_monitors",
-                        "get_system_health", "qdrant_search_code", "run_harness_workflow",
-                        "voice_speak", "voice_clone", "voice_design", "list_voices",
-                        "open_3d_inspector", "open_agent_swarm_graph", "open_3d_theme_studio",
-                        "condense_context", "memory_retain", "memory_recall", "memory_reflect",
-                        "security_audit_repo", "reverse_engineer_target", "financial_dcf",
-                        "get_world_radar", "generate_architecture_map"
-                    ]
+                    "tools": tools,
+                    "count": len(tools)
                 }
             else:
                 response_data = {"ok": False, "error": f"Unknown endpoint: {path}"}
