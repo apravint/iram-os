@@ -19,8 +19,14 @@ echo -e "${BLUE}======================================================${NC}"
 echo -e "${BOLD}${CYAN}            IRAM OS SYSTEM UPGRADE${NC}"
 echo -e "${BLUE}======================================================${NC}"
 
-# 1. Backup ~/.config/hypr
-if [ -d "$HOME/.config/hypr" ]; then
+# 1. Atomic config snapshot before upgrade
+if command -v iram-snapshot >/dev/null 2>&1; then
+    echo -e "${YELLOW}==> [1/6] Creating atomic config snapshot (pre-update)...${NC}"
+    iram-snapshot create "pre-update" || true
+elif [ -x "$HOME/.local/bin/iram-snapshot" ]; then
+    echo -e "${YELLOW}==> [1/6] Creating atomic config snapshot (pre-update)...${NC}"
+    "$HOME/.local/bin/iram-snapshot" create "pre-update" || true
+elif [ -d "$HOME/.config/hypr" ]; then
     BACKUP_HYPR="$HOME/.config/hypr.bak.$(date +%Y%m%d_%H%M%S)"
     echo -e "${YELLOW}==> [1/6] Backing up ~/.config/hypr to ${BACKUP_HYPR}...${NC}"
     cp -r "$HOME/.config/hypr" "$BACKUP_HYPR"

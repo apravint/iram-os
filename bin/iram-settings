@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Unified Control Center (iram-settings)
+# Accessible via Super + I or clicking the top-left OS icon in Waybar.
+# Provides a hierarchical GUI (Wofi) and TUI settings dashboard.
+# ==============================================================================
+set -euo pipefail
+
+# Ensure single instance
+if pgrep -x "iram-settings" -o | grep -v "$$" >/dev/null 2>&1; then
+    exit 0
+fi
+
+# Detect display session
+USE_GUI=1
+if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]] || [[ "${1:-}" == "--tui" ]]; then
+    USE_GUI=0
+fi
+
+menu_select() {
+    local prompt="$1"
+    shift
+    local options=("$@")
+    
+    if [[ $USE_GUI -eq 1 ]] && command -v wofi >/dev/null 2>&1; then
+        printf "%s\n" "${options[@]}" | wofi --dmenu --prompt "${prompt}" --width 600 --lines 12 --cache-file /dev/null
+    else
+        echo -e "\n=== ${prompt} ===" >&2
+        select opt in "${options[@]}" "Back / Cancel"; do
+            if [[ "$opt" == "Back / Cancel" || -z "$opt" ]]; then
+                echo ""
+                return
+            fi
+            echo "$opt"
+            return
+        done
+    fi
+}
+
+notify() {
+    local title="$1"
+    local msg="$2"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a "IRAM Control Center" "${title}" "${msg}" 2>/dev/null || true
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# SUBMENUS
+# ------------------------------------------------------------------------------
+
+submenu_themes() {
+    local choice
+    choice=$(menu_select "🎨 Theme Studio" \
+        "1. Open Theme Selector (Wofi Grid)" \
+        "2. Open Theme Switcher GUI" \
+        "3. Toggle Animations (Fast / Smooth)" \
+        "4. Cycle Wallpaper Background" \
+        "5. Force Sync & Symlink All 22 Themes" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*) ~/.local/bin/iram-theme-selector || iram-theme-switch ;;
+        2*) ~/.local/bin/iram-theme-switcher-gui 2>/dev/null || ~/.local/bin/iram-theme-switch ;;
+        3*) ~/.local/bin/iram-toggle-animations ;;
+        4*) ~/.local/bin/iram theme bg next 2>/dev/null || ~/.local/bin/iram-wallpaper-next 2>/dev/null || true ;;
+        5*) ~/.local/bin/iram-theme-sync-all && notify "Theme Studio" "All 22 themes re-synchronized successfully." ;;
+        *) return ;;
+    esac
+}
+
+submenu_display() {
+    local choice
+    choice=$(menu_select "🖥️ Display & Monitor Layout" \
+        "1. Open Multi-Display GUI" \
+        "2. Reload Hyprland Monitor Config" \
+        "3. Toggle Night Light (wlsunset)" \
+        "4. Auto-Detect / Re-align Monitors" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*) ~/.local/bin/iram-displays-gui 2>/dev/null || wdisplays 2>/dev/null || true ;;
+        2*) hyprctl reload && notify "Display" "Hyprland monitor config reloaded." ;;
+        3*) ~/.local/bin/iram-toggle-nightlight 2>/dev/null || notify "Display" "Night light toggled" ;;
+        4*) hyprctl reload ;;
+        *) return ;;
+    esac
+}
+
+submenu_audio() {
+    local choice
+    choice=$(menu_select "🔊 Audio & PipeWire Studio" \
+        "1. Cycle Audio Output Sink" \
+        "2. Open PulseAudio / PipeWire Volume Control" \
+        "3. Toggle Audio Mute" \
+        "4. Restart PipeWire & WirePlumber Services" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*) ~/.local/bin/iram-waybar-audio-sink toggle 2>/dev/null || ~/.local/bin/iram-audio-toggle 2>/dev/null || true ;;
+        2*) pavucontrol 2>/dev/null || true ;;
+        3*) ~/.local/bin/iram-audio-switch mute 2>/dev/null || wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle 2>/dev/null || true ;;
+        4*) systemctl --user restart pipewire wireplumber && notify "Audio Studio" "PipeWire and WirePlumber restarted." ;;
+        *) return ;;
+    esac
+}
+
+submenu_ai() {
+    local choice
+    choice=$(menu_select "🤖 AI & MCP Hub" \
+        "1. Open AI Scratchpad (Super + \`)" \
+        "2. Launch AI Setup Wizard (iram ai-setup)" \
+        "3. Check Ollama Model Inventory" \
+        "4. Inspect IRAM MCP Server Config" \
+        "5. Screen OCR Vision AI (Super + Shift + V)" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*) ~/.local/bin/iram-ai-scratchpad ;;
+        2*) alacritty --class iram-agy-float -e ~/.local/bin/iram ai-setup ;;
+        3*) alacritty --class iram-agy-float -e bash -c "ollama list; echo ''; read -p 'Press Enter to close...'" ;;
+        4*) alacritty --class iram-agy-float -e ~/.local/bin/iram mcp-config ;;
+        5*) ~/.local/bin/iram-vision-ask ;;
+        *) return ;;
+    esac
+}
+
+submenu_creator() {
+    local choice
+    choice=$(menu_select "🎬 Creator Studio" \
+        "1. Open Creator Workflow Hub (Super + Shift + G)" \
+        "2. Launch video-gen Pipeline" \
+        "3. Launch shorts-creator Pipeline" \
+        "4. Launch BookGeneratorAI" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*) ~/.local/bin/iram-studio ;;
+        2*) ~/.local/bin/iram-studio --launch video-gen ;;
+        3*) ~/.local/bin/iram-studio --launch shorts-creator ;;
+        4*) ~/.local/bin/iram-studio --launch BookGeneratorAI ;;
+        *) return ;;
+    esac
+}
+
+submenu_snapshots() {
+    local choice
+    choice=$(menu_select "🛡️ Snapshots & Atomic Rollback" \
+        "1. Create Desktop Config Snapshot Now" \
+        "2. List Saved Snapshots" \
+        "3. Restore a Desktop Snapshot" \
+        "4. Create System-Level Snapshot (Timeshift)" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*)
+            local label
+            if [[ $USE_GUI -eq 1 ]] && command -v wofi >/dev/null 2>&1; then
+                label=$(echo "" | wofi --dmenu --prompt "Snapshot Label (optional):")
+            else
+                read -r -p "Enter snapshot label: " label
+            fi
+            ~/.local/bin/iram snapshot create "${label:-manual}"
+            notify "IRAM Snapshot" "Snapshot saved: ${label:-manual}"
+            ;;
+        2*)
+            alacritty --class iram-agy-float -e bash -c "~/.local/bin/iram snapshot list; echo ''; read -p 'Press Enter to close...'"
+            ;;
+        3*)
+            ~/.local/bin/iram snapshot restore
+            ;;
+        4*)
+            if command -v timeshift >/dev/null 2>&1; then
+                alacritty --class iram-agy-float -e sudo timeshift --create --comments "IRAM OS Manual Snapshot"
+            else
+                notify "Snapshots" "Timeshift is not installed on this host."
+            fi
+            ;;
+        *) return ;;
+    esac
+}
+
+submenu_health() {
+    local choice
+    choice=$(menu_select "🩺 System Health & Diagnostics" \
+        "1. Run IRAM Doctor (Comprehensive Checks)" \
+        "2. View Autonomous Watchdog Log" \
+        "3. Run Watchdog Self-Healing Verification Pass" \
+        "4. Inspect Failed Systemd User Units" \
+        "⬅ Back")
+
+    case "${choice}" in
+        1*) alacritty --class iram-agy-float -e ~/.local/bin/iram doctor ;;
+        2*) alacritty --class iram-agy-float -e bash -c "~/.local/bin/iram-watchdog --status; echo ''; read -p 'Press Enter to close...'" ;;
+        3*) ~/.local/bin/iram-watchdog --once && notify "Watchdog" "Self-healing verification pass completed." ;;
+        4*) alacritty --class iram-agy-float -e bash -c "systemctl --user --failed; echo ''; read -p 'Press Enter to close...'" ;;
+        *) return ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# MAIN LOOP
+# ------------------------------------------------------------------------------
+
+while true; do
+    MAIN_CHOICE=$(menu_select "IRAM OS Control Center" \
+        "🎨 Theme Studio" \
+        "🖥️ Display & Monitor Layout" \
+        "🔊 Audio & PipeWire Studio" \
+        "🤖 AI & MCP Hub" \
+        "🎬 Creator Studio (Video & Books)" \
+        "🛡️ Snapshots & Rollback" \
+        "🩺 System Health & Diagnostics" \
+        "🚀 Check for System Updates (iram update)" \
+        "❌ Close Control Center")
+
+    case "${MAIN_CHOICE}" in
+        "🎨"*) submenu_themes ;;
+        "🖥️"*) submenu_display ;;
+        "🔊"*) submenu_audio ;;
+        "🤖"*) submenu_ai ;;
+        "🎬"*) submenu_creator ;;
+        "🛡️"*) submenu_snapshots ;;
+        "🩺"*) submenu_health ;;
+        "🚀"*) alacritty --class iram-agy-float -e ~/.local/bin/iram update ;;
+        *) exit 0 ;;
+    esac
+done

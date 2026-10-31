@@ -33,8 +33,8 @@
 
     "custom/menu": {
         "format": "󰀻",
-        "tooltip": "Left-click: Iram Menu | Right-click: Terminal",
-        "on-click": "~/.local/bin/iram-menu",
+        "tooltip": "Left-click: IRAM Control Center (Super+I) | Right-click: Terminal",
+        "on-click": "~/.local/bin/iram-settings",
         "on-click-right": "alacritty"
     },
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# IRAM OS VoiceStudio Unified CLI
-# Open-Source Voice Cloning, Voice Design, Speech Synthesis & Video Dubbing
-# iram:summary=Open-Source VoiceStudio (Voice Cloning, Voice Design & Speech Synthesis)
+# IRAM OS - Local Voice-to-Action & Dictation Engine (iram-voice)
+# Bound to Super + Shift + M. Provides push-to-talk PipeWire recording,
+# local/cloud speech transcription, and instant action dispatch:
+#   --dictate : Types or copies transcribed text into active Wayland window
+#   --agent   : Dispatches spoken instructions to IRAM MCP / AI Assistant
+# Also preserves backward-compatible VoiceStudio commands (tts, clone, design).
 # ==============================================================================
 set -euo pipefail
 
@@ -10,9 +13,243 @@ REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 IRAM_DIR="$(cd "$(dirname "$REAL_PATH")/.." && pwd)"
 export PYTHONPATH="${IRAM_DIR}:${HOME}/iram-voice:${PYTHONPATH:-}"
 
-if [ "${1:-}" = "mcp" ]; then
-    shift
-    exec python3 -m iram_voice.mcp_server "$@"
-fi
+PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/iram-voice.pid"
+AUDIO_FILE="${XDG_RUNTIME_DIR:-/tmp}/iram-voice.wav"
+MODE_FILE="${XDG_RUNTIME_DIR:-/tmp}/iram-voice.mode"
 
-exec python3 -m iram_voice.core "$@"
+notify() {
+    local title="$1"
+    local msg="$2"
+    local urgency="${3:-normal}"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "${urgency}" -a "IRAM Voice" "${title}" "${msg}" 2>/dev/null || true
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Check for Legacy VoiceStudio CLI Subcommands
+# ------------------------------------------------------------------------------
+first_arg="${1:-}"
+case "${first_arg}" in
+    tts|speak|clone|design|dub|studio)
+        exec python3 -m iram_voice.core "$@"
+        ;;
+    mcp)
+        shift
+        exec python3 -m iram_voice.mcp_server "$@"
+        ;;
+esac
+
+# ------------------------------------------------------------------------------
+# Transcription Subroutine
+# ------------------------------------------------------------------------------
+transcribe_audio() {
+    local wav_path="$1"
+    local text=""
+
+    # 1. Local whisper-cpp
+    if command -v whisper-cpp >/dev/null 2>&1; then
+        text="$(whisper-cpp -f "${wav_path}" --no-timestamps 2>/dev/null | tr '\n' ' ' | sed 's/^[ \t]*//;s/[ \t]*$//')"
+    elif command -v whisper >/dev/null 2>&1; then
+        text="$(whisper "${wav_path}" --model tiny --output_format txt --output_dir /tmp >/dev/null 2>&1 && cat /tmp/*.txt 2>/dev/null | tr '\n' ' ' || true)"
+    fi
+
+    # 2. Local python faster-whisper
+    if [[ -z "${text}" ]] && python3 -c "import faster_whisper" 2>/dev/null; then
+        text="$(python3 -c "
+import sys
+from faster_whisper import WhisperModel
+try:
+    model = WhisperModel('tiny', device='cpu', compute_type='int8')
+    segments, _ = model.transcribe('${wav_path}')
+    print(' '.join(s.text.strip() for s in segments))
+except Exception:
+    pass
+" 2>/dev/null || true)"
+    fi
+
+    # 3. Gemini / OpenAI API Fallback if keys present
+    if [[ -z "${text}" && -n "${OPENAI_API_KEY:-}" ]]; then
+        text="$(curl -s -X POST https://api.openai.com/v1/audio/transcriptions \
+            -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+            -H "Content-Type: multipart/form-data" \
+            -F file="@${wav_path}" \
+            -F model="whisper-1" 2>/dev/null | jq -r '.text // ""' 2>/dev/null || true)"
+    fi
+
+    # 4. Fallback input if no STT backend available
+    if [[ -z "${text}" ]]; then
+        if command -v wofi >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]]; then
+            text=$(echo "" | wofi --dmenu --prompt "Voice Engine (No local whisper found. Type spoken text):")
+        fi
+    fi
+
+    echo "${text}"
+}
+
+# ------------------------------------------------------------------------------
+# Dispatch Actions
+# ------------------------------------------------------------------------------
+dispatch_action() {
+    local mode="$1"
+    local text="$2"
+
+    if [[ -z "${text}" ]]; then
+        notify "IRAM Voice" "No speech detected."
+        return
+    fi
+
+    if [[ "${mode}" == "dictate" ]]; then
+        # Copy to clipboard
+        if command -v wl-copy >/dev/null 2>&1; then
+            echo -n "${text}" | wl-copy
+        fi
+        
+        # Type into active window if wtype is available
+        if command -v wtype >/dev/null 2>&1; then
+            sleep 0.2
+            wtype "${text} " 2>/dev/null || true
+        fi
+        notify "Dictation Input" "${text}" "low"
+
+    elif [[ "${mode}" == "agent" ]]; then
+        notify "Voice Command" "${text}"
+        
+        # Quick macro matches for instantaneous hands-free control
+        local lower
+        lower="$(echo "${text}" | tr '[:upper:]' '[:lower:]')"
+        
+        if [[ "${lower}" =~ "theme to " ]]; then
+            local theme_name="${lower#*theme to }"
+            ~/.local/bin/iram theme "${theme_name}" 2>/dev/null || true
+            notify "Voice Action" "Theme switched to: ${theme_name}"
+            return
+        elif [[ "${lower}" =~ "workspace " ]]; then
+            local ws_num="${lower##*workspace }"
+            ws_num="${ws_num%% *}"
+            hyprctl dispatch workspace "${ws_num}" 2>/dev/null || true
+            return
+        elif [[ "${lower}" =~ "settings" || "${lower}" =~ "control center" ]]; then
+            ~/.local/bin/iram-settings &
+            return
+        elif [[ "${lower}" =~ "scratchpad" ]]; then
+            ~/.local/bin/iram-ai-scratchpad &
+            return
+        elif [[ "${lower}" =~ "doctor" ]]; then
+            alacritty --class iram-agy-float -e ~/.local/bin/iram doctor &
+            return
+        fi
+
+        # Pass complex reasoning to Antigravity CLI (agy)
+        alacritty --class iram-agy-float --title "IRAM Voice Agent" -e bash -c "
+echo -e '\033[1;36mIRAM Voice Command:\033[0m \"${text}\"';
+echo '----------------------------------------';
+if command -v agy >/dev/null 2>&1; then
+    agy \"${text}\"
+elif command -v ollama >/dev/null 2>&1; then
+    ollama run qwen2.5-coder:7b \"${text}\"
+else
+    echo 'No local AI agent available to process command.'
+    read -p 'Press Enter to close...'
+fi
+" &
+    fi
+}
+
+start_recording() {
+    local mode="$1"
+    echo "${mode}" > "${MODE_FILE}"
+    rm -f "${AUDIO_FILE}"
+
+    if command -v pw-record >/dev/null 2>&1; then
+        pw-record --rate 16000 --channels 1 "${AUDIO_FILE}" >/dev/null 2>&1 &
+        echo $! > "${PID_FILE}"
+    elif command -v parec >/dev/null 2>&1; then
+        parec --rate=16000 --channels=1 --file-format=wav "${AUDIO_FILE}" >/dev/null 2>&1 &
+        echo $! > "${PID_FILE}"
+    else
+        ffmpeg -f alsa -i default -ar 16000 -ac 1 "${AUDIO_FILE}" >/dev/null 2>&1 &
+        echo $! > "${PID_FILE}"
+    fi
+
+    local mode_label="Dictation"
+    [[ "${mode}" == "agent" ]] && mode_label="AI Agent Command"
+    notify "🎙️ IRAM Voice (${mode_label})" "Listening... Press Super+Shift+M to complete." "low"
+}
+
+stop_recording() {
+    local mode="dictate"
+    if [[ -f "${MODE_FILE}" ]]; then
+        mode="$(cat "${MODE_FILE}")"
+        rm -f "${MODE_FILE}"
+    fi
+
+    if [[ -f "${PID_FILE}" ]]; then
+        local pid
+        pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
+        if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+            kill -2 "${pid}" 2>/dev/null || kill -15 "${pid}" 2>/dev/null || true
+            wait "${pid}" 2>/dev/null || true
+        fi
+        rm -f "${PID_FILE}"
+    fi
+
+    if [[ -f "${AUDIO_FILE}" && -s "${AUDIO_FILE}" ]]; then
+        notify "IRAM Voice" "Transcribing audio..." "low"
+        local transcribed
+        transcribed="$(transcribe_audio "${AUDIO_FILE}")"
+        dispatch_action "${mode}" "${transcribed}"
+    else
+        notify "IRAM Voice" "No audio captured." "low"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint Router
+# ------------------------------------------------------------------------------
+selected_mode="dictate"
+for arg in "$@"; do
+    if [[ "$arg" == "--agent" || "$arg" == "agent" ]]; then
+        selected_mode="agent"
+    elif [[ "$arg" == "--dictate" || "$arg" == "dictate" ]]; then
+        selected_mode="dictate"
+    fi
+done
+
+case "${1:-toggle}" in
+    start|record)
+        start_recording "${selected_mode}"
+        ;;
+    stop|finish)
+        stop_recording
+        ;;
+    toggle|--toggle)
+        if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}" 2>/dev/null)" 2>/dev/null; then
+            stop_recording
+        else
+            start_recording "${selected_mode}"
+        fi
+        ;;
+    status)
+        if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}" 2>/dev/null)" 2>/dev/null; then
+            echo "recording"
+        else
+            echo "idle"
+        fi
+        ;;
+    --help|-h|help)
+        echo "Usage: iram-voice [--dictate|--agent|--toggle|start|stop|status]"
+        echo "  --dictate   Types/pastes transcribed speech into active window (Super+Shift+M)"
+        echo "  --agent     Interprets speech as desktop management commands or AI prompts"
+        echo "  --toggle    Toggles recording on and off"
+        echo "Legacy VoiceStudio commands: tts, clone, design, dub, mcp"
+        ;;
+    *)
+        # Default behavior: toggle in dictate mode
+        if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}" 2>/dev/null)" 2>/dev/null; then
+            stop_recording
+        else
+            start_recording "${selected_mode}"
+        fi
+        ;;
+esac

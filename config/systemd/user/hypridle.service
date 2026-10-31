@@ -1,0 +1,15 @@
+[Unit]
+Description=Hyprland Idle Management Daemon (hypridle)
+Documentation=man:hypridle(1)
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionPathExists=/usr/bin/hypridle
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/hypridle -c %h/.config/hypr/hypridle.conf
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=graphical-session.target

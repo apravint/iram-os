@@ -10,6 +10,7 @@ Tools Exposed:
 3. service_diagnostics(unit_name, action)
 4. audio_display_control(target, command)
 5. system_telemetry()
+6. watchdog_report(lines)
 """
 
 import sys
@@ -20,7 +21,7 @@ import subprocess
 import glob
 
 SERVER_NAME = "iram-os-mcp"
-SERVER_VERSION = "26.04.1"
+SERVER_VERSION = "26.04.2"
 PROTOCOL_VERSION = "2024-11-05"
 
 # Helper for executing shell commands safely
@@ -333,6 +334,39 @@ def tool_system_telemetry():
 
     return telemetry
 
+def tool_watchdog_report(args):
+    """Returns status and logs from the autonomous self-healing watchdog daemon."""
+    home = os.path.expanduser("~")
+    log_file = os.path.join(home, ".local/state/iram-os/watchdog.log")
+    lines_to_read = int(args.get("lines", 40))
+
+    report = {
+        "watchdog_log_path": log_file,
+        "watchdog_service_active": False,
+        "events": [],
+        "healed_events_count": 0,
+        "alert_events_count": 0
+    }
+
+    # Check watchdog service status
+    _, out, _ = run_cmd(["systemctl", "--user", "is-active", "iram-watchdog.service"])
+    report["watchdog_service_active"] = (out.strip() == "active")
+
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                all_lines = f.readlines()
+            recent = [line.strip() for line in all_lines[-lines_to_read:]]
+            report["events"] = recent
+            report["healed_events_count"] = sum(1 for line in all_lines if "[HEAL]" in line)
+            report["alert_events_count"] = sum(1 for line in all_lines if "[ALERT]" in line)
+        except Exception as e:
+            report["error"] = str(e)
+    else:
+        report["message"] = "No watchdog logs recorded yet."
+
+    return report
+
 # ------------------------------------------------------------------------------
 # JSON-RPC DISPATCH ENGINE
 # ------------------------------------------------------------------------------
@@ -418,6 +452,20 @@ TOOLS_MANIFEST = [
             "type": "object",
             "properties": {}
         }
+    },
+    {
+        "name": "watchdog_report",
+        "description": "Queries status and recent crash/recovery event logs from the autonomous self-healing watchdog daemon.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lines": {
+                    "type": "integer",
+                    "description": "Number of recent log lines to retrieve (default: 40)",
+                    "default": 40
+                }
+            }
+        }
     }
 ]
 
@@ -483,6 +531,8 @@ def handle_request(req):
                 result_payload = tool_audio_display_control(args)
             elif tool_name == "system_telemetry":
                 result_payload = tool_system_telemetry()
+            elif tool_name == "watchdog_report":
+                result_payload = tool_watchdog_report(args)
             else:
                 return {
                     "jsonrpc": "2.0",

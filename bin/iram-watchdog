@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Autonomous Self-Healing Watchdog Daemon
+# Automatically recovers crashed desktop units, checks resource pressure,
+# and logs diagnostic journals for AI and user inspection.
+# ==============================================================================
+set -u
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram-os"
+LOG_FILE="${STATE_DIR}/watchdog.log"
+mkdir -p "${STATE_DIR}"
+
+SERVICES=(
+    "waybar.service"
+    "swaybg.service"
+    "hypridle.service"
+    "iram-cliphist.service"
+    "pipewire.service"
+    "wireplumber.service"
+)
+
+# Throttling intervals in seconds
+RAM_ALERT_THROTTLE=300
+DISK_ALERT_THROTTLE=600
+
+LAST_RAM_ALERT=0
+LAST_DISK_ALERT=0
+
+log_msg() {
+    local level="$1"
+    shift
+    local timestamp
+    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo "[$timestamp] [$level] $*" | tee -a "${LOG_FILE}" >&2
+}
+
+notify_alert() {
+    local urgency="$1"
+    local title="$2"
+    local body="$3"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "${urgency}" -a "IRAM Watchdog" "${title}" "${body}" 2>/dev/null || true
+    fi
+}
+
+check_services() {
+    for unit in "${SERVICES[@]}"; do
+        # Check if the service is marked as failed
+        if systemctl --user is-failed "${unit}" >/dev/null 2>&1; then
+            log_msg "HEAL" "Service ${unit} is in FAILED state. Capturing journal & restarting..."
+            
+            # Capture last 20 lines of service journal
+            echo "--- JOURNAL FOR ${unit} ---" >> "${LOG_FILE}"
+            journalctl --user -u "${unit}" -n 20 --no-pager >> "${LOG_FILE}" 2>&1 || true
+            echo "----------------------------" >> "${LOG_FILE}"
+            
+            # Attempt recovery
+            systemctl --user reset-failed "${unit}" 2>/dev/null || true
+            if systemctl --user restart "${unit}" 2>/dev/null; then
+                log_msg "HEAL" "Successfully restarted ${unit}"
+                notify_alert "low" "IRAM Watchdog: Self-Healed" "Recovered ${unit} following failure."
+            else
+                log_msg "ERROR" "Failed to restart ${unit}"
+                notify_alert "normal" "IRAM Watchdog Alert" "Could not automatically restart ${unit}."
+            fi
+        fi
+    done
+}
+
+check_resources() {
+    local now
+    now="$(date +%s)"
+
+    # RAM check
+    local ram_pct
+    ram_pct="$(free 2>/dev/null | awk '/Mem:/ {if ($2>0) printf("%d", ($3/$2)*100); else print 0}')"
+    if [[ -n "${ram_pct}" ]] && (( ram_pct > 92 )); then
+        if (( now - LAST_RAM_ALERT >= RAM_ALERT_THROTTLE )); then
+            log_msg "ALERT" "High memory pressure detected: ${ram_pct}% RAM in use."
+            notify_alert "critical" "IRAM Memory Warning" "RAM utilization at ${ram_pct}%. Consider closing memory-heavy tasks."
+            LAST_RAM_ALERT="${now}"
+        fi
+    fi
+
+    # Disk check (Root filesystem)
+    local disk_pct
+    disk_pct="$(df -P / 2>/dev/null | awk 'NR==2 {gsub("%","",$5); print $5}')"
+    if [[ -n "${disk_pct}" ]] && (( disk_pct > 90 )); then
+        if (( now - LAST_DISK_ALERT >= DISK_ALERT_THROTTLE )); then
+            log_msg "ALERT" "High disk utilization on /: ${disk_pct}%."
+            notify_alert "critical" "IRAM Storage Warning" "Root filesystem is at ${disk_pct}% capacity. Free disk space soon."
+            LAST_DISK_ALERT="${now}"
+        fi
+    fi
+}
+
+single_run() {
+    log_msg "INFO" "Executing watchdog self-healing verification cycle..."
+    check_services
+    check_resources
+    log_msg "INFO" "Watchdog cycle complete."
+}
+
+show_status() {
+    echo "=== IRAM OS WATCHDOG STATUS ==="
+    echo "Log file: ${LOG_FILE}"
+    echo "Monitored units: ${SERVICES[*]}"
+    echo ""
+    echo "Recent activity (last 25 lines):"
+    if [[ -f "${LOG_FILE}" ]]; then
+        tail -n 25 "${LOG_FILE}"
+    else
+        echo "No watchdog log file yet."
+    fi
+}
+
+case "${1:-daemon}" in
+    --once|check|run)
+        single_run
+        ;;
+    --status|status|logs)
+        show_status
+        ;;
+    --help|-h)
+        echo "Usage: iram-watchdog [--once|--status|daemon]"
+        echo "  daemon   Run 30s monitoring loop in background"
+        echo "  --once   Run a single inspection pass and exit"
+        echo "  --status Display current watchdog status and recent logs"
+        ;;
+    daemon|*)
+        log_msg "START" "IRAM Watchdog daemon started (30s polling cycle)"
+        while true; do
+            check_services
+            check_resources
+            sleep 30
+        done
+        ;;
+esac

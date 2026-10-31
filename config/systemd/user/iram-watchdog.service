@@ -1,0 +1,14 @@
+[Unit]
+Description=IRAM OS Autonomous Self-Healing Watchdog Daemon
+Documentation=https://github.com/apravint/iram-os
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/iram-watchdog
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=graphical-session.target

@@ -2,12 +2,12 @@
 
 # IRAM OS 🌌
 
-### The Sovereign Autonomous Agentic Desktop Operating System (v26.04.1)
+### The Sovereign Autonomous Agentic Desktop Operating System (v26.04.2)
 
-A high-performance Linux operating system powered by Hyprland, featuring sharp geometric tiling, zero-restart live theme switching across 22+ curated palettes, studio-grade PipeWire audio routing, automated multi-display intelligence, zero-config native stdio Model Context Protocol (MCP) server, and a deeply integrated autonomous AI runtime.
+A high-performance Linux operating system powered by Hyprland, featuring sharp geometric tiling, zero-restart live theme switching across 22+ curated palettes, studio-grade PipeWire audio routing, automated multi-display intelligence, autonomous self-healing watchdog supervision, atomic 1-second configuration snapshots, native creator studio pipelines, push-to-talk voice-to-action, zero-config native stdio Model Context Protocol (MCP) server, and a deeply integrated autonomous AI runtime.
 
 [![GitHub Release](https://img.shields.io/github/v/release/apravint/iram-os?color=7aa2f7&logo=github&label=Release)](https://github.com/apravint/iram-os/releases)
-[![Version: v26.04.1](https://img.shields.io/badge/Version-v26.04.1-00f0ff.svg)](https://github.com/apravint/iram-os/releases/tag/v26.04.1)
+[![Version: v26.04.2](https://img.shields.io/badge/Version-v26.04.2-00f0ff.svg)](https://github.com/apravint/iram-os/releases/tag/v26.04.2)
 [![Base: Ubuntu 26.10](https://img.shields.io/badge/Base-Ubuntu%2026.10%20Stonking-E95420.svg?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com)
 [![Compositor: Hyprland 0.56](https://img.shields.io/badge/Compositor-Hyprland%200.56-00c853.svg?logo=wayland&logoColor=white)](https://hyprland.org)
 [![Themes: 22+ Live Palettes](https://img.shields.io/badge/Themes-22%2B%20Live%20Palettes-ff007f.svg)](#-zero-restart-theming-engine-22-palettes)
@@ -48,7 +48,10 @@ A high-performance Linux operating system powered by Hyprland, featuring sharp g
 ```mermaid
 graph TD
     subgraph UserSpace["User Interaction & AI Layer"]
-        CLI["iram CLI Manager<br/>(update, doctor, theme, ai-setup, apps, mcp-config)"]
+        CLI["iram CLI Manager<br/>(settings, snapshot, watchdog, update, doctor, theme)"]
+        Control["Control Center (Super+I)<br/>iram-settings GUI/TUI Hub"]
+        Voice["Voice-to-Action (Super+Shift+M)<br/>iram-voice + PipeWire Push-to-Talk"]
+        Studio["Creator Studio (Super+Shift+G)<br/>shorts-creator + video-gen + BookGen"]
         Scratchpad["AI Floating Scratchpad (Super+`)<br/>Alacritty iram-agy-float"]
         Vision["Screen Vision OCR (Super+Shift+V)<br/>grim + slurp + tesseract"]
         Prompt["AI Prompt Bar (Super+Shift+Space)<br/>Wofi + Clipboard Context"]
@@ -60,6 +63,7 @@ graph TD
         Lock["Dynamic Hyprlock (Super+L)<br/>Themed Lockscreen + Swaybg"]
         Idle["Hypridle Daemon<br/>Dim (5m) -> Lock (10m) -> DPMS (15m)"]
         Clip["cliphist (Super+V)<br/>Wayland Clipboard History Manager"]
+        Snapshot["iram snapshot<br/>Atomic Config Archives & 1s Rollback"]
     end
 
     subgraph NativeMCP["Native stdio MCP Subsystem"]
@@ -69,18 +73,22 @@ graph TD
         T3["service_diagnostics(unit, action)"]
         T4["audio_display_control(target, cmd)"]
         T5["system_telemetry()"]
+        T6["watchdog_report(lines)"]
         MCPServer --> T1
         MCPServer --> T2
         MCPServer --> T3
         MCPServer --> T4
         MCPServer --> T5
+        MCPServer --> T6
     end
 
     subgraph SystemCore["Kernel, PipeWire & Services"]
-        Systemd["systemd User Supervision<br/>(waybar, swaybg, hypridle, iram-cliphist)"]
+        Watchdog["iram-watchdog.service<br/>Autonomous Self-Healing Supervisor"]
+        Systemd["systemd User Units<br/>(waybar, swaybg, hypridle, cliphist)"]
         PipeWire["PipeWire Audio Studio<br/>HDMI / DSP Priority Routing"]
         Ollama["Ollama LLM Engine<br/>Local GPU / CPU Inference"]
         Net["linux-dual-wifi<br/>Layer 4 ECMP Multi-WAN Balancer"]
+        Watchdog --> Systemd
     end
 
     UserSpace --> DesktopShell
@@ -94,10 +102,15 @@ graph TD
 
 ## ⚖️ Why IRAM OS? Comparison Matrix
 
-| Feature | IRAM OS (v26.04.1) | Vanilla Ubuntu 24.04/26.10 | Arch Linux / Hyprland | Omarchy (Upstream) | macOS Sequoia |
+| Feature | IRAM OS (v26.04.2) | Vanilla Ubuntu 24.04/26.10 | Arch Linux / Hyprland | Omarchy (Upstream) | macOS Sequoia |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Compositor Engine** | Hyprland 0.56 (Sharp Edges) | GNOME Shell (Mutter) | Manual User Config | Hyprland (Rounded) | Quartz Compositor |
 | **Out-of-the-Box Zero Config** | ✅ Turnkey (`install.sh` / ISO) | ✅ Turnkey (GNOME) | ❌ Manual Rice (Days) | ⚠️ Distro-specific | ✅ Turnkey |
+| **Self-Healing Watchdog** | ✅ `iram-watchdog.service` | ❌ None | ❌ Manual scripts | ❌ None | ⚠️ launchd recovery |
+| **Unified Control Center** | ✅ `iram-settings` (`Super + I`) | ⚠️ GNOME Control Center | ❌ None | ❌ Fragmented scripts | ✅ macOS Settings |
+| **Atomic 1s Snapshots** | ✅ `iram snapshot` (zstd) | ❌ Manual Timeshift | ❌ Manual btrfs | ❌ None | ⚠️ Time Machine (Slow) |
+| **Push-to-Talk Voice-to-Action** | ✅ `iram-voice` (`Super + Shift + M`) | ❌ None | ❌ None | ❌ None | ⚠️ Siri (Cloud) |
+| **Native Creator Studio** | ✅ `iram-studio` (`Super + Shift + G`) | ❌ None | ❌ None | ❌ None | ❌ None |
 | **Native stdio MCP Server** | ✅ `iram-os-mcp` (Zero pip deps) | ❌ None | ❌ None | ❌ None | ❌ None |
 | **AI Scratchpad (`Super + \``)** | ✅ Built-in (`iram-agy-float`) | ❌ None | ❌ Manual bind | ❌ None | ❌ None |
 | **Screen Vision OCR (`Super + Shift + V`)** | ✅ Built-in (tesseract + AI) | ❌ None | ❌ Manual script | ❌ None | ⚠️ Apple Intelligence |
@@ -121,8 +134,11 @@ iram <command> [subcommand] [arguments...]
 
 | Command | Action & Behavior |
 | :--- | :--- |
-| `iram update` | Automatically backs up `~/.config/hypr` to a timestamped archive, pulls latest commits from `apravint/iram-os`, runs `install.sh`, reloads the systemd user daemon, restarts `waybar.service` and `swaybg.service`, and executes `hyprctl reload`. |
-| `iram doctor` | Verifies Wayland session variables, XDG portals, `hyprctl` responsiveness, systemd user services (`waybar`, `swaybg`, `hypridle`, `iram-cliphist`), PipeWire audio sinks, and `agy`/`ollama`/MCP status, printing an instant PASS/FAIL scorecard table. |
+| `iram settings` | Master GUI/TUI Control Center (`Super + I` or Waybar OS icon) for Theme Studio, Displays, Audio, AI Hub, Creator Studio, and Snapshots. |
+| `iram snapshot [cmd]` | Atomic configuration snapshot management (`create [label]`, `list`, `restore`, `auto`). Saves/restores core desktop configs in 1 second. |
+| `iram watchdog [cmd]` | Autonomous self-healing supervisor (`daemon`, `--once`, `status/logs`). Auto-restarts failed desktop services and detects memory pressure. |
+| `iram update` | Automatically backs up configs to an atomic snapshot, pulls latest commits from `apravint/iram-os`, runs `install.sh`, reloads systemd user units, restarts desktop daemons, and reloads Hyprland. |
+| `iram doctor` | Verifies Wayland session variables, XDG portals, `hyprctl` responsiveness, systemd user services (`waybar`, `swaybg`, `hypridle`, `iram-cliphist`, `iram-watchdog`), PipeWire audio sinks, and `agy`/`ollama`/MCP status, printing an instant PASS/FAIL scorecard table. |
 | `iram theme [name]` | Lists all 22 sovereign themes or switches the active theme live with zero compositor restart (`iram theme "Tokyo Storm"`, `iram theme random`, or `iram theme list`). |
 | `iram ai-setup` | Auto-detects acceleration hardware (`nvidia-smi` VRAM, `rocm-smi`, or CPU fallback), ensures `ollama` is installed, and pulls the optimal coding model (`qwen2.5-coder:7b` for GPUs $\ge 6\text{GB}$, or `llama3.2:3b` for CPUs/laptops). |
 | `iram apps` | Interactive Wofi / terminal installer that clones, sets up, and configures flagship tools (`apravint/video-gen`, `apravint/shorts-creator`, `apravint/BookGeneratorAI`) into `~/Projects/`. |
@@ -135,13 +151,14 @@ iram <command> [subcommand] [arguments...]
 
 IRAM OS includes a zero-config, pure Python 3 standard-library Model Context Protocol (MCP) server located at `mcp/iram-os-mcp` (installed to `/usr/local/bin/iram-os-mcp` and `~/.local/bin/iram-os-mcp`). It communicates via standard JSON-RPC 2.0 stdio without requiring external pip packages.
 
-### Exposing 5 Native Tools to AI Coding Agents:
+### Exposing 6 Native Tools to AI Coding Agents:
 
 1. **`switch_theme(theme_name)`**: Lists all 22 sovereign palettes or immediately switches Hyprland, Waybar, Wofi, Mako, and Swaybg to the requested palette live.
 2. **`manage_windows(action, workspace, window_address)`**: Inspects active windows (`list`), moves windows across workspaces (`movetoworkspace`), toggles floating mode (`togglefloating`), triggers fullscreen (`fullscreen`), focuses windows (`focus`), or closes windows (`close`).
 3. **`service_diagnostics(unit_name, action)`**: Reads `systemctl --user status`, inspects `journalctl -u <unit> -n 40` logs, and restarts failed desktop daemons.
 4. **`audio_display_control(target, command)`**: Interfaces with PipeWire audio sinks (listing sinks, cycling outputs, toggling mute, adjusting volume) and queries connected display monitors.
 5. **`system_telemetry()`**: Returns CPU usage, RAM utilization, GPU VRAM allocation, disk space, and failed systemd units in structured JSON.
+6. **`watchdog_report(lines)`**: Inspects the autonomous self-healing supervisor log, recent crash recoveries, and resource pressure warnings.
 
 ---
 
@@ -150,6 +167,9 @@ IRAM OS includes a zero-config, pure Python 3 standard-library Model Context Pro
 ### 🤖 AI Agent & Productivity Hotkeys
 | Shortcut | Action | Description |
 | :--- | :--- | :--- |
+| `Super + I` | **Unified Control Center** | Master GUI/TUI Control Center (`iram-settings`) for Themes, Displays, Audio & AI |
+| `Super + Shift + M` | **Voice-to-Action** | Push-to-talk PipeWire dictation & hands-free desktop AI agent control |
+| `Super + Shift + G` | **Creator Studio** | Pipe highlighted text/scripts directly into `shorts-creator`, `video-gen`, or `BookGeneratorAI` |
 | `Super + \`` (Grave) | **AI Scratchpad** | Toggle floating Alacritty window running Google Antigravity (`agy`) |
 | `Super + Shift + Space` | **AI Prompt Bar** | Prompt via Wofi with automatic Wayland clipboard context injection |
 | `Super + Shift + V` | **Screen Vision & OCR** | Snip a screen region with `grim` + `slurp` to copy text or debug errors with AI |

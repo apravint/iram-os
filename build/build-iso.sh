@@ -181,6 +181,8 @@ apt-get install -y \
     waybar \
     swaybg \
     swaylock \
+    hyprlock \
+    hypridle \
     mako-notifier \
     wofi \
     alacritty \
@@ -193,6 +195,8 @@ apt-get install -y \
     hyprpicker \
     tesseract-ocr \
     wlsunset \
+    wtype \
+    zstd \
     network-manager-gnome \
     polkit-kde-agent-1 \
     python3-pip \
@@ -257,12 +261,16 @@ log_step "Injecting Iram scripts, systemd units, and skeleton user configs..."
 # Copy IRAM OS sovereign system files into /usr/share/iram
 mkdir -p "${ROOTFS_DIR}/usr/share/iram"
 cp -a --remove-destination "${REPO_ROOT}/bin" "${REPO_ROOT}/config" "${REPO_ROOT}/themes" "${REPO_ROOT}/system" "${REPO_ROOT}/migrations" "${ROOTFS_DIR}/usr/share/iram/"
+if [ -d "${REPO_ROOT}/mcp" ]; then cp -a --remove-destination "${REPO_ROOT}/mcp" "${ROOTFS_DIR}/usr/share/iram/"; fi
 if [ -d "${REPO_ROOT}/assets" ]; then cp -a --remove-destination "${REPO_ROOT}/assets" "${ROOTFS_DIR}/usr/share/iram/"; fi
 if [ -d "${REPO_ROOT}/applications" ]; then cp -a --remove-destination "${REPO_ROOT}/applications" "${ROOTFS_DIR}/usr/share/iram/"; fi
 
 # Copy IRAM system-wide binaries & profile
 mkdir -p "${ROOTFS_DIR}/usr/local/bin" "${ROOTFS_DIR}/usr/bin" "${ROOTFS_DIR}/usr/share/wayland-sessions" "${ROOTFS_DIR}/etc/profile.d"
 cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/usr/local/bin/"
+if [ -f "${REPO_ROOT}/mcp/iram-os-mcp" ]; then
+    cp -a --remove-destination "${REPO_ROOT}/mcp/iram-os-mcp" "${ROOTFS_DIR}/usr/local/bin/iram-os-mcp"
+fi
 find "${ROOTFS_DIR}/usr/local/bin/" -type f -exec chmod 0755 {} + 2>/dev/null || true
 
 # Symlink all iram binaries into /usr/bin
@@ -310,8 +318,14 @@ cp -a --remove-destination "${REPO_ROOT}/applications/icons/"*.png "${ROOTFS_DIR
 
 # Copy systemd units
 mkdir -p "${ROOTFS_DIR}/etc/skel/.config/systemd/user" "${ROOTFS_DIR}/home/iram/.config/systemd/user"
-cp -a --remove-destination "${REPO_ROOT}/config/systemd/user/"* "${ROOTFS_DIR}/etc/skel/.config/systemd/user/" 2>/dev/null || true
-cp -a --remove-destination "${REPO_ROOT}/config/systemd/user/"* "${ROOTFS_DIR}/home/iram/.config/systemd/user/" 2>/dev/null || true
+if [ -d "${REPO_ROOT}/systemd/user" ]; then
+    cp -a --remove-destination "${REPO_ROOT}/systemd/user/"* "${ROOTFS_DIR}/etc/skel/.config/systemd/user/" 2>/dev/null || true
+    cp -a --remove-destination "${REPO_ROOT}/systemd/user/"* "${ROOTFS_DIR}/home/iram/.config/systemd/user/" 2>/dev/null || true
+fi
+if [ -d "${REPO_ROOT}/config/systemd/user" ]; then
+    cp -a --remove-destination "${REPO_ROOT}/config/systemd/user/"* "${ROOTFS_DIR}/etc/skel/.config/systemd/user/" 2>/dev/null || true
+    cp -a --remove-destination "${REPO_ROOT}/config/systemd/user/"* "${ROOTFS_DIR}/home/iram/.config/systemd/user/" 2>/dev/null || true
+fi
 
 # Fix permissions
 chroot "${ROOTFS_DIR}" chown -R iram:iram /home/iram 2>/dev/null || true
@@ -428,11 +442,33 @@ grub-mkrescue -o "${OUTPUT_DIR}/${ISO_NAME}" "${ISO_DIR}" \
     -- -volid "IRAM"
 
 # ------------------------------------------------------------------------------
-# 9. Compute Checksums & Finish
+# 9. Compute Checksums & Generate Release Notes Template
 # ------------------------------------------------------------------------------
-log_step "Calculating SHA256 checksum..."
+log_step "Calculating SHA256 checksum and generating release notes..."
 cd "${OUTPUT_DIR}"
 sha256sum "${ISO_NAME}" > "sha256sum.txt"
+
+cat << RELEASE_EOF > "${OUTPUT_DIR}/release-notes-${DISTRO_VERSION}.md"
+# IRAM OS Release v${DISTRO_VERSION}
+
+**Architecture**: ${ARCH} (x86_64)
+**Base**: Ubuntu ${CODENAME}
+**Compositor**: Hyprland 0.56
+**Theme Suite**: 22 Sovereign Palettes
+
+### Checksums
+\`\`\`
+SHA256: $(cat "${OUTPUT_DIR}/sha256sum.txt")
+\`\`\`
+
+### What's New in v${DISTRO_VERSION}
+- **Autonomous Self-Healing Watchdog**: Automatic crash recovery and memory monitoring (\`iram-watchdog.service\`).
+- **Unified Control Center**: Master GUI/TUI Control Center (\`iram-settings\` / \`Super + I\`).
+- **Atomic Config Snapshots**: 1-second desktop state save and instant recovery (\`iram snapshot\`).
+- **Voice-to-Action Engine**: Push-to-talk dictation & hands-free desktop agent control (\`iram-voice\` / \`Super + Shift + M\`).
+- **Native Creator Studio**: Pipeline piping text into \`shorts-creator\`, \`video-gen\`, and \`BookGeneratorAI\` (\`iram-studio\` / \`Super + Shift + G\`).
+- **Zero-Dependency Stdio MCP Server**: Model Context Protocol server exposing desktop controls to AI agents.
+RELEASE_EOF
 
 echo -e "\n${BLUE}======================================================${NC}"
 echo -e "${GREEN}🎉 ISO Build Completed Successfully!${NC}"

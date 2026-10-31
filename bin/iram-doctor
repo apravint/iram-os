@@ -30,7 +30,7 @@ add_result() {
 }
 
 echo -e "${BLUE}========================================================================${NC}"
-echo -e "${BOLD}${CYAN}                   IRAM OS SYSTEM DOCTOR (v26.04.1)${NC}"
+echo -e "${BOLD}${CYAN}                   IRAM OS SYSTEM DOCTOR (v26.04.2)${NC}"
 echo -e "${BLUE}========================================================================${NC}\n"
 
 # 1. Wayland Session Variables
@@ -81,7 +81,7 @@ else
 fi
 
 # 4. Systemd User Units
-for unit in waybar.service swaybg.service hypridle.service iram-cliphist.service; do
+for unit in waybar.service swaybg.service hypridle.service iram-cliphist.service iram-watchdog.service; do
     if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
         add_result "Service: $unit" "PASS" "active (running)"
     elif systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Live ISO Builder & Release Automation (iram-build-iso)
+# Preflights host dependencies, builds hybrid UEFI/BIOS bootable ISO,
+# computes SHA256 hashes, and generates release notes templates.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_SRC="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+IRAM_DIR="$(cd -- "$(dirname -- "$SCRIPT_SRC")/.." && pwd)"
+
+BUILD_SCRIPT="${IRAM_DIR}/build/build-iso.sh"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo -e "${BLUE}======================================================${NC}"
+echo -e "${BOLD}${CYAN}      IRAM OS LIVE ISO BUILDER & AUTOMATION${NC}"
+echo -e "${BLUE}======================================================${NC}"
+
+if [[ ! -f "${BUILD_SCRIPT}" ]]; then
+    echo -e "${RED}[ERROR]${NC} Build script not found at ${BUILD_SCRIPT}"
+    exit 1
+fi
+
+# Preflight host tool checks
+REQUIRED_TOOLS=(debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools isolinux zstd)
+MISSING=()
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    if ! dpkg -s "$tool" >/dev/null 2>&1 && ! command -v "$tool" >/dev/null 2>&1; then
+        MISSING+=("$tool")
+    fi
+done
+
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo -e "${YELLOW}[NOTICE]${NC} Missing recommended host build tools: ${MISSING[*]}"
+    echo -e "They will be automatically installed by apt inside the build process.\n"
+fi
+
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${YELLOW}[SUDO REQUIRED]${NC} Building Live ISO requires root privileges for debootstrap & chroot."
+    exec sudo -E "${BUILD_SCRIPT}" "$@"
+else
+    exec "${BUILD_SCRIPT}" "$@"
+fi

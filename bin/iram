@@ -39,6 +39,9 @@ show_help() {
     echo -e "  iram commands [--json] [--all]\n"
     
     echo -e "${BOLD}CORE SYSTEM MANAGEMENT:${NC}"
+    echo -e "  ${CYAN}settings${NC}                 Unified GUI/TUI Control Center (Super+I)"
+    echo -e "  ${CYAN}snapshot${NC} [create|list|restore] Atomic desktop config snapshot & 1s rollback"
+    echo -e "  ${CYAN}watchdog${NC} [daemon|--once|logs] Autonomous self-healing service & resource watchdog"
     echo -e "  ${CYAN}update${NC}                   Back up ~/.config/hypr, pull repo, re-install, restart services"
     echo -e "  ${CYAN}doctor${NC}                   Verify Wayland, portals, hyprctl, systemd units, audio & AI"
     echo -e "  ${CYAN}theme${NC} [list|set|random]   Zero-restart theme switcher (22 sovereign palettes)"
@@ -737,6 +740,27 @@ case "$cmd" in
             exec "$LOCAL_BIN/iram-update" "$@"
         else
             exec "$IRAM_BIN_DIR/iram-update" "$@"
+        fi
+        ;;
+    snapshot)
+        if [ -x "$LOCAL_BIN/iram-snapshot" ]; then
+            exec "$LOCAL_BIN/iram-snapshot" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-snapshot" "$@"
+        fi
+        ;;
+    settings|control|control-center)
+        if [ -x "$LOCAL_BIN/iram-settings" ]; then
+            exec "$LOCAL_BIN/iram-settings" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-settings" "$@"
+        fi
+        ;;
+    watchdog)
+        if [ -x "$LOCAL_BIN/iram-watchdog" ]; then
+            exec "$LOCAL_BIN/iram-watchdog" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-watchdog" "$@"
         fi
         ;;
     doctor|diagnose|health)

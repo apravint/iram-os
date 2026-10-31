@@ -65,6 +65,8 @@ sudo apt install -y \
     eza \
     bat \
     jq \
+    zstd \
+    wtype \
     curl \
     wlsunset \
     python3 \
@@ -169,13 +171,13 @@ fi
 echo -e "\n${YELLOW}[4/6] Installing user dotfiles & scripts...${NC}"
 mkdir -p "$HOME/.config" "$HOME/.local/bin" "$HOME/.config/iram/hooks"
 
-# Backup existing configs if they exist and are not symlinks
-for dir in hypr waybar wofi mako; do
-    if [ -d "$HOME/.config/$dir" ] && [ ! -d "$HOME/.config/$dir.bak" ]; then
-        echo "Backing up existing ~/.config/$dir to ~/.config/$dir.bak..."
-        cp -r "$HOME/.config/$dir" "$HOME/.config/$dir.bak"
-    fi
-done
+# Atomic configuration snapshot before touching user dotfiles
+if [ -x "$REPO_DIR/bin/iram-snapshot" ]; then
+    echo "Creating atomic configuration snapshot (pre-install)..."
+    "$REPO_DIR/bin/iram-snapshot" create "pre-install" || true
+elif command -v iram-snapshot >/dev/null 2>&1; then
+    iram-snapshot create "pre-install" || true
+fi
 
 # Copy configurations & MCP servers
 mkdir -p "$HOME/.config/mcp" "$HOME/.config/hypr"
@@ -284,6 +286,7 @@ if [ "$INSTALL_TARGET" = "all" ] || [ "$INSTALL_TARGET" = "ai" ]; then
     systemctl --user enable --now iram-agentd.socket 2>/dev/null || true
 fi
 systemctl --user enable --now hypridle.service 2>/dev/null || true
+systemctl --user enable --now iram-watchdog.service 2>/dev/null || true
 systemctl --user enable --now iram-cliphist.service 2>/dev/null || true
 systemctl --user enable --now waybar.service 2>/dev/null || true
 systemctl --user enable --now swaybg.service 2>/dev/null || true
