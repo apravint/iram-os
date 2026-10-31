@@ -219,6 +219,11 @@ window#waybar {
     color: @accent;
 }
 
+#custom-mcp-status.busy {
+    color: #e0af68;
+    font-weight: 800;
+}
+
 #custom-mcp-status.idle {
     color: @muted;
 }
