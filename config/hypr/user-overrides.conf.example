@@ -1,0 +1,17 @@
+# ==============================================================================
+# IRAM OS - User Custom Hyprland Overrides
+# This file is sourced at the very end of ~/.config/hypr/hyprland.conf.
+# Custom keybinds, window rules, and input options defined here will override
+# default settings and will NEVER be overwritten during system updates.
+# ==============================================================================
+
+# Custom Keybind Examples:
+# bind = $mainMod, Return, exec, alacritty
+# bind = $mainMod SHIFT, F, exec, nautilus
+
+# Custom Window Rule Examples:
+# windowrulev2 = float, class:^(pavucontrol)$
+# windowrulev2 = size 800 600, class:^(pavucontrol)$
+
+# Custom Monitor Settings:
+# monitor = eDP-1, preferred, auto, 1

@@ -163,6 +163,34 @@ window#waybar {
     transition: all 0.15s ease;
 }
 
+#custom-iram-ai {
+    padding: 0 12px;
+    margin: 0 1px;
+    background: rgba(255, 255, 255, 0.04);
+    color: @accent;
+    font-weight: 800;
+    border-bottom: 2px solid @accent;
+    transition: all 0.15s ease-in-out;
+}
+
+#custom-iram-ai:hover {
+    background: @accent_rgba;
+    color: @fg;
+}
+
+#custom-iram-ai.active {
+    color: @accent;
+    background: @accent_rgba;
+    border-bottom: 2px solid @accent;
+}
+
+#custom-iram-ai.executing {
+    color: #ff5252;
+    background: rgba(255, 82, 82, 0.2);
+    border-bottom: 2px solid #ff5252;
+    animation: blink 1s linear infinite alternate;
+}
+
 #custom-ai-agent {
     color: @accent;
     font-weight: 800;

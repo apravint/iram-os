@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS AI Agent & Local LLM Setup (iram ai-setup)
+# Auto-detects GPU architecture (NVIDIA / AMD ROCm / CPU), verifies Ollama,
+# and pulls the optimal coding model for the machine.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo -e "${BLUE}========================================================================${NC}"
+echo -e "${BOLD}${CYAN}            IRAM OS - Sovereign AI Acceleration Setup${NC}"
+echo -e "${BLUE}========================================================================${NC}\n"
+
+# 1. Hardware Detection
+echo -e "${BOLD}${BLUE}[1/3] Detecting Acceleration Hardware & VRAM...${NC}"
+
+HAS_NVIDIA=false
+HAS_ROCM=false
+VRAM_MB=0
+DEVICE_NAME="CPU (Host Memory)"
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+    if gpu_info=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n 1); then
+        HAS_NVIDIA=true
+        DEVICE_NAME=$(echo "$gpu_info" | cut -d',' -f1 | xargs)
+        VRAM_MB=$(echo "$gpu_info" | cut -d',' -f2 | xargs)
+        echo -e "  ${GREEN}✓ NVIDIA GPU Detected:${NC} ${BOLD}$DEVICE_NAME${NC} (${VRAM_MB} MB VRAM)"
+    fi
+fi
+
+if [ "$HAS_NVIDIA" = false ] && command -v rocm-smi >/dev/null 2>&1; then
+    HAS_ROCM=true
+    DEVICE_NAME="AMD ROCm Compatible GPU"
+    echo -e "  ${GREEN}✓ AMD ROCm GPU Detected:${NC} ${BOLD}$DEVICE_NAME${NC}"
+fi
+
+if [ "$HAS_NVIDIA" = false ] && [ "$HAS_ROCM" = false ]; then
+    cpu_cores=$(nproc 2>/dev/null || echo "4")
+    total_ram_gb=$(free -g 2>/dev/null | awk '/^Mem:/{print $2}' || echo "8")
+    echo -e "  ${YELLOW}! No discrete accelerator detected.${NC}"
+    echo -e "  ${GREEN}✓ Standard CPU Fallback:${NC} $cpu_cores cores, ${total_ram_gb}GB Host RAM"
+fi
+
+# 2. Ensure Ollama is installed
+echo -e "\n${BOLD}${BLUE}[2/3] Verifying Ollama Local Inference Engine...${NC}"
+if ! command -v ollama >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}Ollama is not installed.${NC} Installing official Ollama runtime..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL https://ollama.com/install.sh | sh || {
+            echo -e "  ${RED}Failed to auto-install Ollama.${NC} Please visit https://ollama.com to install manually."
+            exit 1
+        }
+    else
+        echo -e "  ${RED}curl is required to install Ollama.${NC}" >&2
+        exit 1
+    fi
+fi
+
+echo -e "  ${GREEN}✓ Ollama binary found:${NC} $(which ollama)"
+
+# Ensure Ollama daemon is running
+if ! curl -s "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+    echo -e "  Starting Ollama daemon..."
+    if systemctl --user is-enabled ollama.service >/dev/null 2>&1; then
+        systemctl --user start ollama.service 2>/dev/null || true
+    elif systemctl is-enabled ollama.service >/dev/null 2>&1; then
+        sudo systemctl start ollama.service 2>/dev/null || true
+    else
+        nohup ollama serve >/dev/null 2>&1 &
+        sleep 2
+    fi
+fi
+
+if curl -s "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓ Ollama service is responsive.${NC}"
+else
+    echo -e "  ${YELLOW}Warning: Ollama daemon is not yet responding. Starting temporary serve...${NC}"
+    nohup ollama serve >/dev/null 2>&1 &
+    sleep 3
+fi
+
+# 3. Model Selection & Pulling
+echo -e "\n${BOLD}${BLUE}[3/3] Pulling Optimal Coding Model...${NC}"
+
+TARGET_MODEL="llama3.2:3b"
+if [ "$HAS_NVIDIA" = true ] && [ "$VRAM_MB" -ge 6000 ]; then
+    TARGET_MODEL="qwen2.5-coder:7b"
+    echo -e "  High-performance GPU detected (${VRAM_MB}MB VRAM). Selecting ${BOLD}${CYAN}$TARGET_MODEL${NC}."
+elif [ "$HAS_ROCM" = true ]; then
+    TARGET_MODEL="qwen2.5-coder:7b"
+    echo -e "  AMD ROCm GPU detected. Selecting ${BOLD}${CYAN}$TARGET_MODEL${NC}."
+else
+    TARGET_MODEL="llama3.2:3b"
+    echo -e "  Optimized lightweight architecture selected: ${BOLD}${CYAN}$TARGET_MODEL${NC} (Fast on CPU & low-VRAM GPUs)."
+fi
+
+echo -e "  Pulling ${BOLD}${CYAN}$TARGET_MODEL${NC} via Ollama..."
+ollama pull "$TARGET_MODEL"
+
+echo -e "\n${BLUE}========================================================================${NC}"
+echo -e "${GREEN}🎉 Sovereign AI setup complete!${NC}"
+echo -e "Active Model: ${BOLD}${CYAN}$TARGET_MODEL${NC}"
+echo -e "Test query:   ${YELLOW}ollama run $TARGET_MODEL 'Write a hello-world in Rust'${NC}"
+echo -e "Or launch:    ${YELLOW}iram-ai-scratchpad${NC} (Super + \`)"
+echo -e "${BLUE}========================================================================${NC}\n"

@@ -38,6 +38,14 @@ show_help() {
     echo -e "  iram <group> <subcommand> [arguments...]"
     echo -e "  iram commands [--json] [--all]\n"
     
+    echo -e "${BOLD}CORE SYSTEM MANAGEMENT:${NC}"
+    echo -e "  ${CYAN}update${NC}                   Back up ~/.config/hypr, pull repo, re-install, restart services"
+    echo -e "  ${CYAN}doctor${NC}                   Verify Wayland, portals, hyprctl, systemd units, audio & AI"
+    echo -e "  ${CYAN}theme${NC} [list|set|random]   Zero-restart theme switcher (22 sovereign palettes)"
+    echo -e "  ${CYAN}ai-setup${NC}                Auto-detect GPU/VRAM, install Ollama & pull optimal model"
+    echo -e "  ${CYAN}apps${NC}                    Interactive installer for flagship engines in ~/Projects"
+    echo -e "  ${CYAN}mcp-config${NC} [--inject]     Output or inject native iram-os-mcp server into configs\n"
+    
     echo -e "${BOLD}CORE COMMAND GROUPS:${NC}"
     echo -e "  ${CYAN}hub${NC} [dashboard]           Sovereign Command Hub (3D, Voice, Agent Swarm & System)"
     echo -e "  ${CYAN}agent${NC} [prompt|account|usage] Autonomous coding agent, direct prompting & multi-account failover"
@@ -649,8 +657,29 @@ case "$cmd" in
     quant|screener)
         exec python3 "$HOME/iram-quant/scanner.py" "$@"
         ;;
-    apps|launcher)
+    apps)
+        if [ -x "$LOCAL_BIN/iram-apps" ]; then
+            exec "$LOCAL_BIN/iram-apps" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-apps" "$@"
+        fi
+        ;;
+    launcher)
         exec "$LOCAL_BIN/iram-app-launcher"
+        ;;
+    ai-setup|setup-ai)
+        if [ -x "$LOCAL_BIN/iram-ai-setup" ]; then
+            exec "$LOCAL_BIN/iram-ai-setup" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-ai-setup" "$@"
+        fi
+        ;;
+    mcp-config)
+        if [ -x "$LOCAL_BIN/iram-mcp-config" ]; then
+            exec "$LOCAL_BIN/iram-mcp-config" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-mcp-config" "$@"
+        fi
         ;;
     bar)
         exec "$LOCAL_BIN/iram-restart-bar"
@@ -704,10 +733,18 @@ case "$cmd" in
         echo -e "${GREEN}✓ System cleanup complete!${NC}"
         ;;
     update)
-        exec "$LOCAL_BIN/iram-update" "$@"
+        if [ -x "$LOCAL_BIN/iram-update" ]; then
+            exec "$LOCAL_BIN/iram-update" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-update" "$@"
+        fi
         ;;
     doctor|diagnose|health)
-        exec "$LOCAL_BIN/iram-doctor" "$@"
+        if [ -x "$LOCAL_BIN/iram-doctor" ]; then
+            exec "$LOCAL_BIN/iram-doctor" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-doctor" "$@"
+        fi
         ;;
     pkg|package)
         sub="${1:-deb}"

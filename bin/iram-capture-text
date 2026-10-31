@@ -10,7 +10,16 @@ TMP_IMG=$(mktemp --suffix=.png)
 trap 'rm -f "$TMP_IMG"' EXIT
 
 if ! command -v slurp >/dev/null 2>&1 || ! command -v grim >/dev/null 2>&1; then
-    echo "Error: grim and slurp are required for screen capture." >&2
+    msg="grim and slurp are required for screen capture."
+    echo "Error: $msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Screen Capture Failed" "$msg"
+    exit 1
+fi
+
+if ! command -v tesseract >/dev/null 2>&1; then
+    msg="tesseract-ocr is required for OCR text extraction."
+    echo "Error: $msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical "OCR Failed" "$msg"
     exit 1
 fi
 

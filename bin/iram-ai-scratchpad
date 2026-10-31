@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS AI Scratchpad Launcher & Toggle (iram-ai-scratchpad)
+# Launches or toggles a floating Alacritty window running Google Antigravity (agy)
+# Hotkey: Super + ` (Grave / Backtick)
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+CLASS="iram-agy-float"
+TITLE="IRAM AI Agent"
+
+# Defensive check for terminal
+TERMINAL_BIN="alacritty"
+if ! command -v "$TERMINAL_BIN" >/dev/null 2>&1; then
+    if command -v foot >/dev/null 2>&1; then
+        TERMINAL_BIN="foot --app-id $CLASS --title \"$TITLE\""
+    else
+        msg="Neither alacritty nor foot is installed."
+        echo "Error: $msg" >&2
+        command -v notify-send >/dev/null 2>&1 && notify-send -u critical "AI Scratchpad Failed" "$msg"
+        exit 1
+    fi
+fi
+
+# Determine AI command to execute
+AI_CMD="agy"
+if ! command -v agy >/dev/null 2>&1; then
+    if [ -x "$HOME/.gemini/antigravity-cli/bin/agy" ]; then
+        AI_CMD="$HOME/.gemini/antigravity-cli/bin/agy"
+    elif command -v ollama >/dev/null 2>&1; then
+        # Check active model
+        active_model=$(ollama list 2>/dev/null | awk 'NR>1 {print $1}' | head -n 1 || echo "")
+        if [ -n "$active_model" ]; then
+            AI_CMD="ollama run $active_model"
+        else
+            AI_CMD="$SHELL"
+        fi
+    else
+        AI_CMD="$SHELL"
+    fi
+fi
+
+# Hyprland active toggle integration
+if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    clients_json=$(hyprctl clients -j 2>/dev/null || echo "[]")
+    existing_addr=$(echo "$clients_json" | jq -r ".[] | select(.class == \"$CLASS\") | .address" 2>/dev/null | head -n 1 || true)
+    active_addr=$(hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty' 2>/dev/null || true)
+
+    if [ -n "$existing_addr" ] && [ "$existing_addr" != "null" ]; then
+        if [ "$existing_addr" = "$active_addr" ]; then
+            # Currently focused -> minimize / move to special scratchpad
+            hyprctl dispatch movetoworkspacesilent special:scratchpad,address:"$existing_addr" >/dev/null 2>&1 || true
+            exit 0
+        else
+            # Not focused -> pull to current workspace and focus
+            hyprctl dispatch movetoworkspace current,address:"$existing_addr" >/dev/null 2>&1 || true
+            hyprctl dispatch focuswindow address:"$existing_addr" >/dev/null 2>&1 || true
+            exit 0
+        fi
+    fi
+fi
+
+# Launch fresh instance
+if [ "$TERMINAL_BIN" = "alacritty" ]; then
+    exec alacritty --class "$CLASS" --title "$TITLE" -e bash -c "export PATH=\"$HOME/.local/bin:$HOME/.gemini/antigravity-cli/bin:\$PATH\"; exec $AI_CMD"
+else
+    exec $TERMINAL_BIN -e bash -c "export PATH=\"$HOME/.local/bin:$HOME/.gemini/antigravity-cli/bin:\$PATH\"; exec $AI_CMD"
+fi

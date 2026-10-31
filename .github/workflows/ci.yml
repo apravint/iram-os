@@ -1,0 +1,100 @@
+name: IRAM OS CI Quality & Syntax Gate
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate:
+    name: Lint, Syntax & Palette Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Lint & Validation Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Verify Shell Scripts Syntax (bash -n)
+        run: |
+          echo "==> Checking syntax for install.sh and root scripts..."
+          bash -n install.sh
+          if [ -f uninstall.sh ]; then bash -n uninstall.sh; fi
+
+          echo "==> Checking syntax across all scripts in bin/..."
+          failed=0
+          for script in bin/*; do
+            if [ -f "$script" ] && [ ! -L "$script" ]; then
+              # Check if it has a bash/sh shebang
+              shebang=$(head -n 1 "$script")
+              if [[ "$shebang" =~ (bash|sh) ]]; then
+                if ! bash -n "$script"; then
+                  echo "Syntax error in $script"
+                  failed=$((failed + 1))
+                fi
+              fi
+            fi
+          done
+          if [ "$failed" -gt 0 ]; then
+            echo "Failed: $failed shell script(s) had syntax errors!"
+            exit 1
+          fi
+          echo "✓ All shell scripts passed syntax checks cleanly."
+
+      - name: Verify Python Scripts (py_compile)
+        run: |
+          echo "==> Compiling Python scripts..."
+          python3 -m py_compile mcp/iram-os-mcp
+          for py_script in bin/*.py bin/iram-theme-sync-all bin/iram-waybar-ai bin/iram-welcome bin/iram-mcp-config; do
+            if [ -f "$py_script" ]; then
+              python3 -m py_compile "$py_script"
+            fi
+          done
+          echo "✓ All Python scripts compiled without error."
+
+      - name: Validate Waybar JSON Configurations
+        run: |
+          echo "==> Validating Waybar JSON..."
+          jq . config/waybar/config.jsonc > /dev/null
+          echo "✓ config/waybar/config.jsonc is valid JSON."
+
+      - name: Verify 22 Sovereign Theme Palettes
+        run: |
+          echo "==> Auditing theme directories and colors.toml definitions..."
+          python3 -c "
+          import os, glob
+
+          themes_dir = 'themes'
+          assert os.path.isdir(themes_dir), 'themes directory missing'
+          theme_dirs = [d for d in os.listdir(themes_dir) if os.path.isdir(os.path.join(themes_dir, d))]
+          print(f'Auditing {len(theme_dirs)} sovereign themes...')
+          assert len(theme_dirs) >= 22, f'Expected at least 22 themes, found {len(theme_dirs)}'
+
+          required_keys = ['background', 'foreground', 'accent']
+          missing_errors = []
+
+          for t in theme_dirs:
+              colors_file = os.path.join(themes_dir, t, 'colors.toml')
+              if not os.path.exists(colors_file):
+                  missing_errors.append(f'{t}: missing colors.toml')
+                  continue
+              with open(colors_file, 'r', encoding='utf-8') as f:
+                  content = f.read()
+                  for rk in required_keys:
+                      if rk not in content:
+                          missing_errors.append(f'{t}: missing key \"{rk}\" in colors.toml')
+
+          if missing_errors:
+              print('\n'.join(missing_errors))
+              raise SystemExit(1)
+          print(f'✓ All {len(theme_dirs)} theme palettes are valid and contain essential color keys.')
+          "

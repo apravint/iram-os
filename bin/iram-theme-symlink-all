@@ -2,12 +2,13 @@
 # ==============================================================================
 # IRAM OS Theme Symlink & Directory Synchronizer
 # Ensures all sovereign themes in ~/iram-os/themes are linked into
-# ~/.config/omarchy/themes and system caches remain synchronized.
+# ~/.config/iram/themes and ~/.config/omarchy/themes for compatibility.
 # ==============================================================================
 set -euo pipefail
 
 IRAM_DIR="${IRAM_DIR:-$HOME/iram-os}"
 THEMES_SRC="$IRAM_DIR/themes"
+IRAM_THEMES_DEST="$HOME/.config/iram/themes"
 OMARCHY_THEMES_DEST="$HOME/.config/omarchy/themes"
 
 if [ ! -d "$THEMES_SRC" ]; then
@@ -15,22 +16,29 @@ if [ ! -d "$THEMES_SRC" ]; then
     exit 1
 fi
 
-mkdir -p "$OMARCHY_THEMES_DEST"
+mkdir -p "$IRAM_THEMES_DEST" "$OMARCHY_THEMES_DEST"
 
 count=0
 for theme_dir in "$THEMES_SRC"/*; do
     if [ -d "$theme_dir" ]; then
         theme_name="$(basename "$theme_dir")"
-        target="$OMARCHY_THEMES_DEST/$theme_name"
         
-        # If target exists and is an ordinary directory (not a symlink), back it up
-        if [ -d "$target" ] && [ ! -L "$target" ]; then
-            mv "$target" "${target}.bak.$(date +%s)"
+        # Link to ~/.config/iram/themes
+        iram_target="$IRAM_THEMES_DEST/$theme_name"
+        if [ -d "$iram_target" ] && [ ! -L "$iram_target" ]; then
+            mv "$iram_target" "${iram_target}.bak.$(date +%s)"
         fi
-        
-        ln -sfn "$theme_dir" "$target"
+        ln -sfn "$theme_dir" "$iram_target"
+
+        # Backward compatibility link to ~/.config/omarchy/themes
+        omarchy_target="$OMARCHY_THEMES_DEST/$theme_name"
+        if [ -d "$omarchy_target" ] && [ ! -L "$omarchy_target" ]; then
+            mv "$omarchy_target" "${omarchy_target}.bak.$(date +%s)"
+        fi
+        ln -sfn "$theme_dir" "$omarchy_target"
+
         count=$((count + 1))
     fi
 done
 
-echo "✓ Synchronized $count IRAM sovereign themes to $OMARCHY_THEMES_DEST"
+echo "✓ Synchronized $count IRAM sovereign themes to $IRAM_THEMES_DEST (and $OMARCHY_THEMES_DEST)"

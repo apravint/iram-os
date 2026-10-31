@@ -1,0 +1,562 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Native Model Context Protocol (MCP) System Control Server (iram-os-mcp)
+Zero-config JSON-RPC stdio server using pure Python 3 standard library.
+Compatible with Ubuntu LTS, Debian, Antigravity, Claude Code, and Gemini.
+
+Tools Exposed:
+1. switch_theme(theme_name)
+2. manage_windows(action, workspace, window_address)
+3. service_diagnostics(unit_name, action)
+4. audio_display_control(target, command)
+5. system_telemetry()
+"""
+
+import sys
+import os
+import json
+import shutil
+import subprocess
+import glob
+
+SERVER_NAME = "iram-os-mcp"
+SERVER_VERSION = "26.04.1"
+PROTOCOL_VERSION = "2024-11-05"
+
+# Helper for executing shell commands safely
+def run_cmd(cmd_list, timeout=10):
+    try:
+        res = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout)
+        return res.returncode, res.stdout.strip(), res.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return -1, "", "Command timed out"
+    except Exception as e:
+        return -1, "", str(e)
+
+# ------------------------------------------------------------------------------
+# TOOL IMPLEMENTATIONS
+# ------------------------------------------------------------------------------
+
+def tool_switch_theme(args):
+    theme_name = args.get("theme_name", "").strip()
+    home = os.path.expanduser("~")
+    current_name_file = os.path.join(home, ".local/state/iram/current/theme.name")
+    
+    current_theme = "Unknown"
+    if os.path.exists(current_name_file):
+        try:
+            with open(current_name_file, "r", encoding="utf-8") as f:
+                current_theme = f.read().strip()
+        except Exception:
+            pass
+
+    # If no theme or "list", return all available themes
+    if not theme_name or theme_name.lower() in ["list", "all", "ls"]:
+        themes = set()
+        search_dirs = [
+            os.path.join(home, "iram-os/themes"),
+            os.path.join(home, ".config/iram/themes"),
+            "/usr/share/iram/themes"
+        ]
+        for sdir in search_dirs:
+            if os.path.isdir(sdir):
+                for entry in os.listdir(sdir):
+                    if os.path.isdir(os.path.join(sdir, entry)):
+                        themes.add(entry)
+        
+        sorted_themes = sorted(list(themes))
+        return {
+            "current_theme": current_theme,
+            "theme_count": len(sorted_themes),
+            "themes": sorted_themes
+        }
+
+    # Switch theme
+    iram_bin = shutil.which("iram") or os.path.join(home, ".local/bin/iram") or os.path.join(home, "iram-os/bin/iram")
+    code, stdout, stderr = run_cmd([iram_bin, "theme", "set", theme_name])
+    
+    # Run sync
+    sync_bin = shutil.which("iram-theme-sync-all") or os.path.join(home, ".local/bin/iram-theme-sync-all")
+    if os.path.exists(sync_bin):
+        run_cmd([sync_bin])
+
+    # Check newly applied theme
+    new_theme = current_theme
+    if os.path.exists(current_name_file):
+        try:
+            with open(current_name_file, "r", encoding="utf-8") as f:
+                new_theme = f.read().strip()
+        except Exception:
+            pass
+
+    return {
+        "status": "success" if code == 0 else "warning",
+        "requested": theme_name,
+        "active_theme": new_theme,
+        "output": stdout or stderr or "Theme applied successfully."
+    }
+
+def tool_manage_windows(args):
+    action = args.get("action", "list").lower()
+    workspace = args.get("workspace", "")
+    window_addr = args.get("window_address", "")
+
+    if not shutil.which("hyprctl"):
+        return {"error": "hyprctl not found. Is Hyprland running?"}
+
+    if action == "list":
+        code, out, err = run_cmd(["hyprctl", "clients", "-j"])
+        if code != 0 or not out:
+            return {"error": f"Failed querying Hyprland clients: {err}"}
+        try:
+            clients = json.loads(out)
+            summary = []
+            for c in clients:
+                if c.get("mapped"):
+                    summary.append({
+                        "address": c.get("address"),
+                        "title": c.get("title"),
+                        "class": c.get("class"),
+                        "workspace": c.get("workspace", {}).get("name"),
+                        "floating": c.get("floating"),
+                        "fullscreen": c.get("fullscreen"),
+                        "focusHistoryID": c.get("focusHistoryID")
+                    })
+            return {"count": len(summary), "windows": summary}
+        except Exception as e:
+            return {"error": f"JSON decode failed: {e}"}
+
+    elif action == "movetoworkspace":
+        if not workspace:
+            return {"error": "Parameter 'workspace' is required for action 'movetoworkspace'."}
+        dispatch_arg = workspace
+        if window_addr:
+            dispatch_arg = f"{workspace},address:{window_addr}"
+        code, out, err = run_cmd(["hyprctl", "dispatch", "movetoworkspace", dispatch_arg])
+        return {"status": "ok" if code == 0 else "error", "action": "movetoworkspace", "output": out or err}
+
+    elif action == "togglefloating":
+        dispatch_arg = ""
+        if window_addr:
+            dispatch_arg = f"address:{window_addr}"
+        code, out, err = run_cmd(["hyprctl", "dispatch", "togglefloating", dispatch_arg] if dispatch_arg else ["hyprctl", "dispatch", "togglefloating"])
+        return {"status": "ok" if code == 0 else "error", "action": "togglefloating", "output": out or err}
+
+    elif action == "fullscreen":
+        code, out, err = run_cmd(["hyprctl", "dispatch", "fullscreen", "0"])
+        return {"status": "ok" if code == 0 else "error", "action": "fullscreen", "output": out or err}
+
+    elif action == "focus":
+        if not window_addr:
+            return {"error": "Parameter 'window_address' (address, class, or title substring) is required for focus."}
+        # Try finding address if a class name was passed
+        code, out, err = run_cmd(["hyprctl", "clients", "-j"])
+        target_addr = window_addr
+        if code == 0 and out:
+            try:
+                clients = json.loads(out)
+                for c in clients:
+                    if (c.get("address") == window_addr or 
+                        window_addr.lower() in c.get("class", "").lower() or 
+                        window_addr.lower() in c.get("title", "").lower()):
+                        target_addr = c.get("address")
+                        break
+            except Exception:
+                pass
+        code, out, err = run_cmd(["hyprctl", "dispatch", "focuswindow", f"address:{target_addr}"])
+        return {"status": "ok" if code == 0 else "error", "action": "focus", "target": target_addr, "output": out or err}
+
+    elif action == "close":
+        dispatch_arg = f"address:{window_addr}" if window_addr else ""
+        code, out, err = run_cmd(["hyprctl", "dispatch", "closewindow", dispatch_arg] if dispatch_arg else ["hyprctl", "dispatch", "killactive"])
+        return {"status": "ok" if code == 0 else "error", "action": "close", "output": out or err}
+
+    else:
+        return {"error": f"Unknown window action: {action}"}
+
+def tool_service_diagnostics(args):
+    unit = args.get("unit_name", "")
+    action = args.get("action", "status").lower()
+
+    if action == "failed":
+        code, out, err = run_cmd(["systemctl", "--user", "--failed", "--no-legend"])
+        failed_units = [line.strip().split()[0] for line in out.splitlines() if line.strip()]
+        return {"failed_count": len(failed_units), "failed_units": failed_units, "raw": out}
+
+    if not unit:
+        # If no unit given, inspect common desktop units
+        desktop_units = ["waybar.service", "swaybg.service", "hypridle.service", "iram-cliphist.service"]
+        summary = {}
+        for u in desktop_units:
+            c, o, _ = run_cmd(["systemctl", "--user", "is-active", u])
+            summary[u] = o.strip() if c == 0 else "inactive"
+        return {"desktop_services": summary}
+
+    if action == "status":
+        code, out, err = run_cmd(["systemctl", "--user", "status", unit, "--no-pager"])
+        return {"unit": unit, "action": "status", "output": out or err}
+
+    elif action == "restart":
+        code, out, err = run_cmd(["systemctl", "--user", "restart", unit])
+        c_status, o_status, _ = run_cmd(["systemctl", "--user", "is-active", unit])
+        return {"unit": unit, "action": "restart", "exit_code": code, "active": o_status.strip()}
+
+    elif action == "logs":
+        code, out, err = run_cmd(["journalctl", "--user", "-u", unit, "-n", "40", "--no-pager"])
+        return {"unit": unit, "action": "logs", "logs": out or err}
+
+    return {"error": f"Unknown service action: {action}"}
+
+def tool_audio_display_control(args):
+    target = args.get("target", "").lower()
+    command = args.get("command", "").strip()
+
+    if target == "audio":
+        if not shutil.which("pactl"):
+            return {"error": "pactl not found"}
+
+        if command in ["list", "sinks"]:
+            code, out, err = run_cmd(["pactl", "list", "sinks", "short"])
+            c_def, o_def, _ = run_cmd(["pactl", "get-default-sink"])
+            return {"default_sink": o_def.strip(), "sinks": out.splitlines()}
+
+        elif command == "cycle":
+            home = os.path.expanduser("~")
+            switch_bin = shutil.which("iram-audio-switch") or os.path.join(home, ".local/bin/iram-audio-switch")
+            if os.path.exists(switch_bin):
+                code, out, err = run_cmd([switch_bin, "cycle"])
+                return {"status": "cycled", "output": out}
+            else:
+                return {"error": "iram-audio-switch not found"}
+
+        elif command == "toggle_mute":
+            code, out, err = run_cmd(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
+            return {"status": "ok" if code == 0 else "error", "command": "toggle_mute"}
+
+        elif "set_volume" in command:
+            vol_val = command.split()[-1]
+            code, out, err = run_cmd(["pactl", "set-sink-volume", "@DEFAULT_SINK@", vol_val])
+            return {"status": "ok" if code == 0 else "error", "volume": vol_val}
+
+        return {"error": f"Unknown audio command: {command}"}
+
+    elif target == "display":
+        if not shutil.which("hyprctl"):
+            return {"error": "hyprctl not found"}
+
+        if command in ["list", "monitors_json", "monitors"]:
+            code, out, err = run_cmd(["hyprctl", "monitors", "-j"])
+            try:
+                monitors = json.loads(out)
+                return {"monitor_count": len(monitors), "monitors": monitors}
+            except Exception:
+                return {"raw": out}
+
+        return {"error": f"Unknown display command: {command}"}
+
+    return {"error": f"Invalid target: {target}. Must be 'audio' or 'display'."}
+
+def tool_system_telemetry():
+    telemetry = {}
+
+    # CPU Load
+    try:
+        load1, load5, load15 = os.getloadavg()
+        telemetry["cpu"] = {
+            "cores": os.cpu_count(),
+            "load_1m": round(load1, 2),
+            "load_5m": round(load5, 2),
+            "load_15m": round(load15, 2)
+        }
+    except Exception as e:
+        telemetry["cpu"] = {"error": str(e)}
+
+    # RAM
+    try:
+        meminfo = {}
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    val = parts[1].strip().split()[0]
+                    if key in ["MemTotal", "MemFree", "MemAvailable"]:
+                        meminfo[key] = int(val) // 1024  # Convert to MB
+        total = meminfo.get("MemTotal", 0)
+        avail = meminfo.get("MemAvailable", 0)
+        used = total - avail
+        telemetry["memory_mb"] = {
+            "total": total,
+            "used": used,
+            "available": avail,
+            "percent_used": round((used / total * 100), 1) if total > 0 else 0
+        }
+    except Exception as e:
+        telemetry["memory_mb"] = {"error": str(e)}
+
+    # GPU VRAM
+    telemetry["gpu"] = "None detected"
+    if shutil.which("nvidia-smi"):
+        code, out, _ = run_cmd(["nvidia-smi", "--query-gpu=name,memory.total,memory.used,memory.free", "--format=csv,noheader,nounits"])
+        if code == 0 and out:
+            lines = out.splitlines()
+            gpus = []
+            for l in lines:
+                parts = [p.strip() for p in l.split(",")]
+                if len(parts) >= 4:
+                    gpus.append({
+                        "name": parts[0],
+                        "vram_total_mb": int(parts[1]),
+                        "vram_used_mb": int(parts[2]),
+                        "vram_free_mb": int(parts[3])
+                    })
+            telemetry["gpu"] = gpus
+    elif shutil.which("rocm-smi"):
+        telemetry["gpu"] = "AMD ROCm GPU present"
+
+    # Disk Usage
+    try:
+        usage = shutil.disk_usage("/")
+        telemetry["disk_gb"] = {
+            "total": round(usage.total / (1024**3), 1),
+            "used": round(usage.used / (1024**3), 1),
+            "free": round(usage.free / (1024**3), 1),
+            "percent_used": round((usage.used / usage.total * 100), 1)
+        }
+    except Exception as e:
+        telemetry["disk_gb"] = {"error": str(e)}
+
+    # Failed User Units
+    code, out, _ = run_cmd(["systemctl", "--user", "--failed", "--no-legend"])
+    failed = [line.strip().split()[0] for line in out.splitlines() if line.strip()]
+    telemetry["systemd_user_failed"] = failed
+
+    return telemetry
+
+# ------------------------------------------------------------------------------
+# JSON-RPC DISPATCH ENGINE
+# ------------------------------------------------------------------------------
+
+TOOLS_MANIFEST = [
+    {
+        "name": "switch_theme",
+        "description": "Lists all 22 sovereign themes or switches the active IRAM OS theme live.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "theme_name": {
+                    "type": "string",
+                    "description": "Theme name to apply (e.g. 'Tokyo Storm', 'Cyberpunk Neon'), or empty/list to list all themes."
+                }
+            }
+        }
+    },
+    {
+        "name": "manage_windows",
+        "description": "Lists active windows, moves windows across workspaces, or toggles floating/fullscreen in Hyprland.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "Action to perform: 'list', 'movetoworkspace', 'togglefloating', 'fullscreen', 'focus', 'close'",
+                    "enum": ["list", "movetoworkspace", "togglefloating", "fullscreen", "focus", "close"]
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Target workspace (e.g. '1', '2', 'special:scratchpad') when action is 'movetoworkspace'."
+                },
+                "window_address": {
+                    "type": "string",
+                    "description": "Window address (e.g. '0x55a9b...'), title substring, or class to target."
+                }
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "service_diagnostics",
+        "description": "Inspects systemctl --user status, journalctl logs, and restarts desktop services.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "unit_name": {
+                    "type": "string",
+                    "description": "Service unit name (e.g. 'waybar.service', 'swaybg.service', 'hypridle.service', 'iram-cliphist.service')"
+                },
+                "action": {
+                    "type": "string",
+                    "description": "Action: 'status', 'restart', 'logs', 'failed'",
+                    "enum": ["status", "restart", "logs", "failed"]
+                }
+            }
+        }
+    },
+    {
+        "name": "audio_display_control",
+        "description": "Interfaces with PipeWire audio sink switching and Hyprland monitor display layouts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "Target subsystem: 'audio' or 'display'",
+                    "enum": ["audio", "display"]
+                },
+                "command": {
+                    "type": "string",
+                    "description": "Command for audio: 'list', 'cycle', 'toggle_mute', 'set_volume <N>%'; for display: 'list', 'monitors_json'"
+                }
+            },
+            "required": ["target", "command"]
+        }
+    },
+    {
+        "name": "system_telemetry",
+        "description": "Returns CPU, RAM, GPU VRAM, disk usage, and failed systemd user units as structured JSON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    }
+]
+
+def send_response(response_dict):
+    body = json.dumps(response_dict, separators=(',', ':'))
+    sys.stdout.write(body + "\n")
+    sys.stdout.flush()
+
+def handle_request(req):
+    msg_id = req.get("id")
+    method = req.get("method")
+    params = req.get("params", {})
+
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {
+                "protocolVersion": PROTOCOL_VERSION,
+                "capabilities": {
+                    "tools": {}
+                },
+                "serverInfo": {
+                    "name": SERVER_NAME,
+                    "version": SERVER_VERSION
+                }
+            }
+        }
+
+    elif method == "notifications/initialized":
+        # Notification, no return
+        return None
+
+    elif method == "ping":
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {}
+        }
+
+    elif method == "tools/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {
+                "tools": TOOLS_MANIFEST
+            }
+        }
+
+    elif method == "tools/call":
+        tool_name = params.get("name")
+        args = params.get("arguments", {})
+
+        result_payload = None
+        try:
+            if tool_name == "switch_theme":
+                result_payload = tool_switch_theme(args)
+            elif tool_name == "manage_windows":
+                result_payload = tool_manage_windows(args)
+            elif tool_name == "service_diagnostics":
+                result_payload = tool_service_diagnostics(args)
+            elif tool_name == "audio_display_control":
+                result_payload = tool_audio_display_control(args)
+            elif tool_name == "system_telemetry":
+                result_payload = tool_system_telemetry()
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method/Tool '{tool_name}' not found"
+                    }
+                }
+        except Exception as ex:
+            result_payload = {"error": str(ex)}
+
+        text_output = json.dumps(result_payload, indent=2) if isinstance(result_payload, (dict, list)) else str(result_payload)
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": text_output
+                    }
+                ]
+            }
+        }
+
+    else:
+        if msg_id is not None:
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Method '{method}' not implemented"
+                }
+            }
+        return None
+
+def main():
+    while True:
+        try:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
+
+            # Check for Content-Length framing if present
+            if line.startswith("Content-Length:"):
+                length = int(line.split(":")[1].strip())
+                # Read empty line
+                sys.stdin.readline()
+                raw_payload = sys.stdin.read(length)
+                req = json.loads(raw_payload)
+            else:
+                req = json.loads(line)
+
+            res = handle_request(req)
+            if res is not None:
+                send_response(res)
+        except (KeyboardInterrupt, SystemExit):
+            break
+        except Exception as e:
+            # Send standard JSON-RPC internal error if id is available
+            try:
+                err_resp = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32603, "message": f"Internal JSON-RPC error: {str(e)}"}
+                }
+                send_response(err_resp)
+            except Exception:
+                pass
+
+if __name__ == "__main__":
+    main()

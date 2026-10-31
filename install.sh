@@ -108,6 +108,7 @@ sudo mkdir -p /usr/share/iram
 if [ -d "$REPO_DIR/bin" ] && [ -d "$REPO_DIR/config" ]; then
     echo "Deploying IRAM OS core from local repository ($REPO_DIR)..."
     sudo cp -a "$REPO_DIR/bin" "$REPO_DIR/config" "$REPO_DIR/themes" "$REPO_DIR/system" "$REPO_DIR/migrations" /usr/share/iram/
+    if [ -d "$REPO_DIR/mcp" ]; then sudo cp -a "$REPO_DIR/mcp" /usr/share/iram/; fi
     if [ -d "$REPO_DIR/assets" ]; then sudo cp -a "$REPO_DIR/assets" /usr/share/iram/; fi
     if [ -d "$REPO_DIR/applications" ]; then sudo cp -a "$REPO_DIR/applications" /usr/share/iram/; fi
 else
@@ -125,6 +126,9 @@ sudo git config --system --add safe.directory /usr/share/iram 2>/dev/null || tru
 # Symlink all IRAM CLI binaries to system PATH
 echo "Linking IRAM CLI binaries to /usr/local/bin and /usr/bin..."
 sudo cp -a "$REPO_DIR/bin/"* /usr/local/bin/
+if [ -f "$REPO_DIR/mcp/iram-os-mcp" ]; then
+    sudo cp -a "$REPO_DIR/mcp/iram-os-mcp" /usr/local/bin/iram-os-mcp
+fi
 sudo chmod +x /usr/local/bin/*
 for b in /usr/local/bin/iram* /usr/local/bin/craft*; do
     if [ -f "$b" ]; then
@@ -177,7 +181,18 @@ done
 mkdir -p "$HOME/.config/mcp" "$HOME/.config/hypr"
 cp -r "$REPO_DIR/config/"* "$HOME/.config/"
 touch "$HOME/.config/hypr/monitors.conf"
-touch "$HOME/.config/hypr/user-overrides.conf"
+
+# Ensure user-overrides.conf is created only if it does not already exist
+if [ ! -f "$HOME/.config/hypr/user-overrides.conf" ]; then
+    cat << 'EOF' > "$HOME/.config/hypr/user-overrides.conf"
+# ==============================================================================
+# IRAM OS - User Custom Hyprland Overrides
+# This file is sourced at the very end of ~/.config/hypr/hyprland.conf.
+# Custom keybinds, window rules, and input options defined here will override
+# default settings and will NEVER be overwritten during system updates.
+# ==============================================================================
+EOF
+fi
 
 # Install systemd user units
 mkdir -p "$HOME/.config/systemd/user"
@@ -187,6 +202,9 @@ fi
 
 # Copy scripts & make executable
 cp -a "$REPO_DIR/bin/"* "$HOME/.local/bin/"
+if [ -f "$REPO_DIR/mcp/iram-os-mcp" ]; then
+    cp -a "$REPO_DIR/mcp/iram-os-mcp" "$HOME/.local/bin/iram-os-mcp"
+fi
 chmod +x "$HOME/.local/bin/"*
 
 # Copy Iram desktop webapps and icons
@@ -265,13 +283,22 @@ if [ "$INSTALL_TARGET" = "all" ] || [ "$INSTALL_TARGET" = "ai" ]; then
     # Socket-activation for AI daemon (Zero idle RAM)
     systemctl --user enable --now iram-agentd.socket 2>/dev/null || true
 fi
+systemctl --user enable --now hypridle.service 2>/dev/null || true
 systemctl --user enable --now iram-cliphist.service 2>/dev/null || true
+systemctl --user enable --now waybar.service 2>/dev/null || true
+systemctl --user enable --now swaybg.service 2>/dev/null || true
+systemctl --user enable --now iram-nexus.service 2>/dev/null || true
 systemctl --user enable --now iram-hub.service 2>/dev/null || true
 systemctl --user enable --now iram-mcp-server.service 2>/dev/null || true
 systemctl --user enable --now iram-dual-wifi-keepalive.service 2>/dev/null || true
 systemctl --user enable --now iram-healthd.timer 2>/dev/null || true
 systemctl --user enable --now iram-security.timer 2>/dev/null || true
 systemctl --user enable --now iram-organizer.timer 2>/dev/null || true
+
+# Reload running Hyprland compositor session if active
+if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    hyprctl reload 2>/dev/null || true
+fi
 
 # Unmute audio sinks so sound works out of the box
 for sink in $(pactl list sinks short 2>/dev/null | awk '{print $2}'); do

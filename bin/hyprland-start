@@ -19,8 +19,15 @@ export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export _JAVA_AWT_WM_NONREPARENTING=1
 
-# Hardware cursor compatibility
-export WLR_NO_HARDWARE_CURSORS=1
+# Virtual Machine & Hardware Cursor Detection
+VIRT=$(systemd-detect-virt 2>/dev/null || echo "none")
+if [ "$VIRT" != "none" ]; then
+    export WLR_NO_HARDWARE_CURSORS=1
+    export LIBVA_DRIVER_NAME=sw
+else
+    # Default to 1 if no discrete GPU driver overrides
+    export WLR_NO_HARDWARE_CURSORS=1
+fi
 
 # Launch Hyprland compositor via official start-hyprland watchdog wrapper if available
 if command -v start-hyprland >/dev/null 2>&1; then

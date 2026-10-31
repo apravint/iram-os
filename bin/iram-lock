@@ -16,6 +16,8 @@ elif command -v swaylock >/dev/null 2>&1; then
         exec swaylock -c 080a10 -f "$@"
     fi
 else
-    echo "No Wayland lockscreen utility found (hyprlock or swaylock)." >&2
+    msg="No Wayland lockscreen utility found (hyprlock or swaylock)."
+    echo "$msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Lock Screen Failed" "$msg"
     exit 1
 fi

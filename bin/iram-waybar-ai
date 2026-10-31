@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Waybar AI & Agent Telemetry Pill (iram-waybar-ai)
+Outputs single-line JSON formatted for Waybar custom modules:
+{"text": "...", "tooltip": "...", "class": "..."}
+Displays active Ollama models, agy / iram-os-mcp processes, and VRAM/RAM telemetry.
+https://github.com/apravint/iram-os
+"""
+
+import sys
+import os
+import json
+import shutil
+import subprocess
+import urllib.request
+
+def get_ram_usage():
+    try:
+        mem = {}
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    k = parts[0].strip()
+                    v = parts[1].strip().split()[0]
+                    if k in ["MemTotal", "MemAvailable"]:
+                        mem[k] = int(v) // 1024 # MB
+        total = mem.get("MemTotal", 0)
+        avail = mem.get("MemAvailable", 0)
+        used = total - avail
+        pct = int((used / total) * 100) if total > 0 else 0
+        return total, used, pct
+    except Exception:
+        return 0, 0, 0
+
+def get_vram_usage():
+    if shutil.which("nvidia-smi"):
+        try:
+            out = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+                text=True, timeout=2
+            ).strip()
+            if out:
+                used, total = [int(x.strip()) for x in out.splitlines()[0].split(",")]
+                pct = int((used / total) * 100) if total > 0 else 0
+                return total, used, pct
+        except Exception:
+            pass
+    return None, None, None
+
+def check_process(name):
+    try:
+        out = subprocess.check_output(["pgrep", "-f", name], text=True, timeout=1).strip()
+        return bool(out)
+    except Exception:
+        return False
+
+def get_ollama_status():
+    active_models = []
+    try:
+        req = urllib.request.Request("http://127.0.0.1:11434/api/ps", headers={"User-Agent": "IRAM-Waybar"})
+        with urllib.request.urlopen(req, timeout=1) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for m in data.get("models", []):
+                active_models.append(m.get("name", "model"))
+    except Exception:
+        pass
+    return active_models
+
+def main():
+    total_ram, used_ram, ram_pct = get_ram_usage()
+    total_vram, used_vram, vram_pct = get_vram_usage()
+    
+    agy_active = check_process("agy") or check_process("antigravity")
+    mcp_active = check_process("iram-os-mcp") or check_process("iram-mcp-server")
+    ollama_models = get_ollama_status()
+
+    # Determine status class and label
+    css_class = "idle"
+    if agy_active:
+        css_class = "executing"
+        icon = "󰚩"
+        text = f"{icon} agy"
+    elif ollama_models:
+        css_class = "active"
+        icon = "󱚝"
+        short_model = ollama_models[0].split(":")[0]
+        text = f"{icon} {short_model}"
+    elif mcp_active:
+        css_class = "active"
+        icon = "󰚩"
+        text = f"{icon} MCP"
+    else:
+        icon = "󰚩"
+        if vram_pct is not None:
+            text = f"{icon} AI {vram_pct}%"
+        else:
+            text = f"{icon} AI"
+
+    # Build rich multi-line tooltip
+    tooltip_lines = [
+        "<b>IRAM OS AI Telemetry</b>",
+        f"• Antigravity (agy): {'Active (Working)' if agy_active else 'Standby'}",
+        f"• IRAM MCP Control: {'Connected' if mcp_active else 'Standby'}"
+    ]
+
+    if ollama_models:
+        tooltip_lines.append(f"• Ollama In-VRAM Models: {', '.join(ollama_models)}")
+    else:
+        tooltip_lines.append("• Ollama Models: Standby (Zero Idle VRAM)")
+
+    if total_vram is not None:
+        tooltip_lines.append(f"• GPU VRAM: {used_vram}MB / {total_vram}MB ({vram_pct}%)")
+    tooltip_lines.append(f"• System RAM: {used_ram // 1024}GB / {total_ram // 1024}GB ({ram_pct}%)")
+    tooltip_lines.append("")
+    tooltip_lines.append("<i>Left-click: Toggle AI Scratchpad (Super+`)</i>")
+    tooltip_lines.append("<i>Right-click: Launch System Doctor</i>")
+
+    payload = {
+        "text": text,
+        "tooltip": "\n".join(tooltip_lines),
+        "class": css_class
+    }
+
+    print(json.dumps(payload, separators=(',', ':')))
+
+if __name__ == "__main__":
+    main()

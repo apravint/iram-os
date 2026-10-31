@@ -6,6 +6,20 @@ MODE="${1:-region}"
 SCREENSHOT_DIR="$HOME/Pictures/Screenshots"
 mkdir -p "$SCREENSHOT_DIR"
 
+if ! command -v grim >/dev/null 2>&1; then
+    msg="grim is not installed. Please install grim."
+    echo "Error: $msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Screenshot Failed" "$msg"
+    exit 1
+fi
+
+if [[ "$MODE" != "fullscreen" ]] && ! command -v slurp >/dev/null 2>&1; then
+    msg="slurp is not installed. Please install slurp."
+    echo "Error: $msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Screenshot Failed" "$msg"
+    exit 1
+fi
+
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 FILENAME="screenshot-${TIMESTAMP}.png"
 FILEPATH="${SCREENSHOT_DIR}/${FILENAME}"

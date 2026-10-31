@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Flagship Apps Installer (iram apps)
+# Interactive Wofi / terminal installer that clones and sets up flagship creative
+# and AI production engines into ~/Projects/.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+PROJECTS_DIR="$HOME/Projects"
+mkdir -p "$PROJECTS_DIR"
+
+declare -A APPS_REPOS=(
+    ["video-gen"]="https://github.com/apravint/video-gen.git"
+    ["shorts-creator"]="https://github.com/apravint/shorts-creator.git"
+    ["BookGeneratorAI"]="https://github.com/apravint/BookGeneratorAI.git"
+)
+
+declare -A APPS_DESC=(
+    ["video-gen"]="Universal Cinema, Film & HyperFrames Video Studio"
+    ["shorts-creator"]="Autonomous Viral 9:16 Shorts Generation Pipeline"
+    ["BookGeneratorAI"]="Commercial Multi-Agent Behavioral & Fiction Book Engine"
+)
+
+install_app() {
+    local name="$1"
+    local repo="${APPS_REPOS[$name]}"
+    local target="$PROJECTS_DIR/$name"
+
+    echo -e "\n${BOLD}${BLUE}==> Setting up flagship app: ${CYAN}$name${NC}"
+    echo -e "    Description: ${APPS_DESC[$name]}"
+    echo -e "    Target path: ${YELLOW}$target${NC}"
+
+    if [ -d "$target/.git" ]; then
+        echo -e "    ${GREEN}✓ Repository already exists.${NC} Pulling latest changes..."
+        git -C "$target" pull --ff-only 2>/dev/null || echo -e "    ${YELLOW}! Note: Local changes or detached head, skipping pull.${NC}"
+    elif [ -d "$target" ]; then
+        echo -e "    ${YELLOW}! Directory exists at $target (not a git repo). Skipping clone.${NC}"
+    else
+        echo -e "    Cloning $repo..."
+        git clone "$repo" "$target"
+    fi
+
+    # Post-clone setup
+    if [ -f "$target/requirements.txt" ]; then
+        echo -e "    ${YELLOW}Installing Python dependencies for $name...${NC}"
+        pip3 install -r "$target/requirements.txt" --break-system-packages 2>/dev/null || {
+            echo -e "    ${YELLOW}Note: pip install had warnings or requires virtualenv. Run manually in $target.${NC}"
+        }
+    fi
+
+    if [ -f "$target/setup.py" ] || [ -f "$target/pyproject.toml" ]; then
+        pip3 install -e "$target" --break-system-packages 2>/dev/null || true
+    fi
+
+    echo -e "    ${GREEN}✓ Setup complete for $name!${NC}"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a "IRAM Apps" "✓ App Ready: $name" "Installed to ~/Projects/$name" 2>/dev/null || true
+    fi
+}
+
+# Determine UI mode: GUI (wofi) or CLI
+USE_GUI=false
+if [ "${1:-}" = "--gui" ] || [ "${1:-}" = "--wofi" ] || { [ ! -t 0 ] && command -v wofi >/dev/null 2>&1; }; then
+    USE_GUI=true
+fi
+
+if [ "$USE_GUI" = true ] && command -v wofi >/dev/null 2>&1; then
+    MENU_ITEMS="⚡ Install All Flagship Applications
+🎬 video-gen (Cinema & HyperFrames Video Studio)
+📱 shorts-creator (Viral Automated Shorts Pipeline)
+📚 BookGeneratorAI (Production Multi-Agent Book Engine)
+📂 Open ~/Projects in File Manager"
+
+    CHOICE=$(echo -e "$MENU_ITEMS" | wofi --dmenu --prompt "IRAM Flagship Apps:" --width 540 --height 300 2>/dev/null || true)
+    [ -z "$CHOICE" ] && exit 0
+
+    case "$CHOICE" in
+        *"All Flagship"*)
+            install_app "video-gen"
+            install_app "shorts-creator"
+            install_app "BookGeneratorAI"
+            ;;
+        *"video-gen"*)
+            install_app "video-gen"
+            ;;
+        *"shorts-creator"*)
+            install_app "shorts-creator"
+            ;;
+        *"BookGeneratorAI"*)
+            install_app "BookGeneratorAI"
+            ;;
+        *"Open ~/Projects"*)
+            if command -v dolphin >/dev/null 2>&1; then
+                dolphin "$PROJECTS_DIR" &
+            elif command -v nautilus >/dev/null 2>&1; then
+                nautilus "$PROJECTS_DIR" &
+            else
+                xdg-open "$PROJECTS_DIR" &
+            fi
+            ;;
+    esac
+    exit 0
+fi
+
+# Terminal CLI Mode
+echo -e "${BLUE}========================================================================${NC}"
+echo -e "${BOLD}${CYAN}            IRAM OS FLAGSHIP APPLICATIONS INSTALLER${NC}"
+echo -e "${BLUE}========================================================================${NC}\n"
+
+echo -e "Choose applications to clone & configure into ${YELLOW}$PROJECTS_DIR${NC}:\n"
+echo -e "  ${BOLD}1)${NC} ${CYAN}All Flagship Apps${NC} (video-gen + shorts-creator + BookGeneratorAI)"
+echo -e "  ${BOLD}2)${NC} ${CYAN}video-gen${NC}        - ${APPS_DESC['video-gen']}"
+echo -e "  ${BOLD}3)${NC} ${CYAN}shorts-creator${NC}   - ${APPS_DESC['shorts-creator']}"
+echo -e "  ${BOLD}4)${NC} ${CYAN}BookGeneratorAI${NC}  - ${APPS_DESC['BookGeneratorAI']}"
+echo -e "  ${BOLD}5)${NC} Exit"
+echo ""
+
+read -rp "Enter choice [1-5] (default: 1): " CLI_CHOICE
+CLI_CHOICE="${CLI_CHOICE:-1}"
+
+case "$CLI_CHOICE" in
+    1)
+        install_app "video-gen"
+        install_app "shorts-creator"
+        install_app "BookGeneratorAI"
+        ;;
+    2)
+        install_app "video-gen"
+        ;;
+    3)
+        install_app "shorts-creator"
+        ;;
+    4)
+        install_app "BookGeneratorAI"
+        ;;
+    5)
+        echo "Exiting."
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Invalid selection.${NC}"
+        exit 1
+        ;;
+esac
+
+echo -e "\n${GREEN}🎉 Flagship apps installed! Access them inside $PROJECTS_DIR${NC}\n"

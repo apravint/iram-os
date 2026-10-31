@@ -20,8 +20,7 @@
         "mpris"
     ],
     "modules-right": [
-        "custom/ai-agent",
-        "custom/mcp-status",
+        "custom/iram-ai",
         "custom/theme",
         "cpu",
         "memory",
@@ -72,6 +71,15 @@
         "interval": 300,
         "exec": "~/.local/bin/iram-waybar-weather",
         "on-click": "~/.local/bin/iram-notification-weather"
+    },
+
+    "custom/iram-ai": {
+        "format": "{}",
+        "return-type": "json",
+        "interval": 5,
+        "exec": "~/.local/bin/iram-waybar-ai",
+        "on-click": "~/.local/bin/iram-ai-scratchpad",
+        "on-click-right": "alacritty --class iram-agy-float -e ~/.local/bin/iram doctor"
     },
 
     "custom/ai-agent": {

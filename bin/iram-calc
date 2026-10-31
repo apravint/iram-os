@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Calculator Launcher (iram-calc)
+# ==============================================================================
+set -euo pipefail
+
+if command -v gnome-calculator >/dev/null 2>&1; then
+    exec gnome-calculator "$@"
+elif command -v kcalc >/dev/null 2>&1; then
+    exec kcalc "$@"
+elif command -v qalculate-gtk >/dev/null 2>&1; then
+    exec qalculate-gtk "$@"
+elif command -v alacritty >/dev/null 2>&1; then
+    exec alacritty -T "IRAM Calculator" -e python3 -q
+else
+    echo "No graphical calculator installed. Starting python3 REPL..."
+    exec python3 -q
+fi

@@ -2,6 +2,13 @@
 # Iram Screen Recording Tool for IRAM OS / Hyprland
 set -euo pipefail
 
+if ! command -v wf-recorder >/dev/null 2>&1; then
+    msg="wf-recorder is not installed. Please install wf-recorder."
+    echo "Error: $msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Screen Record Failed" "$msg"
+    exit 1
+fi
+
 RECORDING_DIR="$HOME/Videos"
 mkdir -p "$RECORDING_DIR"
 

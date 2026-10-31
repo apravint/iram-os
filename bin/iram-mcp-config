@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - MCP Configuration Helper (iram mcp-config)
+Outputs or automatically injects the iram-os-mcp server configuration
+into ~/.gemini/settings.json, Antigravity, and Claude configurations.
+https://github.com/apravint/iram-os
+"""
+
+import os
+import sys
+import json
+import shutil
+
+BOLD = "\033[1m"
+GREEN = "\033[0;32m"
+BLUE = "\033[0;34m"
+YELLOW = "\033[1;33m"
+CYAN = "\033[0;36m"
+RED = "\033[0;31m"
+NC = "\033[0m"
+
+MCP_COMMAND = shutil.which("iram-os-mcp") or os.path.expanduser("~/.local/bin/iram-os-mcp")
+if not os.path.exists(MCP_COMMAND) and os.path.exists("/usr/local/bin/iram-os-mcp"):
+    MCP_COMMAND = "/usr/local/bin/iram-os-mcp"
+
+CONFIG_SNIPPET = {
+    "mcpServers": {
+        "iram_system": {
+            "command": MCP_COMMAND,
+            "args": [],
+            "description": "IRAM OS Native Desktop, Hyprland, Themes & Diagnostics MCP Server"
+        }
+    }
+}
+
+def inject_config(filepath: str, label: str):
+    expanded = os.path.expanduser(filepath)
+    os.makedirs(os.path.dirname(expanded), exist_ok=True)
+    data = {}
+    if os.path.exists(expanded):
+        try:
+            with open(expanded, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+
+    if "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
+        data["mcpServers"] = {}
+
+    data["mcpServers"]["iram_system"] = CONFIG_SNIPPET["mcpServers"]["iram_system"]
+
+    try:
+        with open(expanded, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        print(f"  {GREEN}✓ Injected iram_system into {label}:{NC} {expanded}")
+    except Exception as e:
+        print(f"  {RED}✗ Failed writing to {expanded}: {e}{NC}")
+
+def main():
+    inject = False
+    if len(sys.argv) > 1 and sys.argv[1] in ["--inject", "--install", "-i"]:
+        inject = True
+
+    if inject:
+        print(f"{BLUE}========================================================================{NC}")
+        print(f"{BOLD}{CYAN}      IRAM OS MCP SERVER CONFIGURATION INJECTION{NC}")
+        print(f"{BLUE}========================================================================{NC}\n")
+
+        # 1. Gemini / Antigravity settings
+        inject_config("~/.gemini/settings.json", "Gemini / Antigravity")
+        inject_config("~/.gemini/antigravity-cli/settings.json", "Antigravity CLI")
+
+        # 2. Claude Code CLI & Desktop
+        inject_config("~/.claude.json", "Claude Code CLI")
+        inject_config("~/.config/claude/claude_desktop_config.json", "Claude Desktop")
+
+        print(f"\n{GREEN}🎉 Native iram-os-mcp configuration successfully installed!{NC}\n")
+    else:
+        # Standard output mode
+        print(json.dumps(CONFIG_SNIPPET, indent=2))
+        if sys.stdout.isatty():
+            print(f"\n{YELLOW}Tip:{NC} Run '{BOLD}iram mcp-config --inject{NC}' to automatically wire into ~/.gemini/settings.json and Claude.", file=sys.stderr)
+
+if __name__ == "__main__":
+    main()

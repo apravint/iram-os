@@ -1,8 +1,1 @@
-#!/bin/bash
-if command -v gnome-calculator >/dev/null 2>&1; then
-  exec gnome-calculator "$@"
-elif command -v kcalc >/dev/null 2>&1; then
-  exec kcalc "$@"
-else
-  exec alacritty -T "Calculator" -e python3 -q
-fi
+iram-calc
