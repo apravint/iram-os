@@ -107,14 +107,14 @@ jobs:
             3. Boot your PC, choose your USB drive in the boot menu (`F12`, `F11`, or `Esc`).
             4. Default Live Session Credentials:
                - **User**: `iram`
-               - **Password**: `iram` *(Passwordless sudo enabled)*
+               - **Password**: `iram` *(Passwordless sudo enabled for live trial; disk installations automatically enforce password update)*
 
             ### ✨ Key Features
             - Pre-configured Hyprland Wayland compositor with fluid animations
             - Dual-monitor auto-detection with GUI manager (`iram-displays-gui`)
             - Out-of-the-box PipeWire audio routing & toggle shortcuts (`Super + Shift + A`)
             - Persistent Waybar & wallpaper services with 0 collisions
-            - 22 custom built-in themes with instant live switching
+            - 43 custom built-in themes with instant live switching (`iram theme`)
           files: |
             out/*.iso
             out/sha256sum.txt

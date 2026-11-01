@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - First-Boot Authentication & Security Hardening
+# Ensures target disk installations force password reset and revoke live NOPASSWD sudo.
+# ==============================================================================
+set -euo pipefail
+
+# 1. Check if running in a live environment
+is_live_boot() {
+    grep -q -E 'boot=casper|boot=live|live-media' /proc/cmdline 2>/dev/null || [ -d /run/casper ] || [ -d /run/live ]
+}
+
+if is_live_boot; then
+    # Keep default seamless experience for live ISO trials
+    exit 0
+fi
+
+# If already secured on installed disk, exit cleanly
+if [ -f /var/lib/iram/.auth_secured ]; then
+    exit 0
+fi
+
+echo "IRAM OS: Initializing first-boot security hardening for installed system..."
+mkdir -p /var/lib/iram
+
+# 2. Revoke live session passwordless sudo on disk-installed systems
+if [ -f /etc/sudoers.d/iram ]; then
+    rm -f /etc/sudoers.d/iram
+    echo "IRAM OS: Passwordless sudo privilege removed (/etc/sudoers.d/iram)."
+fi
+
+# 3. Disable SDDM autologin on installed target disk
+if [ -f /etc/sddm.conf.d/autologin.conf ]; then
+    rm -f /etc/sddm.conf.d/autologin.conf
+    echo "IRAM OS: Autologin disabled on target disk installation."
+fi
+
+# 4. Expire default 'iram' user password to require new user-chosen password
+if id -u iram >/dev/null 2>&1; then
+    passwd -e iram 2>/dev/null || chage -d 0 iram 2>/dev/null || true
+    echo "IRAM OS: Password expiration enforced for user 'iram'."
+fi
+
+touch /var/lib/iram/.auth_secured
+echo "IRAM OS: Security hardening complete."

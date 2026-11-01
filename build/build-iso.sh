@@ -311,6 +311,11 @@ if [ -f "${REPO_ROOT}/system/sudoers.d/iram-theme-browser" ]; then
     cp -a --remove-destination "${REPO_ROOT}/system/sudoers.d/iram-theme-browser" "${ROOTFS_DIR}/etc/sudoers.d/iram-theme-browser"
     chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/iram-theme-browser"
 fi
+if [ -f "${REPO_ROOT}/system/iram-firstboot-auth.service" ]; then
+    mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
+    cp -a --remove-destination "${REPO_ROOT}/system/iram-firstboot-auth.service" "${ROOTFS_DIR}/etc/systemd/system/iram-firstboot-auth.service"
+    chroot "${ROOTFS_DIR}" systemctl enable iram-firstboot-auth.service 2>/dev/null || true
+fi
 
 # Copy skeleton configs so every user (and live user) gets them
 mkdir -p "${ROOTFS_DIR}/etc/skel/.config" "${ROOTFS_DIR}/etc/skel/.local/bin" "${ROOTFS_DIR}/etc/skel/.local/share/applications" "${ROOTFS_DIR}/etc/skel/.local/share/icons/hicolor/128x128/apps"

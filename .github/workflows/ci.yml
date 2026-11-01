@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: Lint, Syntax & Palette Verification
+    name: Lint, Syntax & Dry-Run Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -30,11 +30,10 @@ jobs:
           bash -n install.sh
           if [ -f uninstall.sh ]; then bash -n uninstall.sh; fi
 
-          echo "==> Checking syntax across all scripts in bin/..."
+          echo "==> Checking syntax across all scripts in bin/ and build/..."
           failed=0
-          for script in bin/*; do
+          for script in bin/* build/*.sh; do
             if [ -f "$script" ] && [ ! -L "$script" ]; then
-              # Check if it has a bash/sh shebang
               shebang=$(head -n 1 "$script")
               if [[ "$shebang" =~ (bash|sh) ]]; then
                 if ! bash -n "$script"; then
@@ -53,8 +52,8 @@ jobs:
       - name: Verify Python Scripts (py_compile)
         run: |
           echo "==> Compiling Python scripts..."
-          python3 -m py_compile mcp/iram-os-mcp
-          for py_script in bin/*.py bin/iram-theme-sync-all bin/iram-waybar-ai bin/iram-welcome bin/iram-mcp-config; do
+          if [ -f "mcp/iram-os-mcp" ]; then python3 -m py_compile mcp/iram-os-mcp; fi
+          for py_script in bin/*.py bin/iram-theme-sync-all bin/iram-waybar-ai bin/iram-welcome bin/iram-mcp-config build/*.py; do
             if [ -f "$py_script" ]; then
               python3 -m py_compile "$py_script"
             fi
@@ -67,7 +66,7 @@ jobs:
           jq . config/waybar/config.jsonc > /dev/null
           echo "✓ config/waybar/config.jsonc is valid JSON."
 
-      - name: Verify 22 Sovereign Theme Palettes
+      - name: Verify 43 Sovereign Theme Palettes
         run: |
           echo "==> Auditing theme directories and colors.toml definitions..."
           python3 -c "
@@ -77,7 +76,7 @@ jobs:
           assert os.path.isdir(themes_dir), 'themes directory missing'
           theme_dirs = [d for d in os.listdir(themes_dir) if os.path.isdir(os.path.join(themes_dir, d))]
           print(f'Auditing {len(theme_dirs)} sovereign themes...')
-          assert len(theme_dirs) >= 22, f'Expected at least 22 themes, found {len(theme_dirs)}'
+          assert len(theme_dirs) >= 43, f'Expected at least 43 themes, found {len(theme_dirs)}'
 
           required_keys = ['background', 'foreground', 'accent']
           missing_errors = []
@@ -98,3 +97,9 @@ jobs:
               raise SystemExit(1)
           print(f'✓ All {len(theme_dirs)} theme palettes are valid and contain essential color keys.')
           "
+
+      - name: Execute Installer Dry-Run Test
+        run: |
+          echo "==> Testing installer dry-run simulation..."
+          bash ./install.sh --dry-run
+          echo "✓ Installer dry-run executed successfully."

@@ -23,7 +23,7 @@ SHORTCUTS = [
     ("Super + Space", "Wofi Application Launcher"),
     ("Super + Return", "Terminal (Alacritty / Foot)"),
     ("Super + L", "Lock Screen (Dynamic Hyprlock)"),
-    ("Super + Alt + T", "Sovereign 22-Theme Switcher"),
+    ("Super + Alt + T", "Sovereign 43-Theme Switcher"),
     ("Super + Escape", "Power & Session Logout Menu")
 ]
 

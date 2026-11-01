@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Curated Modern Theme Suite (18 Themes) for IRAM OS / Omarchy:
+Generate Curated Modern Theme Suite (43 Themes) for IRAM OS / Omarchy:
 Incorporates top worldwide favorites & best aesthetic assets from Ryoku (ryoku-dev/ryoku).
 
 Themes:

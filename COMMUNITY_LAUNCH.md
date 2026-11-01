@@ -24,7 +24,7 @@ Traditionally, if you want to run Hyprland with fluid animations and modern tili
 * **Intelligent Multi-Display**: Automatically prevents monitor overlapping at `0x0` coordinates and includes a native GUI monitor manager (`iram-displays-gui`).
 * **Studio-Grade PipeWire Audio**: Instant sink toggling (`Super + Shift + A`) with ALSA stereo fallback to prevent HDMI TV converter stalls.
 * **Persistent Daemon Architecture**: Status bar (`Waybar`) and wallpaper engine (`Swaybg`) run as managed `systemd` user units with monitor readiness polling loops (no fragile terminal scripts).
-* **22-Theme Live Sync Engine**: Switch between Tokyo Night, Catppuccin Mocha, Nord, Gruvbox, Everforest, and 17 others instantly with `Super + Ctrl + Shift + Space` — re-tints Hyprland borders, Waybar pills, Wofi launcher, and Alacritty terminal with 0 restarts.
+* **43-Theme Live Sync Engine**: Switch between Tokyo Night, Catppuccin Mocha, Nord, Gruvbox, Everforest, Cyberpunk Neon, and 37 others instantly with `iram theme` or `Super + T` — re-tints Hyprland borders, Waybar pills, Wofi launcher, and terminal colors with 0 restarts.
 * **Turnkey Live Environment**: Direct autologin into the live Hyprland session with passwordless sudo (`iram:iram`) and installer to disk.
 
 ### 📦 Download & Source Code:

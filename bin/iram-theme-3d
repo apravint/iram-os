@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS 3D Theme Studio & Palette Shading Simulator (Powered by Three.js)
-# iram:summary=3D Theme Studio & Palette Shading Simulator (All 18 Themes)
+# iram:summary=3D Theme Studio & Palette Shading Simulator (All 43 Themes)
 # ==============================================================================
 set -euo pipefail
 
