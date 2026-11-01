@@ -16,16 +16,16 @@ window#waybar {
     box-shadow: none;
 }
 
-/* Floating Frosted-Glass Island Modules */
+/* Floating Sharp Frosted-Glass Island Modules */
 .modules-left,
 .modules-center,
 .modules-right {
-    background: rgba(18, 18, 28, 0.72);
+    background: rgba(18, 18, 28, 0.75);
     border: 1px solid @border;
-    border-radius: 16px;
+    border-radius: 0px;
     padding: 3px 6px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: all 0.25s cubic-bezier(0.05, 0.9, 0.1, 1.05);
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 .modules-left:hover,
@@ -35,7 +35,7 @@ window#waybar {
     box-shadow: 0 6px 24px @accent_rgba;
 }
 
-/* App Menu Pill */
+/* App Menu Sharp Block */
 #custom-menu {
     padding: 0 12px;
     margin: 2px 4px 2px 2px;
@@ -43,7 +43,7 @@ window#waybar {
     color: #11111b;
     font-size: 14px;
     font-weight: 800;
-    border-radius: 12px;
+    border-radius: 0px;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
@@ -53,7 +53,7 @@ window#waybar {
     box-shadow: 0 0 10px @accent_glow;
 }
 
-/* Animated Workspace Dots & Expanding Active Pill */
+/* Animated Workspace Sharp Blocks & Expanding Active Block */
 #workspaces {
     background: transparent;
     padding: 0;
@@ -65,7 +65,7 @@ window#waybar {
     margin: 2px 3px;
     min-width: 10px;
     min-height: 20px;
-    border-radius: 10px;
+    border-radius: 0px;
     background: rgba(255, 255, 255, 0.14);
     color: transparent;
     font-size: 1px;
@@ -87,7 +87,7 @@ window#waybar {
     font-size: 11px;
     font-weight: 800;
     min-width: 34px;
-    border-radius: 10px;
+    border-radius: 0px;
     padding: 0 10px;
     box-shadow: 0 0 12px @accent_glow;
 }
@@ -96,7 +96,7 @@ window#waybar {
     background: #f7768e;
     color: #11111b;
     min-width: 24px;
-    border-radius: 10px;
+    border-radius: 0px;
     font-size: 11px;
     animation: blink 0.5s linear infinite alternate;
 }
@@ -112,7 +112,7 @@ window#waybar {
 #custom-indicators {
     padding: 0 10px;
     margin: 2px 2px;
-    border-radius: 10px;
+    border-radius: 0px;
     background: rgba(255, 255, 255, 0.05);
     color: @accent;
     font-weight: 700;
@@ -137,7 +137,7 @@ window#waybar {
 #clock {
     padding: 0 14px;
     margin: 2px 2px;
-    border-radius: 10px;
+    border-radius: 0px;
     background: rgba(255, 255, 255, 0.06);
     font-weight: 800;
     color: @accent;
@@ -154,7 +154,7 @@ window#waybar {
 #mpris {
     padding: 0 12px;
     margin: 2px 2px;
-    border-radius: 10px;
+    border-radius: 0px;
     background: rgba(255, 255, 255, 0.04);
     color: @fg;
     transition: all 0.2s ease;
@@ -170,7 +170,7 @@ window#waybar {
     color: @muted;
 }
 
-/* Right Modules Pills */
+/* Right Modules Sharp Blocks */
 #custom-ai-agent,
 #custom-mcp-status,
 #custom-iram-ai,
@@ -184,7 +184,7 @@ window#waybar {
 #tray {
     padding: 0 10px;
     margin: 2px 2px;
-    border-radius: 10px;
+    border-radius: 0px;
     background: rgba(255, 255, 255, 0.04);
     color: @fg;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
@@ -266,7 +266,7 @@ window#waybar {
 #custom-power {
     padding: 0 12px;
     margin: 2px 2px 2px 4px;
-    border-radius: 12px;
+    border-radius: 0px;
     background: rgba(247, 118, 142, 0.2);
     color: #f7768e;
     font-weight: 800;
