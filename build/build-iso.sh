@@ -207,7 +207,7 @@ mkdir -p /usr/share/iram
 # Enable essential systemd services
 systemctl enable NetworkManager.service 2>/dev/null || true
 systemctl enable bluetooth.service 2>/dev/null || true
-systemctl enable sddm.service 2>/dev/null || true
+systemctl enable greetd.service
 
 # Clean caches so the ISO stays under GitHub's 2 GB release asset limit
 apt-get autoremove -y --purge
@@ -302,6 +302,17 @@ for unit in waybar swaybg swaync hypridle iram-cliphist iram-cliphist-image iram
 done
 ln -sf ../iram-battery.timer "$SKEL_WANTS/iram-battery.timer"
 
+# cp -a kept the build user's ownership. Left that way, whoever shares that UID on the
+# target could rewrite scripts on root's PATH, and sudo ignores the sudoers fragment.
+for owned_path in usr/share/iram usr/local/bin usr/local/share/fonts etc/skel etc/iram.conf etc/profile.d/iram.sh \
+    etc/sudoers.d/iram-theme-browser etc/systemd/system/iram-firstboot-auth.service; do
+    if [ -e "${ROOTFS_DIR}/${owned_path}" ]; then
+        chown -hR root:root "${ROOTFS_DIR}/${owned_path}"
+        chmod -R go-w "${ROOTFS_DIR}/${owned_path}"
+    fi
+done
+chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/iram-theme-browser"
+
 # Live user, created only now so that useradd copies the finished /etc/skel into its home.
 chroot "${ROOTFS_DIR}" /bin/bash << 'LIVE_USER_EOF'
 set -euo pipefail
@@ -310,12 +321,7 @@ useradd -m -s /bin/bash -G sudo,audio,video,render,input iram
 echo "iram:iram" | chpasswd
 echo "iram ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/iram
 chmod 0440 /etc/sudoers.d/iram
-mkdir -p /etc/sddm.conf.d
-cat << 'AUTOLOGIN_EOF' > /etc/sddm.conf.d/autologin.conf
-[Autologin]
-User=iram
-Session=iram.desktop
-AUTOLOGIN_EOF
+cp /usr/share/iram/system/greetd/live.toml /etc/greetd/config.toml
 sed -i 's|__PROJECTS_DIR__|/home/iram/Projects|' /home/iram/.config/mcp/iram_mcp_config.json
 LIVE_USER_EOF
 

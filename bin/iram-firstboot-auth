@@ -29,9 +29,9 @@ if [ -f /etc/sudoers.d/iram ]; then
     echo "IRAM OS: Passwordless sudo privilege removed (/etc/sudoers.d/iram)."
 fi
 
-# 3. Disable SDDM autologin on installed target disk
-if [ -f /etc/sddm.conf.d/autologin.conf ]; then
-    rm -f /etc/sddm.conf.d/autologin.conf
+# 3. Disable autologin on installed target disk
+if grep -q '^\[initial_session\]' /etc/greetd/config.toml 2>/dev/null; then
+    cp "${IRAM_PATH:-/usr/share/iram}/system/greetd/config.toml" /etc/greetd/config.toml
     echo "IRAM OS: Autologin disabled on target disk installation."
 fi
 

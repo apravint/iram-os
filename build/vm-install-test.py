@@ -27,6 +27,8 @@ LIVE_PASSWORD = "iram"
 USER = "tester"
 HOSTNAME = "testbox"
 PASSWORD = "Tester-Pass-1"
+# systemd tags shells with OSC 3008 sequences, which would pollute captured output.
+OSC_SEQUENCE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 SHELL_PROMPT = re.compile(rb"[$#] *$")
 OVMF_CODE = ("/usr/share/OVMF/OVMF_CODE_4M.fd", "/usr/share/OVMF/OVMF_CODE.fd")
 OVMF_VARS = ("/usr/share/OVMF/OVMF_VARS_4M.fd", "/usr/share/OVMF/OVMF_VARS.fd")
@@ -136,7 +138,7 @@ class VM:
                 data = bytes(self.buffer)
             match = pattern.search(data)
             if match:
-                text = data[:match.start()].decode(errors="replace").replace("\r", "")
+                text = OSC_SEQUENCE.sub("", data[:match.start()].decode(errors="replace")).replace("\r", "")
                 lines = text.split("\n")[1:]
                 return int(match.group(1)), "\n".join(lines).strip()
             if self.proc.poll() is not None:
@@ -181,6 +183,10 @@ def test_live(results, vm):
     expect_zero(results, vm, stage, "session config is in home", "test -f ~/.config/hypr/hyprland.conf")
     expect_zero(results, vm, stage, "installer is on PATH", "command -v iram-install-disk")
     expect_zero(results, vm, stage, "boot brand is IRAM", "grep -q IRAM /etc/issue")
+    expect_zero(results, vm, stage, "system files are root-owned",
+                "test -z \"$(sudo find /usr/share/iram /usr/local/bin /etc/skel /etc/sudoers.d /etc/iram.conf ! -user root | head -n 5)\"")
+    code, out = vm.run("sudo -n true 2>&1")
+    results.record(stage, "sudo accepts every fragment", code == 0 and not out, out)
 
     # The desktop starts by autologin, on its own schedule.
     desktop = False
@@ -189,14 +195,14 @@ def test_live(results, vm):
             desktop = True
             break
         time.sleep(5)
-    results.record(stage, "Hyprland started by autologin", desktop, vm.run("systemctl status --no-pager sddm | tail -n 15")[1], required=False)
+    results.record(stage, "Hyprland started by autologin", desktop, vm.run("journalctl -b -u greetd --no-pager -n 20")[1])
     time.sleep(25)
     vm.screenshot("live-desktop")
     if desktop:
         out = vm.run("XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user list-units --no-pager --plain --no-legend 'waybar*' 'swaync*' 'swaybg*' 'hypridle*' 'hyprland-session*'")[1]
-        results.record(stage, "session units running", "waybar.service" in out and "running" in out, out, required=False)
+        results.record(stage, "session units running", "waybar.service" in out and "running" in out, out)
     with open(os.path.join(vm.out_dir, "live-diagnostics.txt"), "w") as f:
-        for cmd in ("lsblk -f", "findmnt", "sudo journalctl -b -u sddm --no-pager -n 60", "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user --failed --no-pager", "cat ~/.local/share/sddm/wayland-session.log 2>/dev/null | tail -n 40"):
+        for cmd in ("lsblk -f", "findmnt", "sudo journalctl -b -u greetd --no-pager -n 60", "tail -n 60 /run/user/$(id -u)/hypr/*/hyprland.log", "sudo cat /etc/greetd/config.toml", "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user --failed --no-pager", "XDG_RUNTIME_DIR=/run/user/$(id -u) journalctl --user -b --no-pager -n 40"):
             f.write(f"$ {cmd}\n{vm.run(cmd, timeout=30)[1]}\n\n")
     return vm.run("cat /etc/machine-id")[1].strip()
 
@@ -238,7 +244,7 @@ def test_installed(results, vm, stage, live_machine_id):
     expect_zero(results, vm, stage, "sudo works with the password", f"printf '%s\\n' '{PASSWORD}' | sudo -S -p '' true")
     expect_nonzero(results, vm, stage, "iram user removed", "getent passwd iram")
     expect_nonzero(results, vm, stage, "no iram home", "test -e /home/iram")
-    for path in ("/etc/sudoers.d/iram", "/etc/sudoers.d/casper", "/etc/sddm.conf.d/autologin.conf", "/etc/casper.conf"):
+    for path in ("/etc/sudoers.d/iram", "/etc/sudoers.d/casper", "/etc/casper.conf"):
         expect_nonzero(results, vm, stage, f"{path} removed", f"test -e {path}")
     expect_nonzero(results, vm, stage, "casper purged", "dpkg-query -W -f='${Status}' casper | grep -q 'install ok installed'")
     machine_id = vm.run("cat /etc/machine-id")[1].strip()
@@ -249,7 +255,8 @@ def test_installed(results, vm, stage, live_machine_id):
     expect_zero(results, vm, stage, "user has the desktop config", "test -f ~/.config/hypr/hyprland.conf && test -f ~/.config/systemd/user/hyprland-session.target")
     expect_nonzero(results, vm, stage, "MCP config placeholder resolved", "grep -q __PROJECTS_DIR__ ~/.config/mcp/iram_mcp_config.json")
     expect_zero(results, vm, stage, "timezone applied", "readlink /etc/localtime | grep -q Asia/Kolkata")
-    expect_zero(results, vm, stage, "display manager running", "systemctl is-active sddm")
+    expect_zero(results, vm, stage, "login screen running", "systemctl is-active greetd && pgrep -x tuigreet")
+    expect_nonzero(results, vm, stage, "autologin removed", "grep -q initial_session /etc/greetd/config.toml")
     code, out = vm.run("systemctl --failed --no-legend --plain --no-pager")
     results.record(stage, "no failed system units", code == 0 and not out, out, required=False)
     with open(os.path.join(vm.out_dir, f"{stage}-diagnostics.txt"), "w") as f:

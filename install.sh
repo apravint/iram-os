@@ -176,16 +176,21 @@ else
     for component in bin config default themes system migrations mcp assets applications packages; do
         if [ -d "$REPO_DIR/$component" ]; then
             sudo rm -rf "/usr/share/iram/$component"
-            sudo cp -a "$REPO_DIR/$component" /usr/share/iram/
+            sudo cp -a --no-preserve=ownership "$REPO_DIR/$component" /usr/share/iram/
         fi
     done
 
     echo "Linking IRAM CLI binaries to /usr/local/bin and /usr/bin..."
-    sudo cp -a "$REPO_DIR/bin/"* /usr/local/bin/
+    # Root must own these, whatever a previous install left: sudoers runs one of them as
+    # root without a password, so a user-owned copy would be a privilege escalation.
+    sudo chmod -R go-w /usr/share/iram
+    sudo chown -R root:root /usr/share/iram
+    sudo cp -a --no-preserve=ownership "$REPO_DIR/bin/"* /usr/local/bin/
     for b in "$REPO_DIR"/bin/*; do
         bname="$(basename "$b")"
+        sudo chown -h root:root "/usr/local/bin/$bname"
         [ -L "$b" ] && continue
-        sudo chmod +x "/usr/local/bin/$bname"
+        sudo chmod 0755 "/usr/local/bin/$bname"
         case "$bname" in
             iram*|craft*|hyprland-start) sudo ln -sf "/usr/local/bin/$bname" "/usr/bin/$bname" ;;
         esac

@@ -16,7 +16,9 @@ sudo
 wget
 nano
 vim
-sddm
+# Needs no X server, unlike SDDM, whose greeter this image cannot run.
+greetd
+tuigreet
 # Bare-metal installer dependencies
 gdisk
 parted

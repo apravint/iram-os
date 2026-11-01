@@ -188,7 +188,9 @@ if [ -d /sys/firmware/efi/efivars ]; then
 fi
 
 echo "==> [4/6] Removing live-session artifacts"
-in_target rm -f /etc/sudoers.d/iram /etc/sudoers.d/casper /etc/sddm.conf.d/autologin.conf /etc/casper.conf
+in_target rm -f /etc/sudoers.d/iram /etc/sudoers.d/casper /etc/casper.conf
+# Replaces the live config, which logs in as iram automatically.
+in_target cp /usr/share/iram/system/greetd/config.toml /etc/greetd/config.toml
 in_target bash -c 'if id -u iram >/dev/null 2>&1; then userdel --force --remove iram; fi'
 in_target rm -rf /home/iram
 in_target apt-get purge -y "${LIVE_ONLY_PACKAGES[@]}"
