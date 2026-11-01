@@ -140,12 +140,16 @@ dispatch_action() {
             return
         fi
 
-        # Pass complex reasoning to Antigravity CLI (agy)
+        # Pass complex reasoning to agent hierarchy: Antigravity -> Claude -> Ollama
         alacritty --class iram-agy-float --title "IRAM Voice Agent" -e bash -c "
 echo -e '\033[1;36mIRAM Voice Command:\033[0m \"${text}\"';
 echo '----------------------------------------';
-if command -v agy >/dev/null 2>&1; then
+if command -v iram-ai-launch >/dev/null 2>&1; then
+    iram-ai-launch \"${text}\" --hold
+elif command -v agy >/dev/null 2>&1 || [ -x \"\$HOME/.gemini/antigravity-cli/bin/agy\" ]; then
     agy \"${text}\"
+elif command -v claude >/dev/null 2>&1; then
+    claude \"${text}\"
 elif command -v ollama >/dev/null 2>&1; then
     ollama run qwen2.5-coder:7b \"${text}\"
 else

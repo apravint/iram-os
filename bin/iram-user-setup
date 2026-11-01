@@ -38,7 +38,7 @@ BACKUP_DIR="$CONFIG_HOME/iram/backups/backup_$(date +%Y%m%d_%H%M%S)"
 # nothing about user intent, so they are always replaced.
 is_generated() {
     case "$1" in
-        waybar/style.css|mako/config|cava/config|swaync/style.css|btop/*|hypr/theme.conf|hypr/hyprlock-colors.conf) return 0 ;;
+        waybar/colors.css|wofi/style.css|cava/config|swaync/style.css|btop/*|hypr/theme.conf|hypr/hyprlock-colors.conf) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -151,7 +151,7 @@ install_desktop_entries() {
 
 install_scripts() {
     mkdir -p "$HOME/.local/bin"
-    cp -a "$SOURCE/bin/"* "$HOME/.local/bin/"
+    cp -a --remove-destination "$SOURCE/bin/"* "$HOME/.local/bin/"
     find "$HOME/.local/bin" -maxdepth 1 -type f \( -name 'iram*' -o -name 'craft*' \) -exec chmod +x {} +
 }
 

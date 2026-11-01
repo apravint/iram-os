@@ -26,11 +26,24 @@ echo "🤖 Dispatching autonomous task to agent '$DEFAULT_AGENT'..."
 
 case "$DEFAULT_AGENT" in
     agy|antigravity)
-        exec agy "$PROMPT"
+        if command -v agy >/dev/null 2>&1 || [ -x "$HOME/.gemini/antigravity-cli/bin/agy" ]; then
+            exec agy "$PROMPT"
+        elif command -v claude >/dev/null 2>&1; then
+            echo "Notice: Antigravity not found, falling back to Claude..." >&2
+            exec claude -p "$PROMPT"
+        else
+            exec iram-ai-launch "$PROMPT"
+        fi
         ;;
     claude)
-        # Pass non-interactive/permission flags if available
-        exec claude -p "$PROMPT"
+        if command -v claude >/dev/null 2>&1; then
+            exec claude -p "$PROMPT"
+        elif command -v agy >/dev/null 2>&1 || [ -x "$HOME/.gemini/antigravity-cli/bin/agy" ]; then
+            echo "Notice: Claude not found, falling back to Antigravity..." >&2
+            exec agy "$PROMPT"
+        else
+            exec iram-ai-launch "$PROMPT"
+        fi
         ;;
     codex)
         exec codex exec "$PROMPT"
