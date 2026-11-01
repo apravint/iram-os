@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Session Bootstrap (iram-session-bootstrap)
+# Sole Hyprland exec-once for daemons. Publishes the session environment, waits
+# for a real output, then starts hyprland-session.target.
+#
+# graphical-session.target has RefuseManualStart=yes, so it can only come up as a
+# dependency of a session target. Order matters: the environment must reach
+# systemd and D-Bus before any unit or portal reads it.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -uo pipefail
+
+SESSION_VARS=(
+    WAYLAND_DISPLAY DISPLAY HYPRLAND_INSTANCE_SIGNATURE
+    XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP
+    XCURSOR_THEME XCURSOR_SIZE HYPRCURSOR_THEME HYPRCURSOR_SIZE
+    QT_QPA_PLATFORM QT_QPA_PLATFORMTHEME GDK_BACKEND
+)
+
+# A crashed compositor leaves the old target active, with stale socket paths.
+systemctl --user stop hyprland-session.target 2>/dev/null
+
+systemctl --user import-environment "${SESSION_VARS[@]}" 2>/dev/null
+dbus-update-activation-environment --systemd "${SESSION_VARS[@]}" 2>/dev/null
+
+iram-wait-compositor 15 || echo "iram-session-bootstrap: no monitor yet, starting anyway" >&2
+
+# A portal activated before this point captured an empty environment and fails
+# silently: screen sharing and file pickers break. Restart picks up the real one.
+systemctl --user try-restart xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service xdg-desktop-portal.service 2>/dev/null
+
+systemctl --user start --no-block hyprland-session.target

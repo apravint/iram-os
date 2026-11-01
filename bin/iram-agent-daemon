@@ -18,6 +18,11 @@ import subprocess
 import argparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from iram_policy import check_local_request
+
+MAX_BODY_BYTES = 64 * 1024
+
 def get_api_key():
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if key:
@@ -67,9 +72,18 @@ AGENT_STATE = {
 LAST_ACTIVITY = time.time()
 
 class AgentRequestHandler(BaseHTTPRequestHandler):
+    def refuse(self, code, reason):
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": reason}).encode("utf-8"))
+
     def do_GET(self):
         global LAST_ACTIVITY
         LAST_ACTIVITY = time.time()
+        reason = check_local_request(self.headers)
+        if reason:
+            return self.refuse(403, reason)
         if self.path == "/api/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -82,19 +96,26 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         global LAST_ACTIVITY
         LAST_ACTIVITY = time.time()
+        reason = check_local_request(self.headers, require_json=True)
+        if reason:
+            return self.refuse(403, reason)
         if self.path == "/api/execute":
             content_length = int(self.headers.get("Content-Length", 0))
+            if content_length > MAX_BODY_BYTES:
+                return self.refuse(413, "Request body too large")
             body = self.rfile.read(content_length)
             try:
                 data = json.loads(body.decode("utf-8"))
                 prompt = data.get("prompt", "")
+                if not isinstance(prompt, str) or not prompt.strip():
+                    return self.refuse(400, "A non-empty string 'prompt' is required")
 
                 AGENT_STATE["status"] = "Executing..."
                 AGENT_STATE["last_task"] = prompt
                 AGENT_STATE["updated_at"] = time.time()
 
                 # Trigger iram-agent in background
-                subprocess.Popen(["iram-agent", prompt])
+                subprocess.Popen(["iram-agent", "--", prompt])
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

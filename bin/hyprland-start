@@ -1,32 +1,41 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Hyprland & Iram Session Launcher
-# Ensures all Wayland, toolkit, and GPU environment variables are properly exported.
+# Exec target of the IRAM OS session entry. Provisions a first-login user, and
+# sets toolkit and hardware-specific environment before the compositor starts.
 # ==============================================================================
 
 export XDG_CURRENT_DESKTOP=Hyprland
 export XDG_SESSION_TYPE=wayland
 export XDG_SESSION_DESKTOP=Hyprland
 
-# Toolkit Wayland backends
+# Toolkit Wayland backends, each with an X11 fallback for apps that lack Wayland
 export GDK_BACKEND="wayland,x11,*"
 export QT_QPA_PLATFORM="wayland;xcb"
+export QT_QPA_PLATFORMTHEME=qt6ct
 export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export CLUTTER_BACKEND=wayland
-export SDL_VIDEODRIVER=wayland
+export SDL_VIDEODRIVER="wayland,x11"
 export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export _JAVA_AWT_WM_NONREPARENTING=1
 
-# Virtual Machine & Hardware Cursor Detection
-VIRT=$(systemd-detect-virt 2>/dev/null || echo "none")
-if [ "$VIRT" != "none" ]; then
-    export WLR_NO_HARDWARE_CURSORS=1
-    export LIBVA_DRIVER_NAME=sw
+# A package install has no dotfiles until the user's first login
+if [ ! -f "$HOME/.config/hypr/hyprland.conf" ] && command -v iram-user-setup >/dev/null 2>&1; then
+    iram-user-setup --first-login || true
+fi
+
+# GPU & virtualization detection runs every login: hardware can change between
+# sessions, and card numbering is not stable across boots.
+mkdir -p "$HOME/.config/hypr"
+if command -v iram-gpu-env >/dev/null 2>&1; then
+    iram-gpu-env --hypr > "$HOME/.config/hypr/gpu.conf" 2>/dev/null || : > "$HOME/.config/hypr/gpu.conf"
+    if gpu_exports="$(iram-gpu-env --shell 2>/dev/null)"; then
+        eval "$gpu_exports"
+    fi
 else
-    # Default to 1 if no discrete GPU driver overrides
-    export WLR_NO_HARDWARE_CURSORS=1
+    : > "$HOME/.config/hypr/gpu.conf"
 fi
 
 # Launch Hyprland compositor via official start-hyprland watchdog wrapper if available

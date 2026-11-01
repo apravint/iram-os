@@ -103,10 +103,10 @@ def launch_gui():
             btn_doc.connect("clicked", lambda w: run_in_terminal("iram doctor; echo 'Done. Press Enter...'; read"))
             btn_box.pack_start(btn_doc, True, True, 0)
 
-            if shutil.which("calamares") or os.path.exists("/usr/bin/calamares"):
+            if shutil.which("iram-install-disk") and "boot=casper" in open("/proc/cmdline").read():
                 btn_install = Gtk.Button(label="💿 Install to Disk")
                 btn_install.get_style_context().add_class("btn-action")
-                btn_install.connect("clicked", lambda w: subprocess.Popen(["calamares"]))
+                btn_install.connect("clicked", lambda w: run_in_terminal("sudo iram-install-disk; echo 'Done. Press Enter...'; read"))
                 btn_box.pack_start(btn_install, True, True, 0)
 
             main_box.pack_start(btn_box, False, False, 4)

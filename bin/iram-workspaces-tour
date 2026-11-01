@@ -13,8 +13,8 @@
 # ==============================================================================
 set -euo pipefail
 
-OUTPUT_MP4="/home/apravint/iram-os-workspaces-tour.mp4"
-OUTPUT_GIF="/home/apravint/iram-os-workspaces-tour.gif"
+OUTPUT_MP4="$HOME/iram-os-workspaces-tour.mp4"
+OUTPUT_GIF="$HOME/iram-os-workspaces-tour.gif"
 ORIGINAL_WS=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id // 2')
 
 cleanup_workspaces() {
@@ -76,7 +76,7 @@ sleep 0.5
 # 3. SETUP WORKSPACE 6: Real CAVA Audio Spectrum Visualizer
 # ------------------------------------------------------------------------------
 echo "Configuring Workspace 6: Real CAVA Audio Spectrum Visualizer..."
-hyprctl dispatch exec "[workspace 6] alacritty --class iram-tour-ws6-visualizer --title 'IRAM Spectrum Visualizer' --command /home/apravint/.local/bin/cava" >/dev/null 2>&1
+hyprctl dispatch exec "[workspace 6] alacritty --class iram-tour-ws6-visualizer --title 'IRAM Spectrum Visualizer' --command $HOME/.local/bin/cava" >/dev/null 2>&1
 sleep 0.5
 
 # ------------------------------------------------------------------------------
@@ -146,7 +146,7 @@ hyprctl dispatch focuswindow class:iram-tour-ws8-ff >/dev/null 2>&1 || true
 sleep 0.2
 hyprctl dispatch layoutmsg preselect d >/dev/null 2>&1 || true
 sleep 0.15
-alacritty --class iram-tour-ws8-cava --title "IRAM Spectrum" --command /home/apravint/.local/bin/cava &
+alacritty --class iram-tour-ws8-cava --title "IRAM Spectrum" --command $HOME/.local/bin/cava &
 sleep 0.5
 
 # Focus Btop -> Preselect down -> Bottom-Right: Telemetry
@@ -181,7 +181,7 @@ hyprctl dispatch workspace 9 >/dev/null 2>&1
 sleep 0.3
 
 # Left Tile: Neovim with hyprland.conf
-alacritty --class iram-tour-ws9-nvim --title "Neovim: hyprland.conf" --command nvim -R /home/apravint/iram-os/config/hypr/hyprland.conf &
+alacritty --class iram-tour-ws9-nvim --title "Neovim: hyprland.conf" --command nvim -R $HOME/iram-os/config/hypr/hyprland.conf &
 sleep 0.5
 
 # Preselect right -> Right Tile: Starship Terminal

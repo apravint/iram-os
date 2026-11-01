@@ -1,13 +1,13 @@
 [Unit]
-Description=Iram Agentic OS Service Daemon
-After=network.target hyprland.service
+Description=IRAM OS Agentic Service Daemon (On-Demand Activation)
+Requires=iram-agentd.socket
+After=iram-agentd.socket
 
 [Service]
 Type=simple
 Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/bin/sh -c 'if [ -x /usr/local/bin/iram-agent-daemon ]; then exec /usr/local/bin/iram-agent-daemon; else exec %h/.local/bin/iram-agent-daemon; fi'
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=default.target
+ExecStart=/usr/bin/env iram-agent-daemon --idle-timeout 900
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true

@@ -1,0 +1,13 @@
+# Python packages for the agent stack, installed into a dedicated venv.
+# Before adding one, confirm the PyPI project is the one you mean: a name match is
+# not enough. The PyPI project "openclaw", for instance, is an unrelated installer
+# for a third-party CLI, not the OpenClaw agent, and was removed from this list.
+fastmcp
+qdrant-client
+smolagents
+langgraph
+graphiti-core
+edge-tts
+ddgs
+crawl4ai
+docling

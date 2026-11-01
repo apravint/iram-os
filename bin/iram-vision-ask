@@ -18,7 +18,7 @@ for dep in grim slurp wofi tesseract wl-copy; do
     fi
 done
 
-CAPTURE_IMG="/tmp/iram-capture.png"
+CAPTURE_IMG="${XDG_RUNTIME_DIR:-$HOME/.cache}/iram-capture.png"
 rm -f "$CAPTURE_IMG"
 
 # 2. Select region & capture

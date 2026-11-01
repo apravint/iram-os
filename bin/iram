@@ -404,12 +404,17 @@ case "$cmd" in
 
                 # Render dynamic config templates into next-theme
                 if [ -f "$current_dir/next-theme/colors.toml" ] && [ -x "$LOCAL_BIN/iram-theme-set-templates" ]; then
-                    "$LOCAL_BIN/iram-theme-set-templates" "$current_dir/next-theme" 2>/dev/null || true
+                    "$LOCAL_BIN/iram-theme-set-templates" "$current_dir/next-theme" || \
+                        echo "Warning: theme template rendering failed." >&2
                 fi
 
-                # Atomically swap next-theme to theme
-                rm -rf "$current_dir/theme"
-                mv "$current_dir/next-theme" "$current_dir/theme"
+                # Swap with renameat2 where coreutils has it, so readers never see a missing theme
+                if [ -d "$current_dir/theme" ] && mv --exchange -T "$current_dir/next-theme" "$current_dir/theme" 2>/dev/null; then
+                    rm -rf "$current_dir/next-theme"
+                else
+                    rm -rf "$current_dir/theme"
+                    mv "$current_dir/next-theme" "$current_dir/theme"
+                fi
 
                 # Store normalized slug
                 echo "$slug" > "$current_dir/theme.name"
@@ -444,9 +449,10 @@ case "$cmd" in
                 fi
             fi
 
-            # Sync GNOME / GTK mode if available
-            if [ -x "/usr/share/omarchy/bin/omarchy-theme-set-gnome" ]; then
-                /usr/share/omarchy/bin/omarchy-theme-set-gnome 2>/dev/null || true
+            # Sync GTK, Qt and cursor settings with the theme's light/dark mode
+            if [ -x "$LOCAL_BIN/iram-theme-set-toolkits" ]; then
+                "$LOCAL_BIN/iram-theme-set-toolkits" "$HOME/.local/state/iram/current/theme/colors.toml" || \
+                    echo "Warning: GTK/Qt theme sync failed." >&2
             fi
 
             # Live broadcast ANSI OSC 10/11 escape sequences to all active terminals

@@ -5,13 +5,15 @@
 # ==============================================================================
 set -euo pipefail
 
-# Target base release version: defaults to 26.10 (Stonking) or respects environment override
-CODENAME="${BASE_CODENAME:-stonking}"
-DISTRO_VERSION="${DISTRO_VERSION:-26.10}"
+# Target base release: defaults to the current LTS, 26.04 (Resolute).
+CODENAME="${BASE_CODENAME:-resolute}"
+DISTRO_VERSION="${DISTRO_VERSION:-26.04}"
 DISTRO_NAME="iram-os"
 ARCH="amd64"
-ROOTFS_DIR="/tmp/iram-rootfs"
-ISO_DIR="/tmp/iram-iso"
+# zstd boots several times faster than xz for a modest size cost. xz for smallest image.
+SQUASHFS_COMPRESSION="${SQUASHFS_COMPRESSION:-zstd}"
+# Ollama adds gigabytes of GPU libraries; users get it from `iram ai-setup` instead.
+ISO_INCLUDE_OLLAMA="${ISO_INCLUDE_OLLAMA:-0}"
 OUTPUT_DIR="${PWD}/out"
 ISO_NAME="${DISTRO_NAME}-${DISTRO_VERSION}-${ARCH}.iso"
 APT_MIRROR="${APT_MIRROR:-http://archive.ubuntu.com/ubuntu/}"
@@ -56,13 +58,33 @@ apt install -y \
 # ------------------------------------------------------------------------------
 # 2. Prepare Clean Directories
 # ------------------------------------------------------------------------------
-log_step "Cleaning old build directories..."
-umount -lf "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
-umount -lf "${ROOTFS_DIR}/dev" 2>/dev/null || true
-umount -lf "${ROOTFS_DIR}/proc" 2>/dev/null || true
-umount -lf "${ROOTFS_DIR}/sys" 2>/dev/null || true
-rm -rf "${ROOTFS_DIR}" "${ISO_DIR}" "${OUTPUT_DIR}"
+log_step "Preparing build directories..."
+# A fresh private directory: predictable /tmp paths owned by root are a symlink risk,
+# and rm -rf over a tree with a surviving bind mount would delete the host's /dev.
+BUILD_DIR="$(mktemp -d /var/tmp/iram-iso-build-XXXXXX)"
+ROOTFS_DIR="${BUILD_DIR}/rootfs"
+ISO_DIR="${BUILD_DIR}/iso"
 mkdir -p "${ROOTFS_DIR}" "${ISO_DIR}/casper" "${ISO_DIR}/boot/grub" "${OUTPUT_DIR}"
+rm -f "${OUTPUT_DIR}"/*.iso "${OUTPUT_DIR}/sha256sum.txt"
+
+unmount_virtual_filesystems() {
+    local mountpoint
+    findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | sort -r | while read -r mountpoint; do
+        [ "$mountpoint" = "${ROOTFS_DIR}" ] && continue
+        umount "$mountpoint" || log_warn "Could not unmount $mountpoint"
+    done
+}
+
+cleanup() {
+    log_info "Cleaning up build tree..."
+    unmount_virtual_filesystems
+    if findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | grep -q .; then
+        log_warn "Mounts remain under ${ROOTFS_DIR}; leaving ${BUILD_DIR} for manual cleanup."
+    else
+        rm -rf --one-file-system "${BUILD_DIR}"
+    fi
+}
+trap cleanup EXIT
 
 # ------------------------------------------------------------------------------
 # 3. Bootstrap Base System
@@ -88,15 +110,23 @@ mount --bind /dev/pts "${ROOTFS_DIR}/dev/pts"
 mount -t proc proc "${ROOTFS_DIR}/proc"
 mount -t sysfs sysfs "${ROOTFS_DIR}/sys"
 
-# Ensure cleanup on trap
-cleanup() {
-    log_info "Cleaning up mounted virtual filesystems..."
-    umount -lf "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
-    umount -lf "${ROOTFS_DIR}/dev" 2>/dev/null || true
-    umount -lf "${ROOTFS_DIR}/proc" 2>/dev/null || true
-    umount -lf "${ROOTFS_DIR}/sys" 2>/dev/null || true
-}
-trap cleanup EXIT
+# Package maintainer scripts must not start services inside the chroot.
+printf '#!/bin/sh\nexit 101\n' > "${ROOTFS_DIR}/usr/sbin/policy-rc.d"
+chmod 0755 "${ROOTFS_DIR}/usr/sbin/policy-rc.d"
+
+# Ship copyright files only; docs, man pages and foreign locales never get unpacked.
+mkdir -p "${ROOTFS_DIR}/etc/dpkg/dpkg.cfg.d"
+cat << 'EOF' > "${ROOTFS_DIR}/etc/dpkg/dpkg.cfg.d/01-iram-minimize"
+path-exclude=/usr/share/doc/*
+path-include=/usr/share/doc/*/copyright
+path-exclude=/usr/share/man/*
+path-exclude=/usr/share/info/*
+path-exclude=/usr/share/locale/*
+path-include=/usr/share/locale/en*
+path-include=/usr/share/locale/locale.alias
+path-exclude=/usr/share/gnome/help/*
+path-exclude=/usr/share/lintian/*
+EOF
 
 # ------------------------------------------------------------------------------
 # 4. Configure System Inside Chroot
@@ -119,10 +149,15 @@ cat << EOF > "${ROOTFS_DIR}/etc/hosts"
 EOF
 
 # Install packages inside chroot
-chroot "${ROOTFS_DIR}" /bin/bash -s "${CODENAME}" "${DISTRO_VERSION}" << 'CHROOT_EOF'
+mkdir -p "${ROOTFS_DIR}/tmp/iram-packages"
+grep -hvE '^\s*(#|$)' "${REPO_ROOT}/packages/iso.list" > "${ROOTFS_DIR}/tmp/iram-packages/iso"
+grep -hvE '^\s*(#|$)' "${REPO_ROOT}/packages/desktop.list" > "${ROOTFS_DIR}/tmp/iram-packages/desktop"
+
+chroot "${ROOTFS_DIR}" /bin/bash -s "${CODENAME}" "${DISTRO_VERSION}" "${ISO_INCLUDE_OLLAMA}" << 'CHROOT_EOF'
 set -euo pipefail
 CODENAME="$1"
 DISTRO_VERSION="$2"
+ISO_INCLUDE_OLLAMA="$3"
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -y
@@ -138,129 +173,41 @@ apt-get install -y --no-install-recommends \
 if ! apt-cache show hyprland >/dev/null 2>&1; then
     echo "Hyprland not found in base repositories. Adding cppiber PPA for ${CODENAME}..."
     mkdir -p /etc/apt/keyrings
-    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xA54D23B62FF3FCC76EFF71E8FDBAAA1CF0CCF48E" | gpg --dearmor -o /etc/apt/keyrings/cppiber-hyprland.gpg 2>/dev/null || true
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xA54D23B62FF3FCC76EFF71E8FDBAAA1CF0CCF48E" | gpg --dearmor -o /etc/apt/keyrings/cppiber-hyprland.gpg
     echo "deb [signed-by=/etc/apt/keyrings/cppiber-hyprland.gpg] https://ppa.launchpadcontent.net/cppiber/hyprland/ubuntu ${CODENAME} main" > /etc/apt/sources.list.d/cppiber-hyprland.list
-    apt-get update -y || true
+    apt-get update -y
 fi
 
-# Kernel & Live Boot Essentials
-apt-get install -y --no-install-recommends \
-    linux-generic \
-    initramfs-tools \
-    casper \
-    discover \
-    laptop-detect \
-    os-prober \
-    network-manager \
-    net-tools \
-    iw \
-    wpasupplicant \
-    sudo \
-    curl \
-    git \
-    wget \
-    nano \
-    vim
+# Kernel, live boot, and bare-metal installer tooling
+mapfile -t ISO_PACKAGES < /tmp/iram-packages/iso
+apt-get install -y --no-install-recommends "${ISO_PACKAGES[@]}"
 
-# Audio, Bluetooth & Display Server
-apt-get install -y --no-install-recommends \
-    pipewire \
-    wireplumber \
-    pipewire-pulse \
-    pipewire-alsa \
-    libspa-0.2-bluetooth \
-    bluez \
-    blueman \
-    pavucontrol \
-    sddm
+# Desktop stack. Recommends stay off: they double the image for little benefit.
+mapfile -t DESKTOP_PACKAGES < /tmp/iram-packages/desktop
+apt-get install -y --no-install-recommends "${DESKTOP_PACKAGES[@]}"
 
-# Hyprland & Wayland Desktop Stack
-apt-get install -y \
-    hyprland \
-    xdg-desktop-portal-hyprland \
-    waybar \
-    swaybg \
-    swaylock \
-    hyprlock \
-    hypridle \
-    mako-notifier \
-    wofi \
-    alacritty \
-    grim \
-    slurp \
-    wl-clipboard \
-    cliphist \
-    playerctl \
-    wf-recorder \
-    hyprpicker \
-    tesseract-ocr \
-    wlsunset \
-    wtype \
-    zstd \
-    network-manager-gnome \
-    polkit-kde-agent-1 \
-    python3-pip \
-    python3-gi \
-    gir1.2-gtk-3.0 \
-    ripgrep \
-    fd-find \
-    tmux \
-    fzf \
-    zoxide \
-    eza \
-    bat \
-    gawk \
-    socat \
-    fonts-jetbrains-mono \
-    fonts-font-awesome \
-    btop \
-    jq
-
-# Install Ollama & OpenClaw Agentic OS Stack inside ISO
-OLLAMA_TMP=$(mktemp)
-if curl -fsSL https://ollama.com/install.sh -o "$OLLAMA_TMP"; then
-    if grep -q "OLLAMA" "$OLLAMA_TMP"; then
-        sh "$OLLAMA_TMP" || echo "Notice: Ollama install exited with non-fatal code"
-    fi
+if [ "$ISO_INCLUDE_OLLAMA" = "1" ]; then
+    OLLAMA_TMP=$(mktemp)
+    curl -fsSL https://ollama.com/install.sh -o "$OLLAMA_TMP"
+    sh "$OLLAMA_TMP"
     rm -f "$OLLAMA_TMP"
-else
-    echo "Notice: Could not download Ollama install script, skipping"
 fi
-pip3 install --break-system-packages openclaw edge-tts ddgs || pip3 install openclaw edge-tts ddgs || echo "Notice: Optional AI python packages skipped"
+python3 -m venv --system-site-packages /opt/iram-ai
+/opt/iram-ai/bin/pip install --quiet edge-tts ddgs
+/opt/iram-ai/bin/python -c 'import site; print(site.getsitepackages()[0])' > /usr/lib/python3/dist-packages/iram-ai.pth
 
 # Setup IRAM OS system core directory
 mkdir -p /usr/share/iram
-
-# Setup default live user: 'iram' with passwordless sudo
-mkdir -p /etc/sudoers.d
-groupadd -f sudo
-groupadd -f audio
-groupadd -f video
-
-if ! id -u iram >/dev/null 2>&1; then
-    useradd -m -s /bin/bash -G sudo,audio,video iram
-fi
-echo "iram:iram" | chpasswd
-echo "iram ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/iram
-chmod 0440 /etc/sudoers.d/iram
-
-# Autologin into Iram Hyprland session via SDDM
-mkdir -p /etc/sddm.conf.d
-cat << 'AUTOLOGIN_EOF' > /etc/sddm.conf.d/autologin.conf
-[Autologin]
-User=iram
-Session=iram.desktop
-AUTOLOGIN_EOF
 
 # Enable essential systemd services
 systemctl enable NetworkManager.service 2>/dev/null || true
 systemctl enable bluetooth.service 2>/dev/null || true
 systemctl enable sddm.service 2>/dev/null || true
 
-# Clean apt cache and docs to ensure ISO size stays well under GitHub 2GB release limit
+# Clean caches so the ISO stays under GitHub's 2 GB release asset limit
 apt-get autoremove -y --purge
 apt-get clean
-rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/* /usr/share/doc/* /usr/share/man/* /usr/share/info/*
+rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/*
 CHROOT_EOF
 
 # ------------------------------------------------------------------------------
@@ -270,22 +217,23 @@ log_step "Injecting Iram scripts, systemd units, and skeleton user configs..."
 
 # Copy IRAM OS sovereign system files into /usr/share/iram
 mkdir -p "${ROOTFS_DIR}/usr/share/iram"
-cp -a --remove-destination "${REPO_ROOT}/bin" "${REPO_ROOT}/config" "${REPO_ROOT}/themes" "${REPO_ROOT}/system" "${REPO_ROOT}/migrations" "${ROOTFS_DIR}/usr/share/iram/"
-if [ -d "${REPO_ROOT}/mcp" ]; then cp -a --remove-destination "${REPO_ROOT}/mcp" "${ROOTFS_DIR}/usr/share/iram/"; fi
-if [ -d "${REPO_ROOT}/assets" ]; then cp -a --remove-destination "${REPO_ROOT}/assets" "${ROOTFS_DIR}/usr/share/iram/"; fi
+cp -a --remove-destination "${REPO_ROOT}/bin" "${REPO_ROOT}/config" "${REPO_ROOT}/default" "${REPO_ROOT}/themes" "${REPO_ROOT}/system" "${REPO_ROOT}/migrations" "${REPO_ROOT}/mcp" "${REPO_ROOT}/packages" "${ROOTFS_DIR}/usr/share/iram/"
+if [ -d "${REPO_ROOT}/assets" ]; then
+    # The README's showcase video and GIF do not belong on the install medium.
+    mkdir -p "${ROOTFS_DIR}/usr/share/iram/assets"
+    find "${REPO_ROOT}/assets" -mindepth 1 -maxdepth 1 ! -name '*.mp4' ! -name '*.gif' ! -name 'screenshots' \
+        -exec cp -a --remove-destination {} "${ROOTFS_DIR}/usr/share/iram/assets/" \;
+fi
 if [ -d "${REPO_ROOT}/applications" ]; then cp -a --remove-destination "${REPO_ROOT}/applications" "${ROOTFS_DIR}/usr/share/iram/"; fi
 
 # Copy IRAM system-wide binaries & profile
 mkdir -p "${ROOTFS_DIR}/usr/local/bin" "${ROOTFS_DIR}/usr/bin" "${ROOTFS_DIR}/usr/share/wayland-sessions" "${ROOTFS_DIR}/etc/profile.d"
 cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/usr/local/bin/"
-if [ -f "${REPO_ROOT}/mcp/iram-os-mcp" ]; then
-    cp -a --remove-destination "${REPO_ROOT}/mcp/iram-os-mcp" "${ROOTFS_DIR}/usr/local/bin/iram-os-mcp"
-fi
 find "${ROOTFS_DIR}/usr/local/bin/" -type f -exec chmod 0755 {} + 2>/dev/null || true
 
 # Symlink all iram binaries into /usr/bin
 chroot "${ROOTFS_DIR}" /bin/bash << 'POST_CHROOT_EOF'
-for bin_file in /usr/local/bin/iram* /usr/local/bin/craft*; do
+for bin_file in /usr/local/bin/iram* /usr/local/bin/craft* /usr/local/bin/hyprland-start; do
     if [ -f "$bin_file" ] || [ -L "$bin_file" ]; then
         base_name="$(basename "$bin_file")"
         ln -sf "$bin_file" "/usr/bin/${base_name}" 2>/dev/null || true
@@ -317,6 +265,9 @@ if [ -f "${REPO_ROOT}/system/iram-firstboot-auth.service" ]; then
     chroot "${ROOTFS_DIR}" systemctl enable iram-firstboot-auth.service 2>/dev/null || true
 fi
 
+bash "${REPO_ROOT}/bin/iram-install-nerd-font" "${ROOTFS_DIR}"
+chroot "${ROOTFS_DIR}" /bin/bash -c 'if command -v fc-cache >/dev/null; then fc-cache -f; fi'
+
 # Copy skeleton configs so every user (and live user) gets them
 mkdir -p "${ROOTFS_DIR}/etc/skel/.config" "${ROOTFS_DIR}/etc/skel/.local/bin" "${ROOTFS_DIR}/etc/skel/.local/share/applications" "${ROOTFS_DIR}/etc/skel/.local/share/icons/hicolor/128x128/apps"
 cp -a --remove-destination "${REPO_ROOT}/config/"* "${ROOTFS_DIR}/etc/skel/.config/"
@@ -324,31 +275,48 @@ cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/etc/skel/.local/b
 for f in "${REPO_ROOT}/applications/"*.desktop; do
     if [ -e "$f" ]; then
         cp -a --remove-destination "$f" "${ROOTFS_DIR}/etc/skel/.local/share/applications/"
-        cp -a --remove-destination "$f" "${ROOTFS_DIR}/home/iram/.local/share/applications/"
     fi
 done
 for f in "${REPO_ROOT}/applications/icons/"*.png; do
     if [ -e "$f" ]; then
         cp -a --remove-destination "$f" "${ROOTFS_DIR}/etc/skel/.local/share/icons/hicolor/128x128/apps/"
-        cp -a --remove-destination "$f" "${ROOTFS_DIR}/home/iram/.local/share/icons/hicolor/128x128/apps/"
     fi
 done
 
-# Copy systemd units
-mkdir -p "${ROOTFS_DIR}/etc/skel/.config/systemd/user" "${ROOTFS_DIR}/home/iram/.config/systemd/user"
-if [ -d "${REPO_ROOT}/systemd/user" ]; then
-    cp -a --remove-destination "${REPO_ROOT}/systemd/user/"* "${ROOTFS_DIR}/etc/skel/.config/systemd/user/" 2>/dev/null || true
-    cp -a --remove-destination "${REPO_ROOT}/systemd/user/"* "${ROOTFS_DIR}/home/iram/.config/systemd/user/" 2>/dev/null || true
-fi
-if [ -d "${REPO_ROOT}/config/systemd/user" ]; then
-    cp -a --remove-destination "${REPO_ROOT}/config/systemd/user/"* "${ROOTFS_DIR}/etc/skel/.config/systemd/user/" 2>/dev/null || true
-    cp -a --remove-destination "${REPO_ROOT}/config/systemd/user/"* "${ROOTFS_DIR}/home/iram/.config/systemd/user/" 2>/dev/null || true
-fi
+# Everything hyprland.conf sources must exist, or the session opens on an error banner.
+for hypr_include in monitors.conf webapps.conf theme.conf gpu.conf; do
+    : > "${ROOTFS_DIR}/etc/skel/.config/hypr/${hypr_include}"
+done
+cp -a "${REPO_ROOT}/config/hypr/user-overrides.conf.example" "${ROOTFS_DIR}/etc/skel/.config/hypr/user-overrides.conf"
 
-# Fix permissions
-chroot "${ROOTFS_DIR}" chown -R iram:iram /home/iram 2>/dev/null || true
-chroot "${ROOTFS_DIR}" gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-chroot "${ROOTFS_DIR}" update-desktop-database 2>/dev/null || true
+# Session units start for every user, without a per-home enable step.
+SKEL_WANTS="${ROOTFS_DIR}/etc/skel/.config/systemd/user/graphical-session.target.wants"
+mkdir -p "$SKEL_WANTS"
+for unit in waybar swaybg swaync hypridle iram-cliphist iram-cliphist-image iram-polkit-agent iram-watchdog; do
+    ln -sf "../${unit}.service" "$SKEL_WANTS/${unit}.service"
+done
+ln -sf ../iram-battery.timer "$SKEL_WANTS/iram-battery.timer"
+
+# Live user, created only now so that useradd copies the finished /etc/skel into its home.
+chroot "${ROOTFS_DIR}" /bin/bash << 'LIVE_USER_EOF'
+set -euo pipefail
+for group in sudo audio video render input; do groupadd -f "$group"; done
+useradd -m -s /bin/bash -G sudo,audio,video,render,input iram
+echo "iram:iram" | chpasswd
+echo "iram ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/iram
+chmod 0440 /etc/sudoers.d/iram
+mkdir -p /etc/sddm.conf.d
+cat << 'AUTOLOGIN_EOF' > /etc/sddm.conf.d/autologin.conf
+[Autologin]
+User=iram
+Session=iram.desktop
+AUTOLOGIN_EOF
+sed -i 's|__PROJECTS_DIR__|/home/iram/Projects|' /home/iram/.config/mcp/iram_mcp_config.json
+LIVE_USER_EOF
+
+# Both tools come from packages a --no-install-recommends build may leave out.
+chroot "${ROOTFS_DIR}" /bin/bash -c 'if command -v gtk-update-icon-cache >/dev/null; then gtk-update-icon-cache -f -t /usr/share/icons/hicolor; fi'
+chroot "${ROOTFS_DIR}" /bin/bash -c 'if command -v update-desktop-database >/dev/null; then update-desktop-database; fi'
 
 # Copy Wayland session desktop entry
 if [ -f "${REPO_ROOT}/system/iram.desktop" ]; then
@@ -360,15 +328,23 @@ cat << EOF > "${ROOTFS_DIR}/etc/os-release"
 NAME="IRAM OS"
 VERSION="${DISTRO_VERSION} (${CODENAME})"
 ID=iram-os
-ID_LIKE="debian"
+ID_LIKE="ubuntu debian"
 PRETTY_NAME="IRAM OS ${DISTRO_VERSION} (${CODENAME})"
 VERSION_ID="${DISTRO_VERSION}"
 HOME_URL="https://github.com/apravint/iram-os"
 SUPPORT_URL="https://github.com/apravint/iram-os/issues"
 BUG_REPORT_URL="https://github.com/apravint/iram-os/issues"
 PRIVACY_POLICY_URL="https://github.com/apravint/iram-os"
+UBUNTU_CODENAME=${CODENAME}
+VERSION_CODENAME=${CODENAME}
 BASE_CODENAME=${CODENAME}
 EOF
+
+# Remove build-only state so installs do not inherit it.
+rm -f "${ROOTFS_DIR}/usr/sbin/policy-rc.d"
+ln -sf ../run/systemd/resolve/stub-resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
+: > "${ROOTFS_DIR}/etc/machine-id"
+rm -f "${ROOTFS_DIR}/var/lib/dbus/machine-id"
 
 # Copy kernel & initrd into casper directory for ISO booting
 log_step "Extracting kernel and initrd for live boot..."
@@ -395,14 +371,18 @@ log_step "Compressing root filesystem into filesystem.squashfs (this may take a 
 chroot "${ROOTFS_DIR}" dpkg-query -W --showformat='${Package} ${Version}\n' > "${ISO_DIR}/casper/filesystem.manifest"
 printf "%s" "$(du -sx --block-size=1 "${ROOTFS_DIR}" | cut -f1)" > "${ISO_DIR}/casper/filesystem.size"
 
-# Unmount virtual mounts before squashing
-umount -lf "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
-umount -lf "${ROOTFS_DIR}/dev" 2>/dev/null || true
-umount -lf "${ROOTFS_DIR}/proc" 2>/dev/null || true
-umount -lf "${ROOTFS_DIR}/sys" 2>/dev/null || true
+unmount_virtual_filesystems
+if findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | grep -q .; then
+    log_err "Virtual filesystems are still mounted; refusing to squash host paths."
+    exit 1
+fi
 
-mksquashfs "${ROOTFS_DIR}" "${ISO_DIR}/casper/filesystem.squashfs" \
-    -comp xz -b 1048576 -Xbcj x86 -processors 4
+case "${SQUASHFS_COMPRESSION}" in
+    xz) SQUASHFS_ARGS=(-comp xz -Xbcj x86) ;;
+    zstd) SQUASHFS_ARGS=(-comp zstd -Xcompression-level 19) ;;
+    *) log_err "SQUASHFS_COMPRESSION must be zstd or xz."; exit 1 ;;
+esac
+mksquashfs "${ROOTFS_DIR}" "${ISO_DIR}/casper/filesystem.squashfs" "${SQUASHFS_ARGS[@]}" -b 1048576 -noappend
 
 # ------------------------------------------------------------------------------
 # 7. Configure GRUB Bootloader for BIOS & UEFI Hybrid Boot
@@ -411,6 +391,11 @@ log_step "Creating GRUB boot menu..."
 cat << 'EOF' > "${ISO_DIR}/boot/grub/grub.cfg"
 set default="0"
 set timeout=5
+
+# Serial console lets CI watch the boot; harmless where no serial port exists.
+serial --unit=0 --speed=115200
+terminal_input console serial
+terminal_output console serial
 
 insmod part_gpt
 insmod part_msdos
@@ -422,28 +407,28 @@ insmod font
 set menu_color_normal=white/black
 set menu_color_highlight=black/light-cyan
 
-menuentry "🚀 Start IRAM OS Live (Default)" {
+menuentry "Start IRAM OS Live (Default)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper fsck.mode=skip quiet splash ---
+    linux /casper/vmlinuz boot=casper fsck.mode=skip quiet console=ttyS0,115200 console=tty1 ---
     initrd /casper/initrd
 }
 
-menuentry "🛡️ Start IRAM OS Live (Safe Graphics)" {
+menuentry "Start IRAM OS Live (Safe Graphics)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper nomodeset fsck.mode=skip quiet splash ---
+    linux /casper/vmlinuz boot=casper nomodeset fsck.mode=skip quiet console=ttyS0,115200 console=tty1 ---
     initrd /casper/initrd
 }
 
-menuentry "🔍 Check Disc for Defects" {
+menuentry "Check Disc for Defects" {
     linux /casper/vmlinuz boot=casper integrity-check quiet splash ---
     initrd /casper/initrd
 }
 
-menuentry "⚡ Reboot System" {
+menuentry "Reboot System" {
     reboot
 }
 
-menuentry "⏻ Power Off System" {
+menuentry "Power Off System" {
     halt
 }
 EOF
@@ -471,8 +456,8 @@ cat << RELEASE_EOF > "${OUTPUT_DIR}/release-notes-${DISTRO_VERSION}.md"
 
 **Architecture**: ${ARCH} (x86_64)
 **Base**: Ubuntu ${CODENAME}
-**Compositor**: Hyprland 0.56
-**Theme Suite**: 22 Sovereign Palettes
+**Compositor**: Hyprland (from Ubuntu ${CODENAME})
+**Theme Suite**: $(find "${REPO_ROOT}/themes" -mindepth 1 -maxdepth 1 -type d | wc -l) palettes
 
 ### Checksums
 \`\`\`
@@ -485,7 +470,8 @@ SHA256: $(cat "${OUTPUT_DIR}/sha256sum.txt")
 - **Atomic Config Snapshots**: 1-second desktop state save and instant recovery (\`iram snapshot\`).
 - **Voice-to-Action Engine**: Push-to-talk dictation & hands-free desktop agent control (\`iram-voice\` / \`Super + Shift + M\`).
 - **Native Creator Studio**: Pipeline piping text into \`shorts-creator\`, \`video-gen\`, and \`BookGeneratorAI\` (\`iram-studio\` / \`Super + Shift + G\`).
-- **Zero-Dependency Stdio MCP Server**: Model Context Protocol server exposing desktop controls to AI agents.
+- **Zero-Dependency Stdio MCP Server**: Tiered Model Context Protocol server (read, desktop, polkit-gated privileged).
+- **Bare-Metal Installer**: \`sudo iram-install-disk\` from the live session; no live-session artifacts on disk.
 RELEASE_EOF
 
 echo -e "\n${BLUE}======================================================${NC}"

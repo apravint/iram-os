@@ -1,12 +1,17 @@
 [Unit]
-Description=IRAM OS Sovereign FastMCP Desktop & Diagnostic Server
-After=network.target
+Description=IRAM OS FastMCP Server (optional network transport)
+Documentation=https://github.com/apravint/iram-os
+# Not enabled by default: SSE has no client authentication, so any local process
+# could call every tool. MCP clients should use the stdio server, iram-os-mcp.
+After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/iram mcp --sse
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=IRAM_MCP_TRANSPORT=sse
+Environment=IRAM_MCP_PORT=8991
+ExecStart=/usr/bin/env iram-mcp-server
 Restart=on-failure
 RestartSec=3
-
-[Install]
-WantedBy=default.target
+NoNewPrivileges=true

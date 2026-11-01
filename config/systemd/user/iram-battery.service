@@ -1,0 +1,8 @@
+[Unit]
+Description=IRAM OS Battery Threshold Check
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*
+
+[Service]
+Type=oneshot
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/env iram-battery-monitor

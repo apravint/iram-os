@@ -42,8 +42,8 @@ def main():
 
     # 3. Do Not Disturb (DND)
     try:
-        mako_out = subprocess.check_output(["makoctl", "mode"], text=True, timeout=0.5)
-        if "dnd" in mako_out:
+        dnd_state = subprocess.check_output(["swaync-client", "--get-dnd"], text=True, timeout=0.5)
+        if dnd_state.strip() == "true":
             glyphs.append("🔕")
             tooltips.append("• Do Not Disturb: Notifications silenced")
             classes.append("dnd")

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "iram_system": {
-      "command": "/usr/local/bin/iram-mcp-server",
+      "command": "iram-os-mcp",
       "args": [],
       "description": "Native Iram Linux System, Hyprland Window Manager, Themes & Diagnostics MCP Server"
     },
@@ -10,9 +10,9 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/home/iram"
+        "__PROJECTS_DIR__"
       ],
-      "description": "Safe structured filesystem access for user home directory"
+      "description": "Filesystem access limited to ~/Projects"
     },
     "fetch": {
       "command": "uvx",

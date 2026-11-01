@@ -1,0 +1,17 @@
+[Unit]
+Description=SwayNC Notification Center
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=15
+[Service]
+Type=dbus
+BusName=org.freedesktop.Notifications
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/swaync
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=graphical-session.target

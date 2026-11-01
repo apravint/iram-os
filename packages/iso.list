@@ -1,0 +1,31 @@
+# Additional packages for the live ISO and the disk it installs. Live-only entries
+# are purged by iram-install-disk (see LIVE_ONLY_PACKAGES there).
+linux-generic
+linux-firmware
+intel-microcode
+amd64-microcode
+initramfs-tools
+casper
+discover
+laptop-detect
+os-prober
+net-tools
+iw
+wpasupplicant
+sudo
+wget
+nano
+vim
+sddm
+# Bare-metal installer dependencies
+gdisk
+parted
+dosfstools
+e2fsprogs
+squashfs-tools
+grub-common
+grub2-common
+grub-pc-bin
+grub-efi-amd64-bin
+grub-efi-amd64-signed
+shim-signed

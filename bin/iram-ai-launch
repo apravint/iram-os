@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Agent Launcher (iram-ai-launch)
+# Starts the best available agent: Claude Code, then Antigravity, then local
+# Ollama. Cloud agents are skipped when the machine is offline, so the same
+# hotkey keeps working on a plane.
+#
+# IRAM_AI_PROVIDER=claude|agy|ollama forces a provider.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+PROMPT_FILE=""
+HOLD=false
+LIST_ONLY=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --prompt-file) PROMPT_FILE="${2:-}"; shift 2 ;;
+        --hold) HOLD=true; shift ;;
+        --which) LIST_ONLY=true; shift ;;
+        *) echo "Usage: iram-ai-launch [--prompt-file FILE] [--hold] [--which]" >&2; exit 2 ;;
+    esac
+done
+
+PROMPT=""
+if [ -n "$PROMPT_FILE" ]; then
+    PROMPT="$(cat -- "$PROMPT_FILE")"
+    rm -f -- "$PROMPT_FILE"
+fi
+
+is_online() {
+    # A short TCP probe, not DNS alone: captive portals resolve but do not connect.
+    timeout 0.6 bash -c '</dev/tcp/1.1.1.1/443' 2>/dev/null
+}
+
+agy_bin() {
+    command -v agy 2>/dev/null || { [ -x "$HOME/.gemini/antigravity-cli/bin/agy" ] && echo "$HOME/.gemini/antigravity-cli/bin/agy"; } || true
+}
+
+local_model() {
+    local configured=""
+    if [ -f "$HOME/.config/iram/ai.env" ]; then
+        configured="$(sed -n 's/^OLLAMA_MODEL=//p' "$HOME/.config/iram/ai.env" | head -n 1)"
+    fi
+    if [ -n "$configured" ] && ollama show "$configured" >/dev/null 2>&1; then
+        echo "$configured"
+    else
+        ollama list 2>/dev/null | awk 'NR==2 {print $1}'
+    fi
+}
+
+select_provider() {
+    if [ -n "${IRAM_AI_PROVIDER:-}" ]; then
+        echo "$IRAM_AI_PROVIDER"
+        return
+    fi
+    if is_online; then
+        if command -v claude >/dev/null 2>&1; then echo claude; return; fi
+        if [ -n "$(agy_bin)" ]; then echo agy; return; fi
+    fi
+    if command -v ollama >/dev/null 2>&1 && [ -n "$(local_model)" ]; then echo ollama; return; fi
+    echo none
+}
+
+PROVIDER="$(select_provider)"
+if [ "$LIST_ONLY" = true ]; then
+    echo "$PROVIDER"
+    exit 0
+fi
+
+status=0
+case "$PROVIDER" in
+    claude)
+        if [ -n "$PROMPT" ]; then claude "$PROMPT" || status=$?; else claude || status=$?; fi
+        ;;
+    agy)
+        AGY="$(agy_bin)"
+        if [ -n "$PROMPT" ]; then "$AGY" "$PROMPT" || status=$?; else "$AGY" || status=$?; fi
+        ;;
+    ollama)
+        MODEL="$(local_model)"
+        echo "Offline or no cloud agent: using local model $MODEL"
+        if [ -n "$PROMPT" ]; then
+            printf '%s\n' "$PROMPT" | ollama run "$MODEL" || status=$?
+        else
+            ollama run "$MODEL" || status=$?
+        fi
+        ;;
+    *)
+        echo "No agent is available. Install Claude Code, or run: iram ai-setup" >&2
+        status=1
+        ;;
+esac
+
+if [ "$HOLD" = true ]; then
+    read -r -p "Press Enter to close..." _ || true
+fi
+exit "$status"

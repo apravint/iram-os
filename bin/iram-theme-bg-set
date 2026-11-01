@@ -20,8 +20,10 @@ ln -nsf "$BACKGROUND" "$CURRENT_BACKGROUND_LINK"
 
 # If swaybg is active or WAYLAND_DISPLAY is set, update wallpaper immediately
 if pgrep -x swaybg >/dev/null 2>&1 || [[ -n ${WAYLAND_DISPLAY:-} ]]; then
-  pkill swaybg 2>/dev/null || true
-  nohup swaybg -i "$BACKGROUND" -m fill >/dev/null 2>&1 &
+  if ! systemctl --user restart swaybg.service 2>/dev/null; then
+    pkill swaybg 2>/dev/null || true
+    nohup swaybg -i "$BACKGROUND" -m fill >/dev/null 2>&1 &
+  fi
 fi
 
 # Also ping iram-shell if present

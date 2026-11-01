@@ -182,12 +182,12 @@ def handle_commit():
 
 def prompt_action(cmd, task_query=""):
     try:
-        choice = input(f"{BOLD}Action [{GREEN}E{RESET}{BOLD}xecute / {YELLOW}C{RESET}{BOLD}opy / {BOLD}Q{RESET}{BOLD}uit] (Default: E): {RESET}").strip().lower()
+        choice = input(f"{BOLD}Action [{GREEN}E{RESET}{BOLD}xecute / {YELLOW}C{RESET}{BOLD}opy / {BOLD}Q{RESET}{BOLD}uit] (Default: Q): {RESET}").strip().lower()
     except (KeyboardInterrupt, EOFError):
         print("\nAborted.")
         sys.exit(0)
 
-    if choice in ["", "e", "exec"]:
+    if choice in ["e", "exec"]:
         print(f"{GREEN}Executing...{RESET}\n")
         # Retain confirmed command in Hindsight memory
         if task_query:

@@ -1,12 +1,13 @@
 [Unit]
-Description=IRAM OS Autonomous Self-Healing Watchdog Daemon
-Documentation=https://github.com/apravint/iram-os
+Description=IRAM OS Self-Healing Watchdog Daemon
 PartOf=graphical-session.target
 After=graphical-session.target
+Requisite=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/iram-watchdog
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/env iram-watchdog
 Restart=always
 RestartSec=5s
 

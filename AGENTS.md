@@ -1,7 +1,7 @@
 # AGENTS.md - Developer & Agent Guide for IRAM OS
 
 ## Project Overview
-**IRAM OS** is an autonomous, agentic Wayland distribution built upon Ubuntu Linux and Hyprland. It integrates local AI models (Ollama, fastmcp, OpenClaw), dynamic theme synchronization across 43 palettes, zero-restart configuration reloading, and voice/vision capabilities.
+**IRAM OS** is an autonomous, agentic Wayland distribution built upon Ubuntu Linux and Hyprland. It integrates local AI models (Ollama, fastmcp), dynamic theme synchronization across 55 palettes, zero-restart configuration reloading, and voice/vision capabilities.
 
 ---
 
@@ -10,15 +10,15 @@
 ```
 iram-os/
 ├── bin/              # System CLI utilities, agent dispatchers, hardware controllers
-├── config/           # Desktop configuration files (Hyprland, Waybar, Wofi, Mako, Alacritty)
-├── themes/           # 43 curated themes with palettes, wallpapers, and templates
+├── config/           # Desktop configuration and systemd user units (config/systemd/user)
+├── themes/           # 55 curated themes with palettes, wallpapers, and templates
 ├── applications/     # .desktop application launchers and hicolor icons (51 apps)
 ├── build/            # ISO build automation (build-iso.sh) and Debian packager (package-deb.sh)
 ├── system/           # Sudoers configuration, system-wide profiles, and Wayland session
-├── systemd/          # User-level systemd units and timers (AI daemon, cliphist, healthd)
 ├── iram_voice/       # Speech synthesis engine and local edge-tts bridges
 ├── migrations/       # Non-destructive schema and config migrations
-├── packaging/        # Debian package specifications and control files
+├── packages/         # Package manifests shared by install.sh, the ISO and the .deb
+├── tests/            # tests/run.sh: needs no root, compositor or network
 └── install.sh        # Modular system installer with rollback backups & --dry-run mode
 ```
 

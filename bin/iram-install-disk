@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Bare-Metal Disk Installer (iram-install-disk)
+# Installs the live system to a whole disk from the live session.
+# THE TARGET DISK IS ERASED.
+#
+# Layout (GPT, boots on both UEFI and legacy BIOS):
+#   1  1 MiB   BIOS boot    2  1 GiB  EFI system (FAT32)    3  rest  root (ext4)
+#
+# The installed system keeps nothing of the live session: no `iram` user, no
+# passwordless sudo, no autologin, no casper, and a fresh machine-id.
+#
+# Interactive:  sudo iram-install-disk
+# Scripted:     sudo iram-install-disk --disk /dev/sdX --user NAME --hostname NAME \
+#                   --password-file FILE --yes-erase-disk /dev/sdX
+# Preview:      iram-install-disk --plan --disk /dev/sdX --user NAME
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+LIVE_ONLY_PACKAGES=(casper discover laptop-detect)
+TARGET_ROOT="/mnt/iram-target"
+MIN_DISK_BYTES=$((20 * 1024 * 1024 * 1024))
+
+DISK="" USERNAME="" FULLNAME="" HOSTNAME_NEW="iram" TIMEZONE="UTC"
+PASSWORD_FILE="" CONFIRM_ERASE="" PLAN=false
+
+usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; }
+
+die() { echo "iram-install-disk: $*" >&2; exit 1; }
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --disk) DISK="${2:-}"; shift 2 ;;
+        --user) USERNAME="${2:-}"; shift 2 ;;
+        --fullname) FULLNAME="${2:-}"; shift 2 ;;
+        --hostname) HOSTNAME_NEW="${2:-}"; shift 2 ;;
+        --timezone) TIMEZONE="${2:-}"; shift 2 ;;
+        --password-file) PASSWORD_FILE="${2:-}"; shift 2 ;;
+        --yes-erase-disk) CONFIRM_ERASE="${2:-}"; shift 2 ;;
+        --plan) PLAN=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) die "unknown option: $1" ;;
+    esac
+done
+
+# In plan mode every step prints instead of running, so the preview and the real
+# run are one code path and cannot drift apart.
+run() {
+    if [ "$PLAN" = true ]; then
+        printf '+ %s\n' "$*"
+    else
+        "$@"
+    fi
+}
+
+in_target() { run chroot "$TARGET_ROOT" "$@"; }
+
+is_live_session() {
+    grep -qE 'boot=casper|boot=live' "${IRAM_CMDLINE:-/proc/cmdline}" 2>/dev/null
+}
+
+partition_path() {
+    # /dev/sda -> /dev/sda3, but /dev/nvme0n1 -> /dev/nvme0n1p3 and /dev/mmcblk0 -> /dev/mmcblk0p3
+    case "$1" in
+        *[0-9]) echo "${1}p${2}" ;;
+        *) echo "${1}${2}" ;;
+    esac
+}
+
+valid_username() { [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && [ "$1" != root ] && [ "$1" != iram ]; }
+valid_hostname() { [[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; }
+valid_timezone() { [[ "$1" =~ ^[A-Za-z0-9_+/-]+$ ]] && [[ "$1" != *..* ]]; }
+
+find_squashfs() {
+    local candidate
+    for candidate in "${IRAM_SQUASHFS:-}" /cdrom/casper/filesystem.squashfs /run/live/medium/casper/filesystem.squashfs /isodevice/casper/filesystem.squashfs; do
+        if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Refuse anything that is not a whole, writable, idle disk of adequate size.
+check_disk() {
+    [ -b "$DISK" ] || die "$DISK is not a block device."
+    [ "$(lsblk -dno TYPE "$DISK")" = disk ] || die "$DISK is not a whole disk."
+    [ "$(lsblk -dno RO "$DISK" | tr -d ' ')" = 0 ] || die "$DISK is read-only."
+    local size mounted
+    size="$(lsblk -bdno SIZE "$DISK" | tr -d ' ')"
+    [ "$size" -ge "$MIN_DISK_BYTES" ] || die "$DISK is under 20 GiB."
+    mounted="$(lsblk -nro MOUNTPOINT "$DISK" | grep -v '^$' || true)"
+    if [ -n "$mounted" ]; then
+        die "$DISK has mounted filesystems, possibly the live media itself: $(echo "$mounted" | tr '\n' ' ')"
+    fi
+}
+
+prompt_interactive() {
+    if [ -z "$DISK" ]; then
+        echo "Disks found:"
+        lsblk -dpno NAME,SIZE,MODEL,TRAN -e 7,11
+        read -r -p "Disk to ERASE and install to (e.g. /dev/nvme0n1): " DISK
+    fi
+    if [ -z "$USERNAME" ]; then read -r -p "Username: " USERNAME; fi
+    if [ -z "$FULLNAME" ]; then read -r -p "Full name (optional): " FULLNAME; fi
+    if [ "$PLAN" = false ] && [ -z "$PASSWORD_FILE" ] && [ -z "${INSTALL_PASSWORD:-}" ]; then
+        local again
+        read -r -s -p "Password: " INSTALL_PASSWORD; echo
+        read -r -s -p "Password again: " again; echo
+        [ "$INSTALL_PASSWORD" = "$again" ] || die "Passwords do not match."
+    fi
+}
+
+UNMOUNT_NEEDED=false
+cleanup_mounts() {
+    [ "$UNMOUNT_NEEDED" = true ] || return 0
+    local mountpoint
+    # Deepest first; never lazy, because a false "unmounted" is worse than an error here.
+    findmnt -Rno TARGET "$TARGET_ROOT" 2>/dev/null | sort -r | while read -r mountpoint; do
+        umount "$mountpoint" 2>/dev/null || echo "Warning: could not unmount $mountpoint" >&2
+    done
+}
+
+[ -n "$DISK" ] && [ -n "$USERNAME" ] || prompt_interactive
+valid_username "$USERNAME" || die "invalid username '$USERNAME' (lowercase, and neither root nor iram)."
+valid_hostname "$HOSTNAME_NEW" || die "invalid hostname '$HOSTNAME_NEW'."
+valid_timezone "$TIMEZONE" || die "invalid timezone '$TIMEZONE'."
+[[ "$DISK" == /dev/* ]] || die "--disk must be a /dev path."
+
+PART_BIOS="$(partition_path "$DISK" 1)"
+PART_EFI="$(partition_path "$DISK" 2)"
+PART_ROOT="$(partition_path "$DISK" 3)"
+
+if [ "$PLAN" = true ]; then
+    SQUASHFS="$(find_squashfs || echo /cdrom/casper/filesystem.squashfs)"
+else
+    [ "$(id -u)" -eq 0 ] || die "run as root (sudo)."
+    is_live_session || die "this only runs from the IRAM OS live session."
+    SQUASHFS="$(find_squashfs)" || die "live filesystem image not found."
+    check_disk
+    if [ -n "$PASSWORD_FILE" ]; then
+        [ -r "$PASSWORD_FILE" ] || die "cannot read $PASSWORD_FILE."
+        INSTALL_PASSWORD="$(head -n 1 -- "$PASSWORD_FILE")"
+    fi
+    [ -n "${INSTALL_PASSWORD:-}" ] || prompt_interactive
+    [ -n "${INSTALL_PASSWORD:-}" ] || die "an empty password is not allowed."
+
+    if [ "$CONFIRM_ERASE" != "$DISK" ]; then
+        echo
+        lsblk -pno NAME,SIZE,FSTYPE,LABEL "$DISK"
+        echo
+        echo "ALL DATA ON $DISK WILL BE PERMANENTLY ERASED."
+        read -r -p "Type the disk path again to confirm: " CONFIRM_ERASE
+        [ "$CONFIRM_ERASE" = "$DISK" ] || die "confirmation did not match; nothing was changed."
+    fi
+    trap cleanup_mounts EXIT
+fi
+
+echo "==> [1/6] Partitioning $DISK"
+run wipefs --all --force "$DISK"
+run sgdisk --zap-all "$DISK"
+run sgdisk --new=1:0:+1M --typecode=1:ef02 --change-name=1:bios-boot "$DISK"
+run sgdisk --new=2:0:+1G --typecode=2:ef00 --change-name=2:EFI "$DISK"
+run sgdisk --new=3:0:0 --typecode=3:8304 --change-name=3:iram-root "$DISK"
+run partprobe "$DISK"
+run udevadm settle
+echo "    BIOS boot: $PART_BIOS"
+
+echo "==> [2/6] Creating filesystems"
+run mkfs.vfat -F 32 -n EFI "$PART_EFI"
+run mkfs.ext4 -F -L iram-root "$PART_ROOT"
+
+echo "==> [3/6] Copying the system from $SQUASHFS"
+run mkdir -p "$TARGET_ROOT"
+UNMOUNT_NEEDED=true
+run mount "$PART_ROOT" "$TARGET_ROOT"
+run mkdir -p "$TARGET_ROOT/boot/efi"
+run mount "$PART_EFI" "$TARGET_ROOT/boot/efi"
+run unsquashfs -force -dest "$TARGET_ROOT" "$SQUASHFS"
+for fs in dev dev/pts proc sys run; do
+    run mkdir -p "$TARGET_ROOT/$fs"
+    run mount --bind "/$fs" "$TARGET_ROOT/$fs"
+done
+if [ -d /sys/firmware/efi/efivars ]; then
+    run mount --bind /sys/firmware/efi/efivars "$TARGET_ROOT/sys/firmware/efi/efivars"
+fi
+
+echo "==> [4/6] Removing live-session artifacts"
+in_target rm -f /etc/sudoers.d/iram /etc/sudoers.d/casper /etc/sddm.conf.d/autologin.conf
+in_target bash -c 'if id -u iram >/dev/null 2>&1; then userdel --force --remove iram; fi'
+in_target rm -rf /home/iram
+in_target apt-get purge -y "${LIVE_ONLY_PACKAGES[@]}"
+in_target apt-get autoremove -y --purge
+# The first-boot hardening exists for images laid down some other way; this one is clean.
+in_target mkdir -p /var/lib/iram
+in_target touch /var/lib/iram/.auth_secured
+in_target systemctl disable iram-firstboot-auth.service
+
+echo "==> [5/6] Configuring identity and user '$USERNAME'"
+in_target truncate -s 0 /etc/machine-id
+run rm -f "$TARGET_ROOT/var/lib/dbus/machine-id"
+if [ "$PLAN" = true ]; then
+    echo "+ write $TARGET_ROOT/etc/hostname, hosts, fstab (root and EFI by UUID)"
+else
+    echo "$HOSTNAME_NEW" > "$TARGET_ROOT/etc/hostname"
+    cat > "$TARGET_ROOT/etc/hosts" << EOF
+127.0.0.1   localhost
+127.0.1.1   $HOSTNAME_NEW
+::1         localhost ip6-localhost ip6-loopback
+EOF
+    cat > "$TARGET_ROOT/etc/fstab" << EOF
+UUID=$(blkid -s UUID -o value "$PART_ROOT")  /          ext4  errors=remount-ro  0  1
+UUID=$(blkid -s UUID -o value "$PART_EFI")  /boot/efi  vfat  umask=0077         0  1
+EOF
+fi
+in_target ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+in_target useradd --create-home --shell /bin/bash --comment "$FULLNAME" --groups sudo,audio,video,render,input "$USERNAME"
+in_target sed -i "s|__PROJECTS_DIR__|/home/$USERNAME/Projects|" "/home/$USERNAME/.config/mcp/iram_mcp_config.json"
+if [ "$PLAN" = true ]; then
+    echo "+ chroot $TARGET_ROOT chpasswd  (password via stdin, never argv)"
+else
+    printf '%s:%s\n' "$USERNAME" "$INSTALL_PASSWORD" | chroot "$TARGET_ROOT" chpasswd
+    unset INSTALL_PASSWORD
+fi
+
+echo "==> [6/6] Installing the bootloader"
+in_target grub-install --target=i386-pc "$DISK"
+if [ -d /sys/firmware/efi ] || [ "$PLAN" = true ]; then
+    in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=IRAM --uefi-secure-boot
+    # Also write the fallback path, for firmware that loses NVRAM boot entries.
+    in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --uefi-secure-boot
+fi
+in_target update-initramfs -c -k all
+in_target update-grub
+run sync
+
+if [ "$PLAN" = true ]; then
+    echo "Plan only. Nothing was changed."
+else
+    cleanup_mounts
+    UNMOUNT_NEEDED=false
+    echo "Done. Remove the install media and reboot, then sign in as '$USERNAME'."
+fi

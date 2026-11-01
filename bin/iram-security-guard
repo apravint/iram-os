@@ -19,7 +19,8 @@ def run_cmd(cmd):
 
 def notify(title, message, urgency="normal"):
     print(f"[{urgency.upper()}] {title}: {message}")
-    subprocess.run(f'notify-send -u {urgency} -a "Iram Security Guard" "{title}" "{message}"', shell=True)
+    # Message text can carry process and network names, so it must never reach a shell.
+    subprocess.run(["notify-send", "-u", urgency, "-a", "Iram Security Guard", title, message])
 
 def audit_security():
     issues = []

@@ -8,7 +8,7 @@
 set -euo pipefail
 
 MONOLOGUE_DIR="$HOME/Videos/Monologues"
-PID_FILE="/tmp/iram-monologue.pid"
+PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.cache}/iram-monologue.pid"
 mkdir -p "$MONOLOGUE_DIR"
 
 notify() {

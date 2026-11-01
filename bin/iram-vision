@@ -26,12 +26,14 @@ except ImportError:
         is_gemini_healthy, get_gemini_api_key, mark_gemini_failed, query_llm
     )
 
-IMG_PATH = "/tmp/iram_vision.png"
+# Screenshots can hold anything on screen: keep them in the private runtime directory.
+IMG_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or os.path.expanduser("~/.cache"), "iram_vision.png")
 
 
 def capture_region():
     try:
-        subprocess.run(f"grim -g \"$(slurp)\" {IMG_PATH}", shell=True, check=True)
+        region = subprocess.run(["slurp"], capture_output=True, text=True, check=True).stdout.strip()
+        subprocess.run(["grim", "-g", region, IMG_PATH], check=True)
         return True
     except Exception:
         return False

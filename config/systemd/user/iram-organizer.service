@@ -5,7 +5,4 @@ After=network.target
 [Service]
 Type=oneshot
 Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/bin/sh -c 'if [ -x /usr/local/bin/iram-ai-organizer ]; then exec /usr/local/bin/iram-ai-organizer; else exec %h/.local/bin/iram-ai-organizer; fi'
-
-[Install]
-WantedBy=default.target
+ExecStart=/usr/bin/env iram-ai-organizer

@@ -2,14 +2,16 @@
 Description=Swaybg Wallpaper Daemon
 PartOf=graphical-session.target
 After=graphical-session.target
+Requisite=graphical-session.target
+ConditionPathExists=%h/.local/state/iram/current/background
 StartLimitIntervalSec=60
 StartLimitBurst=15
-
 [Service]
 Type=simple
-ExecStartPre=/bin/bash -c 'for i in {1..30}; do hyprctl monitors 2>/dev/null | grep -q "Monitor " && exit 0; sleep 1; done; exit 0'
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStartPre=/usr/bin/env iram-wait-compositor 30
 ExecStart=/usr/bin/swaybg -i %h/.local/state/iram/current/background -m fill
-Restart=always
+Restart=on-failure
 RestartSec=2s
 
 [Install]

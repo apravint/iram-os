@@ -1,183 +1,155 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# IRAM OS - Debian/Ubuntu Package Builder (.deb)
-# Packages IRAM OS Desktop into a sovereign, single-file distribution package
+# IRAM OS - Debian/Ubuntu Package Builder
+# Builds separate, signable packages, so a user can take the desktop without the
+# AI stack or the 400 MB of wallpapers:
+#
+#   iram-themes    Theme palettes and wallpapers (arch-independent data)
+#   iram-desktop   Hyprland session, scripts, configs and units
+#   iram-ai        Agent stack dependencies, and the MCP server's recommendations
+#   iram-os        Metapackage: all of the above
+#
+# Usage: ./build/package-deb.sh [version]
 # https://github.com/apravint/iram-os
 # ==============================================================================
 set -euo pipefail
 
-VERSION="${1:-2.0.0}"
-PKG_NAME="iram-os-desktop"
-ARCH="all"
-FULL_PKG_NAME="${PKG_NAME}_${VERSION}_${ARCH}"
-
+VERSION="${1:-26.4.3}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${REPO_ROOT}/out"
-BUILD_ROOT="/tmp/iram-deb-build"
-STAGE_DIR="${BUILD_ROOT}/${FULL_PKG_NAME}"
+BUILD_ROOT="$(mktemp -d)"
+trap 'rm -rf "$BUILD_ROOT"' EXIT
+mkdir -p "$OUTPUT_DIR"
 
-BOLD="\033[1m"
-GREEN="\033[0;32m"
-BLUE="\033[0;34m"
-YELLOW="\033[1;33m"
-CYAN="\033[0;36m"
-NC="\033[0m"
+MAINTAINER="Ayyappa Pravin <apravint@gmail.com>"
+HOMEPAGE="https://github.com/apravint/iram-os"
 
-echo -e "${BLUE}======================================================${NC}"
-echo -e "${GREEN}      IRAM OS - Packaging Debian Package (.deb)${NC}"
-echo -e "      Package: ${BOLD}${FULL_PKG_NAME}.deb${NC}"
-echo -e "${BLUE}======================================================${NC}"
+new_stage() {
+    STAGE="$BUILD_ROOT/$1"
+    mkdir -p "$STAGE/DEBIAN"
+}
 
-# Clean previous build artifacts
-rm -rf "${STAGE_DIR}"
-mkdir -p "${STAGE_DIR}/DEBIAN" "${OUTPUT_DIR}"
+write_control() { # package depends recommends description
+    {
+        echo "Package: $1"
+        echo "Version: $VERSION"
+        echo "Section: x11"
+        echo "Priority: optional"
+        echo "Architecture: all"
+        echo "Maintainer: $MAINTAINER"
+        echo "Homepage: $HOMEPAGE"
+        [ -n "$2" ] && echo "Depends: $2"
+        [ -n "$3" ] && echo "Recommends: $3"
+        echo "Description: $4"
+    } > "$STAGE/DEBIAN/control"
+}
 
-# 1. Create System Directories
-mkdir -p "${STAGE_DIR}/usr/bin" \
-         "${STAGE_DIR}/usr/local/bin" \
-         "${STAGE_DIR}/usr/share/iram" \
-         "${STAGE_DIR}/usr/share/wayland-sessions" \
-         "${STAGE_DIR}/usr/share/applications" \
-         "${STAGE_DIR}/usr/share/icons/hicolor/128x128/apps" \
-         "${STAGE_DIR}/usr/lib/systemd/user" \
-         "${STAGE_DIR}/etc/profile.d" \
-         "${STAGE_DIR}/etc/sudoers.d"
+build_package() {
+    # --root-owner-group: files must be root-owned on the target however this was built.
+    dpkg-deb --build --root-owner-group -Zzstd "$STAGE" "$OUTPUT_DIR/$1_${VERSION}_all.deb" >/dev/null
+    echo "  $1_${VERSION}_all.deb ($(du -h "$OUTPUT_DIR/$1_${VERSION}_all.deb" | cut -f1))"
+}
 
-# 2. Deploy IRAM Core System Files into /usr/share/iram
-echo "Copying IRAM OS core assets into /usr/share/iram..."
-cp -a "${REPO_ROOT}/bin" "${STAGE_DIR}/usr/share/iram/"
-cp -a "${REPO_ROOT}/config" "${STAGE_DIR}/usr/share/iram/"
-cp -a "${REPO_ROOT}/themes" "${STAGE_DIR}/usr/share/iram/"
-cp -a "${REPO_ROOT}/system" "${STAGE_DIR}/usr/share/iram/"
-cp -a "${REPO_ROOT}/migrations" "${STAGE_DIR}/usr/share/iram/"
-if [ -d "${REPO_ROOT}/assets" ]; then cp -a "${REPO_ROOT}/assets" "${STAGE_DIR}/usr/share/iram/"; fi
-if [ -d "${REPO_ROOT}/applications" ]; then cp -a "${REPO_ROOT}/applications" "${STAGE_DIR}/usr/share/iram/"; fi
+as_depends() { # file: one package per line, comments allowed
+    grep -vE '^\s*(#|$)' "$1" | paste -sd, | sed 's/,/, /g'
+}
 
-# Ensure executable permissions on all binaries
-find "${STAGE_DIR}/usr/share/iram/bin" -type f -exec chmod 0755 {} +
+echo "Building IRAM OS packages, version $VERSION:"
 
-# 3. Expose Binaries to /usr/bin
-echo "Copying all IRAM and Craft binaries to /usr/bin..."
-for b in "${REPO_ROOT}/bin/"*; do
-    if [ -f "$b" ] || [ -L "$b" ]; then
-        cp -a "$b" "${STAGE_DIR}/usr/bin/"
-    fi
+# ---- iram-themes ---------------------------------------------------------------
+new_stage iram-themes
+mkdir -p "$STAGE/usr/share/iram"
+cp -a "$REPO_ROOT/themes" "$STAGE/usr/share/iram/"
+write_control iram-themes "" "" "IRAM OS theme palettes and wallpapers
+ Color palettes, wallpapers and previews for the IRAM OS live theme engine."
+build_package iram-themes
+
+# ---- iram-desktop --------------------------------------------------------------
+new_stage iram-desktop
+mkdir -p "$STAGE/usr/bin" "$STAGE/usr/share/iram" "$STAGE/usr/share/wayland-sessions" \
+    "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/128x128/apps" \
+    "$STAGE/usr/lib/systemd/user" "$STAGE/usr/lib/systemd/system" \
+    "$STAGE/etc/profile.d" "$STAGE/etc/sudoers.d" "$STAGE/etc/sysctl.d" "$STAGE/etc/modules-load.d"
+
+for component in bin config default system migrations mcp packages applications; do
+    cp -a "$REPO_ROOT/$component" "$STAGE/usr/share/iram/"
 done
-find "${STAGE_DIR}/usr/bin" -type f -exec chmod 0755 {} +
-
-# Universal agent launcher 'a'
-if [ -f "${REPO_ROOT}/bin/iram-agent-prompt" ]; then
-    cp -a "${REPO_ROOT}/bin/iram-agent-prompt" "${STAGE_DIR}/usr/bin/a"
-    chmod 0755 "${STAGE_DIR}/usr/bin/a"
+if [ -d "$REPO_ROOT/assets/hub" ]; then
+    mkdir -p "$STAGE/usr/share/iram/assets"
+    cp -a "$REPO_ROOT/assets/hub" "$STAGE/usr/share/iram/assets/"
 fi
 
-# 4. Desktop Sessions & Environment
-if [ -f "${REPO_ROOT}/system/iram.desktop" ]; then
-    cp -a "${REPO_ROOT}/system/iram.desktop" "${STAGE_DIR}/usr/share/wayland-sessions/iram.desktop"
-fi
-if [ -f "${REPO_ROOT}/system/iram.conf" ]; then
-    cp -a "${REPO_ROOT}/system/iram.conf" "${STAGE_DIR}/etc/iram.conf"
-fi
-if [ -f "${REPO_ROOT}/system/iram.sh" ]; then
-    cp -a "${REPO_ROOT}/system/iram.sh" "${STAGE_DIR}/etc/profile.d/iram.sh"
-    chmod 0644 "${STAGE_DIR}/etc/profile.d/iram.sh"
-fi
-if [ -f "${REPO_ROOT}/system/sudoers.d/iram-theme-browser" ]; then
-    cp -a "${REPO_ROOT}/system/sudoers.d/iram-theme-browser" "${STAGE_DIR}/etc/sudoers.d/iram-theme-browser"
-    chmod 0440 "${STAGE_DIR}/etc/sudoers.d/iram-theme-browser"
-fi
+# One copy of each script: /usr/bin links into /usr/share/iram/bin, so that a
+# script's relative lookups (iram_policy.py, assets/) resolve the same everywhere.
+find "$STAGE/usr/share/iram/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
+for script in "$REPO_ROOT"/bin/*; do
+    ln -s "../share/iram/bin/$(basename "$script")" "$STAGE/usr/bin/$(basename "$script")"
+done
+ln -s ../share/iram/bin/iram-agent-prompt "$STAGE/usr/bin/a"
 
-# 5. Desktop Entries and Application Icons
-if [ -d "${REPO_ROOT}/applications" ]; then
-    cp "${REPO_ROOT}/applications/"*.desktop "${STAGE_DIR}/usr/share/applications/" 2>/dev/null || true
-    if [ -d "${REPO_ROOT}/applications/icons" ]; then
-        cp "${REPO_ROOT}/applications/icons/"*.png "${STAGE_DIR}/usr/share/icons/hicolor/128x128/apps/" 2>/dev/null || true
+cp "$REPO_ROOT/system/iram.desktop" "$STAGE/usr/share/wayland-sessions/"
+cp "$REPO_ROOT/system/iram.conf" "$STAGE/etc/iram.conf"
+install -m 0644 "$REPO_ROOT/system/iram.sh" "$STAGE/etc/profile.d/iram.sh"
+install -m 0644 "$REPO_ROOT/system/sysctl.d/99-iram-performance.conf" "$STAGE/etc/sysctl.d/"
+install -m 0644 "$REPO_ROOT/system/modules-load.d/bbr.conf" "$STAGE/etc/modules-load.d/bbr.conf"
+install -m 0440 "$REPO_ROOT/system/sudoers.d/iram-theme-browser" "$STAGE/etc/sudoers.d/iram-theme-browser"
+install -m 0644 "$REPO_ROOT/system/iram-firstboot-auth.service" "$STAGE/usr/lib/systemd/system/"
+
+find "$REPO_ROOT/applications" -maxdepth 1 -name '*.desktop' -exec cp {} "$STAGE/usr/share/applications/" \;
+find "$REPO_ROOT/applications/icons" -maxdepth 1 -name '*.png' -exec cp {} "$STAGE/usr/share/icons/hicolor/128x128/apps/" \;
+cp -a "$REPO_ROOT/config/systemd/user/." "$STAGE/usr/lib/systemd/user/"
+
+# dpkg keeps a locally edited conffile across upgrades instead of overwriting it.
+(cd "$STAGE" && find etc -type f | sed 's|^|/|') > "$STAGE/DEBIAN/conffiles"
+
+write_control iram-desktop "$(as_depends "$REPO_ROOT/packages/desktop.list"), iram-themes (= $VERSION)" "" \
+"IRAM OS Hyprland desktop session
+ Hyprland session with managed systemd user services, a live theme engine,
+ hardware-aware GPU configuration, config snapshots and a tiered MCP server."
+
+cat > "$STAGE/DEBIAN/postinst" << 'SCRIPT'
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    # A sudoers fragment with bad syntax can disable sudo for the whole machine.
+    if ! visudo -cf /etc/sudoers.d/iram-theme-browser >/dev/null 2>&1; then
+        echo "iram-desktop: removing invalid sudoers fragment" >&2
+        rm -f /etc/sudoers.d/iram-theme-browser
     fi
+    grep -q '^IRAM_PATH=' /etc/environment 2>/dev/null || echo "IRAM_PATH=/usr/share/iram" >> /etc/environment
+    command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor || true
+    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
+    sysctl -q -p /etc/sysctl.d/99-iram-performance.conf >/dev/null 2>&1 || true
+    iram-install-nerd-font || echo "iram-desktop: run 'sudo iram-install-nerd-font' for Waybar icons." >&2
+    # Per-user dotfiles are not touched here, since this runs as root.
+    # hyprland-start provisions them at each user's first login.
 fi
-
-# 5b. Systemd User Services and Daemons
-if [ -d "${REPO_ROOT}/systemd/user" ]; then
-    echo "Installing systemd user unit definitions..."
-    cp -a "${REPO_ROOT}/systemd/user/"* "${STAGE_DIR}/usr/lib/systemd/user/"
-fi
-
-# 6. Generate DEBIAN/control
-echo "Writing package control manifest..."
-cat << EOF > "${STAGE_DIR}/DEBIAN/control"
-Package: ${PKG_NAME}
-Version: ${VERSION}
-Section: x11
-Priority: optional
-Architecture: ${ARCH}
-Maintainer: Pravin <apravint@gmail.com>
-Depends: hyprland, waybar, wofi, swaybg, swaylock, mako-notifier, grim, slurp, wl-clipboard, cliphist, playerctl, alacritty, btop, tesseract-ocr, ripgrep, fd-find, tmux, fzf, zoxide, eza, bat, jq, curl, wlsunset, python3, python3-pip, python3-gi, gir1.2-gtk-3.0, pavucontrol, blueman, polkit-kde-agent-1, socat
-Recommends: ollama, mpv, fastmcp, qdrant-client, brightnessctl, ddcutil
-Homepage: https://github.com/apravint/iram-os
-Description: IRAM OS Desktop - Sovereign Autonomous Agentic Linux
- IRAM OS is an agentic Linux operating environment built on Ubuntu 26.10
- and Hyprland, tailored for digital artists, engineers, and AI pair programming.
- Features the Storytold Creative Suite, live zero-restart theming, PipeWire
- hardware DSP studio audio tuning, non-destructive migrations, and first-class
- AI coding agent orchestration.
-EOF
-
-# 7. Generate DEBIAN/postinst
-cat << 'EOF' > "${STAGE_DIR}/DEBIAN/postinst"
-#!/bin/bash
-set -e
-
-# Setup global environment variable
-if ! grep -q "IRAM_PATH" /etc/environment 2>/dev/null; then
-    echo "IRAM_PATH=/usr/share/iram" >> /etc/environment
-fi
-
-# Refresh desktop databases
-if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-fi
-if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database /usr/share/applications 2>/dev/null || true
-fi
-
-# Run baseline migrations if user is active
-if [ -x "/usr/bin/iram-migrate" ]; then
-    /usr/bin/iram-migrate run 2>/dev/null || true
-fi
-
-# Reload systemd user daemon definitions if available
-if command -v systemctl >/dev/null 2>&1; then
-    systemctl --global daemon-reload 2>/dev/null || true
-fi
-
 exit 0
-EOF
-chmod 0755 "${STAGE_DIR}/DEBIAN/postinst"
-
-# 8. Generate DEBIAN/prerm
-cat << 'EOF' > "${STAGE_DIR}/DEBIAN/prerm"
-#!/bin/bash
+SCRIPT
+cat > "$STAGE/DEBIAN/postrm" << 'SCRIPT'
+#!/bin/sh
 set -e
-
-if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-    rm -f /usr/share/wayland-sessions/iram.desktop
+if [ "$1" = purge ]; then
+    sed -i '/^IRAM_PATH=/d' /etc/environment 2>/dev/null || true
 fi
-
 exit 0
-EOF
-chmod 0755 "${STAGE_DIR}/DEBIAN/prerm"
+SCRIPT
+chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
+build_package iram-desktop
 
-# 9. Build the Debian Archive with dpkg-deb
-echo -e "\n${YELLOW}Compiling Debian archive (.deb)...${NC}"
-dpkg-deb --build --root-owner-group "${STAGE_DIR}" "${OUTPUT_DIR}/${FULL_PKG_NAME}.deb"
+# ---- iram-ai -------------------------------------------------------------------
+new_stage iram-ai
+write_control iram-ai "iram-desktop (= $VERSION), python3-venv" "tesseract-ocr, nodejs" \
+"IRAM OS agent stack integration
+ Pulls in the requirements of the context assistant and the MCP servers.
+ Run 'iram ai-setup' after installing to choose local models for this hardware."
+build_package iram-ai
 
-# 10. Verify Package
-DEB_FILE="${OUTPUT_DIR}/${FULL_PKG_NAME}.deb"
-SIZE=$(du -h "${DEB_FILE}" | cut -f1)
-MD5=$(md5sum "${DEB_FILE}" | cut -d' ' -f1)
+# ---- iram-os -------------------------------------------------------------------
+new_stage iram-os
+write_control iram-os "iram-desktop (= $VERSION), iram-themes (= $VERSION), iram-ai (= $VERSION)" "" \
+"IRAM OS complete desktop (metapackage)
+ Installs the IRAM OS desktop, themes and agent stack."
+build_package iram-os
 
-echo -e "\n${GREEN}✔ Package Built Successfully!${NC}"
-echo -e "  File:   ${BOLD}${DEB_FILE}${NC}"
-echo -e "  Size:   ${BOLD}${SIZE}${NC}"
-echo -e "  MD5:    ${BOLD}${MD5}${NC}"
-echo -e "\nTo install on any Ubuntu/Debian system:"
-echo -e "  ${CYAN}sudo apt install ${DEB_FILE}${NC}"
+echo "Done: $OUTPUT_DIR. Publish with: build/publish-apt-repo.sh $OUTPUT_DIR <repo-dir>"

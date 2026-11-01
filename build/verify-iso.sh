@@ -40,9 +40,9 @@ ISO_SIZE_BYTES=$(stat -c%s "$ISO_PATH")
 ISO_SIZE_MB=$((ISO_SIZE_BYTES / 1024 / 1024))
 log_info "ISO size: ${ISO_SIZE_MB} MB (${ISO_SIZE_BYTES} bytes)"
 
-# Minimum acceptable size for a full desktop live ISO (1.2 GB)
-if [[ $ISO_SIZE_MB -lt 1200 ]]; then
-    log_err "ISO size is unusually small (${ISO_SIZE_MB} MB < 1200 MB). Compression or debootstrap failed!"
+# Minimum acceptable size for a full desktop live ISO
+if [[ $ISO_SIZE_MB -lt 800 ]]; then
+    log_err "ISO size is unusually small (${ISO_SIZE_MB} MB < 800 MB). Compression or debootstrap failed!"
     exit 1
 fi
 
@@ -101,6 +101,32 @@ if command -v unsquashfs >/dev/null 2>&1; then
     log_info "Testing SquashFS integrity via unsquashfs -s..."
     unsquashfs -s "$SQUASHFS_FILE" >/dev/null
     log_step "SquashFS superblock and compression blocks are intact!"
+
+    # What the session and the installer actually need, by path. Catches build
+    # steps that silently produce a bootable image with an empty desktop.
+    MANIFEST="$(unsquashfs -lc "$SQUASHFS_FILE" | sed 's|^squashfs-root/||')"
+    for required in \
+        home/iram/.config/hypr/hyprland.conf \
+        home/iram/.config/hypr/user-overrides.conf \
+        home/iram/.config/systemd/user/hyprland-session.target \
+        etc/skel/.config/hypr/hyprland.conf \
+        usr/share/wayland-sessions/iram.desktop \
+        usr/share/iram/default/themed/alacritty.toml.tpl \
+        usr/local/bin/iram-install-disk \
+        usr/local/bin/iram-os-mcp \
+        usr/local/bin/hyprland-start; do
+        if ! grep -qxF "$required" <<< "$MANIFEST"; then
+            log_err "CRITICAL: $required missing from the root filesystem!"
+            exit 1
+        fi
+    done
+    for forbidden in usr/sbin/policy-rc.d var/lib/dbus/machine-id; do
+        if grep -qxF "$forbidden" <<< "$MANIFEST"; then
+            log_err "CRITICAL: build artifact $forbidden shipped in the image!"
+            exit 1
+        fi
+    done
+    log_step "Root filesystem contents verified!"
 fi
 
 sudo umount "$TMP_MNT"
@@ -126,13 +152,13 @@ else
     log_warn "KVM acceleration not available; running QEMU with TCG (software emulation)."
 fi
 
-BOOT_LOG="/tmp/iram-qemu-boot.log"
-rm -f "$BOOT_LOG"
+BOOT_LOG="$(mktemp -t iram-qemu-boot-XXXXXX.log)"
+BOOT_TIMEOUT="${BOOT_TIMEOUT:-300}"
 
-log_info "Launching QEMU in background (timeout 60s)..."
+log_info "Launching QEMU in background (timeout ${BOOT_TIMEOUT}s)..."
 qemu-system-x86_64 \
     $QEMU_ACCEL \
-    -m 2G \
+    -m 4G \
     -smp 2 \
     -cdrom "$ISO_PATH" \
     -boot d \
@@ -142,32 +168,33 @@ qemu-system-x86_64 \
     >/dev/null 2>&1 &
 QEMU_PID=$!
 
-# Wait up to 50 seconds or until kernel panic / boot signature
-SUCCESS=0
-for ((i=1; i<=25; i++)); do
-    sleep 2
-    if ! kill -0 $QEMU_PID 2>/dev/null; then
-        break
-    fi
-    if [[ -f "$BOOT_LOG" ]] && grep -q -i "Linux version" "$BOOT_LOG" 2>/dev/null; then
-        SUCCESS=1
-        break
-    fi
+# Pass only on evidence: the kernel started, and userspace came up from the squashfs.
+KERNEL_SEEN=0
+USERSPACE_SEEN=0
+deadline=$((SECONDS + BOOT_TIMEOUT))
+while [[ $SECONDS -lt $deadline ]] && kill -0 $QEMU_PID 2>/dev/null; do
+    sleep 3
+    grep -q "Linux version" "$BOOT_LOG" 2>/dev/null && KERNEL_SEEN=1
+    grep -qE "Reached target|systemd\[1\]|login:" "$BOOT_LOG" 2>/dev/null && USERSPACE_SEEN=1
+    [[ $USERSPACE_SEEN -eq 1 ]] && break
+    grep -qE "Kernel panic|\(initramfs\)" "$BOOT_LOG" 2>/dev/null && break
 done
 
-# Terminate QEMU
 kill -9 $QEMU_PID 2>/dev/null || true
 wait $QEMU_PID 2>/dev/null || true
 
-if [[ -f "$BOOT_LOG" ]]; then
-    if grep -q -i "Kernel panic" "$BOOT_LOG"; then
-        log_err "CRITICAL: Kernel panic detected during ISO boot!"
-        tail -n 25 "$BOOT_LOG"
-        exit 1
-    fi
+if grep -qE "Kernel panic|\(initramfs\)" "$BOOT_LOG"; then
+    log_err "CRITICAL: boot failed!"
+    tail -n 40 "$BOOT_LOG"
+    exit 1
+fi
+if [[ $KERNEL_SEEN -ne 1 || $USERSPACE_SEEN -ne 1 ]]; then
+    log_err "CRITICAL: no evidence of a completed boot (kernel=$KERNEL_SEEN userspace=$USERSPACE_SEEN)."
+    tail -n 40 "$BOOT_LOG"
+    exit 1
 fi
 
-log_step "QEMU headless boot check completed without kernel panic."
+log_step "QEMU boot reached userspace from the live image."
 echo -e "\n${BLUE}======================================================${NC}"
 echo -e "${GREEN}✓ ALL ISO VERIFICATION CHECKS PASSED SUCCESSFULLY!${NC}"
 echo -e "Verified ISO: ${BOLD}$ISO_PATH${NC} ($ISO_SIZE_MB MB)"

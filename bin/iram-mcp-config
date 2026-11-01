@@ -41,18 +41,29 @@ def inject_config(filepath: str, label: str):
         try:
             with open(expanded, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except Exception:
-            data = {}
+        except Exception as e:
+            print(f"  {RED}✗ Skipped {expanded}: not valid JSON ({e}). Left untouched.{NC}")
+            return
+
+    if not isinstance(data, dict):
+        print(f"  {RED}✗ Skipped {expanded}: top level is not an object. Left untouched.{NC}")
+        return
 
     if "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
         data["mcpServers"] = {}
 
     data["mcpServers"]["iram_system"] = CONFIG_SNIPPET["mcpServers"]["iram_system"]
 
+    tmp_path = f"{expanded}.iram-tmp"
     try:
-        with open(expanded, "w", encoding="utf-8") as f:
+        if os.path.exists(expanded):
+            shutil.copy2(expanded, f"{expanded}.iram-bak")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
+        if os.path.exists(expanded):
+            shutil.copymode(expanded, tmp_path)
+        os.replace(tmp_path, expanded)
         print(f"  {GREEN}✓ Injected iram_system into {label}:{NC} {expanded}")
     except Exception as e:
         print(f"  {RED}✗ Failed writing to {expanded}: {e}{NC}")

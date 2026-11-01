@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Toolkit Theme Sync (iram-theme-set-toolkits)
+# Keeps GTK 3/4, Qt 5/6 and the cursor in step with the active theme, so a light
+# or dark switch reaches apps that never read Hyprland's or Waybar's colors.
+# Usage: iram-theme-set-toolkits [path/to/colors.toml]
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+COLORS_FILE="${1:-$HOME/.local/state/iram/current/theme/colors.toml}"
+[ -f "$COLORS_FILE" ] || { echo "iram-theme-set-toolkits: $COLORS_FILE not found" >&2; exit 1; }
+
+color() { iram-theme-color --file "$COLORS_FILE" "$1"; }
+
+MODE="$(color mode || echo dark)"
+if [ "$MODE" = light ]; then
+    COLOR_SCHEME=prefer-light; GTK_THEME=Adwaita; GTK_PREFER_DARK=0
+else
+    COLOR_SCHEME=prefer-dark; GTK_THEME=Adwaita-dark; GTK_PREFER_DARK=1
+fi
+
+CURSOR_THEME="${XCURSOR_THEME:-Adwaita}"
+CURSOR_SIZE="${XCURSOR_SIZE:-24}"
+FONT_NAME="JetBrainsMono Nerd Font 10"
+
+# 1. Portal-aware apps and GTK apps with a live settings daemon
+if command -v gsettings >/dev/null 2>&1; then
+    gsettings set org.gnome.desktop.interface color-scheme "$COLOR_SCHEME" 2>/dev/null || true
+    gsettings set org.gnome.desktop.interface gtk-theme "$GTK_THEME" 2>/dev/null || true
+    gsettings set org.gnome.desktop.interface cursor-theme "$CURSOR_THEME" 2>/dev/null || true
+    gsettings set org.gnome.desktop.interface cursor-size "$CURSOR_SIZE" 2>/dev/null || true
+fi
+
+# 2. GTK apps started without a settings daemon, including XWayland ones
+for version in 3.0 4.0; do
+    mkdir -p "$HOME/.config/gtk-$version"
+    cat > "$HOME/.config/gtk-$version/settings.ini" << EOF
+[Settings]
+gtk-application-prefer-dark-theme=$GTK_PREFER_DARK
+gtk-theme-name=$GTK_THEME
+gtk-cursor-theme-name=$CURSOR_THEME
+gtk-cursor-theme-size=$CURSOR_SIZE
+gtk-font-name=$FONT_NAME
+EOF
+done
+
+# 3. XWayland apps resolve their cursor through the "default" icon theme
+mkdir -p "$HOME/.icons/default"
+cat > "$HOME/.icons/default/index.theme" << EOF
+[Icon Theme]
+Name=Default
+Inherits=$CURSOR_THEME
+EOF
+
+# 4. Qt 5/6: a color scheme generated from the palette, using the Fusion style
+BG="$(color background)"; FG="$(color foreground)"; ACCENT="$(color accent)"
+ALT="$(color lighter_background)"; MUTED="$(color muted)"; SEL_FG="$(color selection_foreground)"
+
+qt_palette() {
+    # active/normal order: window text, button, light, midlight, dark, mid, text, bright text,
+    # button text, base, window, shadow, highlight, highlighted text, link, visited link,
+    # alternate base, default, tooltip base, tooltip text, placeholder text
+    printf '%s' "#ff${FG#\#}, #ff${ALT#\#}, #ff${ALT#\#}, #ff${ALT#\#}, #ff${BG#\#}, #ff${MUTED#\#}, #ff${FG#\#}, #ff${FG#\#}, #ff${FG#\#}, #ff${BG#\#}, #ff${BG#\#}, #ff000000, #ff${ACCENT#\#}, #ff${SEL_FG#\#}, #ff${ACCENT#\#}, #ff${ACCENT#\#}, #ff${ALT#\#}, #ff${BG#\#}, #ff${ALT#\#}, #ff${FG#\#}, #ff${MUTED#\#}"
+}
+
+for qt in qt5ct qt6ct; do
+    QT_DIR="$HOME/.config/$qt"
+    mkdir -p "$QT_DIR/colors"
+    SCHEME="$QT_DIR/colors/iram.conf"
+    {
+        echo "[ColorScheme]"
+        echo "active_colors=$(qt_palette)"
+        echo "disabled_colors=$(qt_palette)"
+        echo "inactive_colors=$(qt_palette)"
+    } > "$SCHEME"
+    # Only our keys change; other qtct preferences the user set are left alone.
+    CONF="$QT_DIR/$qt.conf"
+    [ -f "$CONF" ] || printf '[Appearance]\n' > "$CONF"
+    for setting in "custom_palette=true" "color_scheme_path=$SCHEME" "style=Fusion"; do
+        key="${setting%%=*}"
+        if grep -q "^$key=" "$CONF"; then
+            sed -i "s|^$key=.*|$setting|" "$CONF"
+        elif grep -q '^\[Appearance\]' "$CONF"; then
+            sed -i "/^\[Appearance\]/a $setting" "$CONF"
+        else
+            printf '\n[Appearance]\n%s\n' "$setting" >> "$CONF"
+        fi
+    done
+done

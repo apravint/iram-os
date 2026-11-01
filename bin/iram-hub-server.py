@@ -15,6 +15,9 @@ import subprocess
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from iram_policy import check_local_request, is_safe_dispatcher
+
 # Import Sovereign Ecosystem Modules
 try:
     import smart_router.cache
@@ -41,19 +44,32 @@ def resolve_bin(name: str) -> str:
 
 PORT = int(os.environ.get("IRAM_HUB_PORT", 8990))
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "assets", "hub"))
+if not os.path.isdir(BASE_DIR):
+    BASE_DIR = os.path.join(os.environ.get("IRAM_PATH", "/usr/share/iram"), "assets", "hub")
 
 class SovereignHubHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
+    def refuse_foreign_request(self, require_json=False):
+        """Answers 403 and returns True when a web page forged this request."""
+        reason = check_local_request(self.headers, require_json=require_json)
+        if reason is None:
+            return False
+        self.send_response(403)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"ok": False, "error": reason}).encode("utf-8"))
+        return True
+
     def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # The Hub UI is same-origin and never preflights; everyone else is refused.
+        self.send_response(403)
         self.end_headers()
 
     def do_POST(self):
+        if self.refuse_foreign_request(require_json=True):
+            return
         parsed = urlparse(self.path)
         path = parsed.path
         content_len = int(self.headers.get("Content-Length", 0))
@@ -69,7 +85,6 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
 
@@ -116,10 +131,12 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         if not path.startswith("/api/"):
             return super().do_GET()
 
+        if self.refuse_foreign_request():
+            return
+
         # Handle API Endpoints
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
 
@@ -509,6 +526,8 @@ class SovereignHubHandler(SimpleHTTPRequestHandler):
         }
 
     def handle_hypr(self, dispatcher, args):
+        if not is_safe_dispatcher(dispatcher):
+            return {"ok": False, "error": f"Dispatcher '{dispatcher}' is not allowed"}
         cmd = ["hyprctl", "dispatch", dispatcher]
         if args:
             cmd.append(args)

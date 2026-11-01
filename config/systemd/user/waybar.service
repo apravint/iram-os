@@ -2,14 +2,16 @@
 Description=Waybar Status Bar
 PartOf=graphical-session.target
 After=graphical-session.target
+Requisite=graphical-session.target
 StartLimitIntervalSec=60
 StartLimitBurst=15
-
 [Service]
 Type=simple
-ExecStartPre=/bin/bash -c 'for i in {1..30}; do hyprctl monitors 2>/dev/null | grep -q "Monitor " && exit 0; sleep 1; done; exit 0'
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStartPre=/usr/bin/env iram-wait-compositor 30
 ExecStart=/usr/bin/waybar
-Restart=always
+ExecReload=/bin/kill -SIGUSR2 $MAINPID
+Restart=on-failure
 RestartSec=2s
 
 [Install]

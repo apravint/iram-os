@@ -1,22 +1,43 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# IRAM OS - Atomic Config Snapshots & Instant Rollback (iram-snapshot)
-# Creates compressed, timestamped snapshots of core desktop configurations
-# (~/.config/hypr, waybar, wofi, alacritty, systemd/user) and enables
-# 1-second instant rollback if changes break the desktop environment.
+# IRAM OS - Atomic Config Snapshots & Rollback (iram-snapshot)
+#
+# Create writes to a temp file, verifies it, then renames it into place: a
+# crash or a full disk cannot leave a damaged snapshot in the list.
+#
+# Restore extracts into a staging directory on the same filesystem, checks it,
+# and swaps each config directory by rename. Files added since the snapshot are
+# removed rather than merged, and any failure rolls the swap back.
+#
+# Machine state is out of scope: `--timeshift` asks Timeshift for that.
 # ==============================================================================
 set -euo pipefail
 
 SNAPSHOT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/iram-os/snapshots"
 mkdir -p "${SNAPSHOT_DIR}"
+chmod 700 "${SNAPSHOT_DIR}"
 
-CONFIGS=(
-    "$HOME/.config/hypr"
-    "$HOME/.config/waybar"
-    "$HOME/.config/wofi"
-    "$HOME/.config/alacritty"
-    "$HOME/.config/systemd/user"
+# Relative to $HOME. Only these paths may be restored from an archive.
+TARGETS=(
+    ".config/hypr"
+    ".config/waybar"
+    ".config/wofi"
+    ".config/swaync"
+    ".config/alacritty"
+    ".config/cava"
+    ".config/btop"
+    ".config/fastfetch"
+    ".config/gtk-3.0"
+    ".config/gtk-4.0"
+    ".config/qt5ct"
+    ".config/qt6ct"
+    ".config/xdg-desktop-portal"
+    ".config/systemd/user"
+    ".config/iram/agent"
+    ".config/iram/hooks"
+    ".local/state/iram/current/theme.name"
 )
+AUTO_KEEP=10
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -27,220 +48,288 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 notify() {
-    local title="$1"
-    local msg="$2"
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send -a "IRAM Snapshot" "${title}" "${msg}" 2>/dev/null || true
+        notify-send -a "IRAM Snapshot" "$1" "$2" 2>/dev/null || true
     fi
 }
 
 get_active_theme() {
-    local theme_file="$HOME/.local/state/iram/current/theme.name"
-    if [[ -f "${theme_file}" ]]; then
-        cat "${theme_file}"
-    else
-        echo "Default"
+    cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "Default"
+}
+
+sanitize_label() {
+    local cleaned
+    cleaned="$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"
+    echo "${cleaned:0:48}"
+}
+
+decompress_flag() {
+    case "$1" in
+        *.tar.zst) echo "--zstd" ;;
+        *.tar.gz) echo "--gzip" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Accept only member paths under TARGETS, so a tampered or hand-copied archive
+# cannot write through ../ or an absolute path into the rest of $HOME.
+verify_archive() {
+    local archive="$1" flag member target allowed
+    flag="$(decompress_flag "$archive")" || { echo "Unsupported archive type: $archive" >&2; return 1; }
+    while IFS= read -r member; do
+        case "$member" in
+            /*|../*|*/../*|*/..) echo "Unsafe path in archive: $member" >&2; return 1 ;;
+        esac
+        allowed=false
+        for target in "${TARGETS[@]}"; do
+            case "${member%/}" in
+                "$target"|"$target"/*) allowed=true; break ;;
+            esac
+        done
+        # Parents of a target appear as their own entries in some tar versions.
+        case " ${TARGETS[*]} " in
+            *" ${member%/}/"*) allowed=true ;;
+        esac
+        if [ "$allowed" != true ]; then
+            echo "Unexpected path in archive: $member" >&2
+            return 1
+        fi
+    done < <(tar "$flag" -tf "$archive")
+    # A symlink member could redirect a later extraction outside the staging tree.
+    if tar "$flag" -tvf "$archive" | awk '$1 ~ /^h/ || ($1 ~ /^l/ && ($NF ~ /^\// || $NF ~ /\.\./)) {found=1} END {exit !found}'; then
+        echo "Archive holds links that escape the snapshot tree." >&2
+        return 1
     fi
 }
 
 cmd_create() {
-    local label="${1:-manual}"
-    label=$(echo "${label}" | tr ' /:;' '____')
-    local ts
-    ts="$(date +%Y%m%d_%H%M%S)"
-    local current_theme
-    current_theme="$(get_active_theme)"
-
-    local ext="tar.gz"
-    local tar_cmd=("tar" "-czf")
-    if command -v zstd >/dev/null 2>&1; then
-        ext="tar.zst"
-        tar_cmd=("tar" "--zstd" "-cf")
-    fi
-
-    local archive_name="iram_snapshot_${ts}_${label}.${ext}"
-    local archive_path="${SNAPSHOT_DIR}/${archive_name}"
-    local meta_path="${SNAPSHOT_DIR}/iram_snapshot_${ts}_${label}.json"
-
-    # Collect existing targets relative to $HOME
-    local targets=()
-    for dir in "${CONFIGS[@]}"; do
-        if [[ -e "${dir}" ]]; then
-            local rel_path=".config/$(basename "${dir}")"
-            if [[ -e "$HOME/${rel_path}" ]]; then
-                targets+=("${rel_path}")
-            fi
-        fi
+    local label timeshift=false
+    label="manual"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --timeshift) timeshift=true ;;
+            *) label="$(sanitize_label "$1")" ;;
+        esac
+        shift
     done
 
-    if [[ ${#targets[@]} -eq 0 ]]; then
-        echo -e "${RED}[ERROR]${NC} No target configuration directories found in ~/.config/"
+    local ts base ext="tar.gz" compress=(--gzip)
+    ts="$(date +%Y%m%d_%H%M%S)"
+    base="iram_snapshot_${ts}_${label}"
+    if command -v zstd >/dev/null 2>&1; then
+        ext="tar.zst"
+        compress=(--zstd)
+    fi
+    # Two snapshots in the same second must not overwrite each other.
+    local n=1
+    while [ -e "${SNAPSHOT_DIR}/${base}.${ext}" ]; do
+        base="iram_snapshot_${ts}_${label}-$n"
+        n=$((n + 1))
+    done
+
+    local targets=() rel
+    for rel in "${TARGETS[@]}"; do
+        if [ -e "$HOME/$rel" ]; then targets+=("$rel"); fi
+    done
+    if [ ${#targets[@]} -eq 0 ]; then
+        echo -e "${RED}[ERROR]${NC} No configuration found to snapshot." >&2
         return 1
     fi
 
-    echo -e "${BLUE}[SNAPSHOT]${NC} Creating atomic archive of: ${targets[*]}..."
-    (cd "$HOME" && "${tar_cmd[@]}" "${archive_path}" "${targets[@]}")
+    local tmp
+    tmp="$(mktemp -p "${SNAPSHOT_DIR}" .creating-XXXXXX)"
+    echo -e "${BLUE}[SNAPSHOT]${NC} Archiving ${#targets[@]} paths..."
+    if ! tar -C "$HOME" "${compress[@]}" -cf "$tmp" "${targets[@]}"; then
+        rm -f "$tmp"
+        echo -e "${RED}[ERROR]${NC} Could not create the archive." >&2
+        return 1
+    fi
+    if ! tar "${compress[@]}" -tf "$tmp" >/dev/null; then
+        rm -f "$tmp"
+        echo -e "${RED}[ERROR]${NC} The new archive failed verification." >&2
+        return 1
+    fi
+    chmod 600 "$tmp"
 
-    local size
-    size="$(du -h "${archive_path}" | cut -f1)"
+    local archive_path="${SNAPSHOT_DIR}/${base}.${ext}" size meta_tmp
+    size="$(du -h "$tmp" | cut -f1)"
+    meta_tmp="$(mktemp -p "${SNAPSHOT_DIR}" .creating-XXXXXX)"
+    jq -n --arg ts "$ts" --arg label "$label" --arg archive "${base}.${ext}" --arg size "$size" \
+        --arg theme "$(get_active_theme)" --arg created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{timestamp:$ts, label:$label, archive:$archive, size:$size, theme:$theme, created_at:$created}' > "$meta_tmp"
+    mv "$tmp" "$archive_path"
+    mv "$meta_tmp" "${SNAPSHOT_DIR}/${base}.json"
 
-    cat << EOF > "${meta_path}"
-{
-  "timestamp": "${ts}",
-  "label": "${label}",
-  "archive": "${archive_name}",
-  "size": "${size}",
-  "theme": "${current_theme}",
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-EOF
-
-    echo -e "${GREEN}✓ Snapshot created successfully!${NC}"
+    echo -e "${GREEN}✓ Snapshot created${NC}"
     echo -e "  File : ${BOLD}${archive_path}${NC} (${size})"
-    echo -e "  Label: ${CYAN}${label}${NC} | Theme: ${YELLOW}${current_theme}${NC}"
+    echo -e "  Label: ${CYAN}${label}${NC} | Theme: ${YELLOW}$(get_active_theme)${NC}"
     notify "Snapshot Created" "Saved ${label} (${size})"
+    SNAPSHOT_RESULT="$archive_path"
 
-    # Optional timeshift hook
-    if [[ "${2:-}" == "--timeshift" ]] || [[ "${label}" == *"system"* ]]; then
+    if [ "$timeshift" = true ]; then
         if command -v timeshift >/dev/null 2>&1; then
-            echo -e "${BLUE}[TIMESHIFT]${NC} Creating host system-level snapshot..."
-            sudo timeshift --create --comments "IRAM OS (${label})" || true
+            echo -e "${BLUE}[TIMESHIFT]${NC} Creating system-level snapshot..."
+            sudo timeshift --create --comments "IRAM OS (${label})"
+        else
+            echo -e "${YELLOW}Timeshift is not installed; only the config snapshot was taken.${NC}"
         fi
     fi
 }
 
 cmd_list() {
-    echo -e "${BOLD}${CYAN}=== IRAM OS DESKTOP CONFIG SNAPSHOTS ===${NC}"
-    echo -e "Location: ${SNAPSHOT_DIR}\n"
-
-    local count=0
-    printf "%-18s | %-20s | %-8s | %-16s | %s\n" "TIMESTAMP" "LABEL" "SIZE" "THEME" "FILE"
-    echo "-------------------+----------------------+----------+------------------+-----------------------------------"
-
+    local meta count=0 json=false
+    [ "${1:-}" = "--json" ] && json=true
     shopt -s nullglob
     local meta_files=("${SNAPSHOT_DIR}"/iram_snapshot_*.json)
     shopt -u nullglob
 
-    if [[ ${#meta_files[@]} -eq 0 ]]; then
-        echo "No snapshots recorded yet."
+    if [ "$json" = true ]; then
+        if [ ${#meta_files[@]} -eq 0 ]; then echo "[]"; else jq -s '.' "${meta_files[@]}"; fi
         return 0
     fi
 
-    for mf in "${meta_files[@]}"; do
-        if command -v jq >/dev/null 2>&1; then
-            local ts label sz th arch
-            ts="$(jq -r '.timestamp // "N/A"' "$mf")"
-            label="$(jq -r '.label // "N/A"' "$mf")"
-            sz="$(jq -r '.size // "N/A"' "$mf")"
-            th="$(jq -r '.theme // "N/A"' "$mf")"
-            arch="$(jq -r '.archive // "N/A"' "$mf")"
-            printf "%-18s | %-20s | %-8s | %-16s | %s\n" "$ts" "$label" "$sz" "$th" "$arch"
-            count=$((count + 1))
-        fi
+    echo -e "${BOLD}${CYAN}=== IRAM OS DESKTOP CONFIG SNAPSHOTS ===${NC}"
+    echo -e "Location: ${SNAPSHOT_DIR}\n"
+    if [ ${#meta_files[@]} -eq 0 ]; then
+        echo "No snapshots recorded yet."
+        return 0
+    fi
+    printf "%-18s | %-20s | %-8s | %-16s | %s\n" "TIMESTAMP" "LABEL" "SIZE" "THEME" "FILE"
+    for meta in "${meta_files[@]}"; do
+        jq -r '[.timestamp, .label, .size, .theme, .archive] | @tsv' "$meta" | \
+            awk -F'\t' '{printf "%-18s | %-20s | %-8s | %-16s | %s\n", $1, $2, $3, $4, $5}'
+        count=$((count + 1))
     done
-    echo ""
-    echo "Total snapshots: ${count}"
+    echo -e "\nTotal snapshots: ${count}"
 }
 
-cmd_restore() {
-    local target="${1:-}"
-
+select_archive() {
+    local target="$1" arc idx choice sel
     shopt -s nullglob
     local archives=("${SNAPSHOT_DIR}"/iram_snapshot_*.tar.*)
     shopt -u nullglob
-
-    if [[ ${#archives[@]} -eq 0 ]]; then
-        echo -e "${RED}[ERROR]${NC} No snapshot archives available in ${SNAPSHOT_DIR}"
+    if [ ${#archives[@]} -eq 0 ]; then
+        echo -e "${RED}[ERROR]${NC} No snapshots in ${SNAPSHOT_DIR}" >&2
         return 1
     fi
 
-    local selected_archive=""
-
-    if [[ -z "${target}" ]]; then
-        # Interactive selection
-        if [[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]] && command -v wofi >/dev/null 2>&1; then
-            local options=()
-            for arc in "${archives[@]}"; do
-                options+=("$(basename "${arc}")")
-            done
-            local choice
-            choice=$(printf "%s\n" "${options[@]}" | wofi --dmenu --prompt "Select Snapshot to Restore:" --width 650 --lines 10)
-            if [[ -n "${choice}" ]]; then
-                selected_archive="${SNAPSHOT_DIR}/${choice}"
-            else
-                echo "Restore cancelled."
-                return 0
-            fi
-        else
-            echo "Available Snapshots:"
-            local idx=1
-            for arc in "${archives[@]}"; do
-                echo "  [$idx] $(basename "${arc}")"
-                idx=$((idx + 1))
-            done
-            read -r -p "Enter number to restore (or 'q' to quit): " sel
-            if [[ "$sel" =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= ${#archives[@]} )); then
-                selected_archive="${archives[$((sel - 1))]}"
-            else
-                echo "Cancelled."
-                return 0
-            fi
+    if [ -n "$target" ]; then
+        if [ "$target" = latest ]; then
+            printf '%s\n' "${archives[-1]}"
+            return 0
         fi
-    else
-        # Match target by path, filename, or substring
-        if [[ -f "${target}" ]]; then
-            selected_archive="${target}"
-        elif [[ -f "${SNAPSHOT_DIR}/${target}" ]]; then
-            selected_archive="${SNAPSHOT_DIR}/${target}"
-        else
-            for arc in "${archives[@]}"; do
-                if [[ "$(basename "${arc}")" == *"${target}"* ]]; then
-                    selected_archive="${arc}"
-                    break
-                fi
-            done
-        fi
-    fi
-
-    if [[ -z "${selected_archive}" || ! -f "${selected_archive}" ]]; then
-        echo -e "${RED}[ERROR]${NC} Snapshot archive not found: ${target}"
+        if [ -f "$target" ]; then printf '%s\n' "$target"; return 0; fi
+        if [ -f "${SNAPSHOT_DIR}/$target" ]; then printf '%s\n' "${SNAPSHOT_DIR}/$target"; return 0; fi
+        local matches=()
+        for arc in "${archives[@]}"; do
+            case "$(basename "$arc")" in *"$target"*) matches+=("$arc") ;; esac
+        done
+        if [ ${#matches[@]} -eq 1 ]; then printf '%s\n' "${matches[0]}"; return 0; fi
+        echo -e "${RED}[ERROR]${NC} '$target' matches ${#matches[@]} snapshots." >&2
         return 1
     fi
 
-    echo -e "${YELLOW}[SAFETY]${NC} Creating automatic safety checkpoint before restore..."
-    cmd_create "pre-restore-safety" >/dev/null 2>&1 || true
-
-    echo -e "${BLUE}[RESTORE]${NC} Extracting $(basename "${selected_archive}") into $HOME..."
-    tar -xf "${selected_archive}" -C "$HOME"
-
-    echo -e "${BLUE}[RELOAD]${NC} Reloading Hyprland and refreshing user services..."
-    hyprctl reload 2>/dev/null || true
-    systemctl --user daemon-reload 2>/dev/null || true
-    systemctl --user restart waybar.service swaybg.service 2>/dev/null || true
-
-    echo -e "${GREEN}✓ Desktop snapshot restored in <1s!${NC}"
-    notify "Snapshot Restored" "Restored $(basename "${selected_archive}")"
+    if [ -t 0 ]; then
+        idx=1
+        for arc in "${archives[@]}"; do
+            echo "  [$idx] $(basename "$arc")" >&2
+            idx=$((idx + 1))
+        done
+        read -r -p "Enter number to restore (or q to quit): " sel
+        if [[ "$sel" =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= ${#archives[@]} )); then
+            printf '%s\n' "${archives[$((sel - 1))]}"
+            return 0
+        fi
+    elif command -v wofi >/dev/null 2>&1; then
+        choice="$(for arc in "${archives[@]}"; do basename "$arc"; done | wofi --dmenu --prompt "Select Snapshot to Restore:" --width 650 --lines 10 || true)"
+        if [ -n "$choice" ]; then printf '%s\n' "${SNAPSHOT_DIR}/${choice}"; return 0; fi
+    fi
+    return 2
 }
 
-cmd_auto() {
-    # Create auto snapshot and prune older ones if > 10
-    cmd_create "auto"
-    
-    # Prune oldest auto snapshots exceeding 10
-    shopt -s nullglob
-    local auto_metas=("${SNAPSHOT_DIR}"/iram_snapshot_*_auto.json)
-    shopt -u nullglob
-    
-    if (( ${#auto_metas[@]} > 10 )); then
-        local excess=$(( ${#auto_metas[@]} - 10 ))
-        for (( i=0; i<excess; i++ )); do
-            local meta="${auto_metas[$i]}"
-            local arc="${meta%.json}.tar.zst"
-            [[ -f "$arc" ]] || arc="${meta%.json}.tar.gz"
-            rm -f "$meta" "$arc" 2>/dev/null || true
-        done
-        echo "Pruned ${excess} old automated snapshot(s)."
+cmd_restore() {
+    local selected status=0 no_safety=false target=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --no-safety-snapshot) no_safety=true ;;
+            *) target="$1" ;;
+        esac
+        shift
+    done
+    selected="$(select_archive "$target")" || status=$?
+    if [ "$status" -eq 2 ]; then echo "Restore cancelled."; return 0; fi
+    [ "$status" -eq 0 ] || return "$status"
+
+    verify_archive "$selected"
+
+    local staging flag
+    flag="$(decompress_flag "$selected")"
+    staging="$(mktemp -d -p "$HOME" .iram-restore-XXXXXX)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$staging'" RETURN
+    tar "$flag" -xf "$selected" -C "$staging" --no-same-owner
+
+    if [ -f "$staging/.config/hypr/hyprland.conf" ] && command -v Hyprland >/dev/null 2>&1 && [ -n "${IRAM_SNAPSHOT_VERIFY_HYPR:-}" ]; then
+        if ! HOME="$staging" Hyprland --verify-config --config "$staging/.config/hypr/hyprland.conf" >/dev/null 2>&1; then
+            echo -e "${RED}[ERROR]${NC} hyprland.conf in that snapshot does not verify." >&2
+            return 1
+        fi
     fi
+
+    if [ "$no_safety" != true ]; then
+        echo -e "${YELLOW}[SAFETY]${NC} Saving the current state before restoring..."
+        cmd_create "pre-restore-safety" >/dev/null || { echo -e "${RED}[ERROR]${NC} Safety snapshot failed; nothing was changed." >&2; return 1; }
+        echo -e "  Saved as $(basename "$SNAPSHOT_RESULT")"
+    fi
+
+    # Swap each target by rename. Targets missing from the snapshot are left alone.
+    local rel swapped=() parent failed=false
+    for rel in "${TARGETS[@]}"; do
+        [ -e "$staging/$rel" ] || continue
+        parent="$(dirname "$HOME/$rel")"
+        mkdir -p "$parent"
+        if [ -e "$HOME/$rel" ]; then
+            if ! mv -T "$HOME/$rel" "$staging/$rel.iram-old"; then failed=true; break; fi
+        fi
+        if ! mv -T "$staging/$rel" "$HOME/$rel"; then
+            if [ -e "$staging/$rel.iram-old" ]; then mv -T "$staging/$rel.iram-old" "$HOME/$rel" || true; fi
+            failed=true
+            break
+        fi
+        swapped+=("$rel")
+    done
+
+    if [ "$failed" = true ]; then
+        echo -e "${RED}[ERROR]${NC} Swap failed; rolling back." >&2
+        for rel in "${swapped[@]}"; do
+            rm -rf "${HOME:?}/$rel"
+            mv -T "$staging/$rel.iram-old" "$HOME/$rel" 2>/dev/null || true
+        done
+        return 1
+    fi
+
+    echo -e "${BLUE}[RELOAD]${NC} Reloading Hyprland and user services..."
+    if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        hyprctl reload >/dev/null 2>&1 || echo -e "${YELLOW}Notice: hyprctl reload failed.${NC}"
+        systemctl --user daemon-reload 2>/dev/null || true
+        systemctl --user try-restart waybar.service swaync.service 2>/dev/null || true
+    fi
+
+    echo -e "${GREEN}✓ Restored $(basename "$selected") (${#swapped[@]} paths)${NC}"
+    notify "Snapshot Restored" "Restored $(basename "$selected")"
+}
+
+cmd_prune() {
+    local keep="${1:-$AUTO_KEEP}" meta
+    shopt -s nullglob
+    local auto_metas=("${SNAPSHOT_DIR}"/iram_snapshot_*_auto*.json)
+    shopt -u nullglob
+    local excess=$(( ${#auto_metas[@]} - keep ))
+    [ "$excess" -gt 0 ] || return 0
+    for meta in "${auto_metas[@]:0:$excess}"; do
+        rm -f "${meta%.json}.tar.zst" "${meta%.json}.tar.gz" "$meta"
+    done
+    echo "Pruned ${excess} old automated snapshot(s)."
 }
 
 case "${1:-list}" in
@@ -249,23 +338,31 @@ case "${1:-list}" in
         cmd_create "$@"
         ;;
     list|ls)
-        cmd_list
+        shift || true
+        cmd_list "$@"
         ;;
-    restore|apply)
+    restore|apply|rollback)
         shift
         cmd_restore "$@"
         ;;
     auto)
-        cmd_auto
+        cmd_create "auto"
+        cmd_prune
+        ;;
+    prune)
+        shift
+        cmd_prune "$@"
         ;;
     --help|-h|help)
-        echo "Usage: iram snapshot [create|list|restore|auto]"
-        echo "  create [label]   Create a new desktop config snapshot"
-        echo "  list             List all saved snapshots"
-        echo "  restore [target] Restore snapshot (interactive if no target specified)"
-        echo "  auto             Automated snapshot (keeps last 10)"
+        echo "Usage: iram snapshot <command>"
+        echo "  create [label] [--timeshift]   Create a config snapshot"
+        echo "  list [--json]                  List snapshots"
+        echo "  restore [name|latest]          Atomically restore (saves current state first)"
+        echo "  auto                           Automated snapshot, keeps the last $AUTO_KEEP"
+        echo "  prune [keep]                   Delete old automated snapshots"
         ;;
     *)
-        cmd_list
+        echo "Unknown command: $1. See: iram snapshot help" >&2
+        exit 2
         ;;
 esac

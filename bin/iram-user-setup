@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Per-User Setup (iram-user-setup)
+# Installs dotfiles for the current user. Safe to re-run on every upgrade:
+#
+#  - Everything it may replace is first backed up to ~/.config/iram/backups/<ts>/
+#  - A manifest records the checksum of each file it shipped. A file the user has
+#    since edited stays as it is, and the new version lands beside it as *.iram-new
+#  - user-overrides.conf, monitors.conf and webapps.conf are never shipped, so
+#    upgrades cannot touch them
+#
+# Usage: iram-user-setup [--source DIR] [--with-bin] [--first-login] [--dry-run]
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+SOURCE="${IRAM_PATH:-/usr/share/iram}"
+WITH_BIN=false
+DRY_RUN=false
+FIRST_LOGIN=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --source) SOURCE="$2"; shift 2 ;;
+        --with-bin) WITH_BIN=true; shift ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        --first-login) FIRST_LOGIN=true; shift ;;
+        *) echo "Unknown option: $1" >&2; exit 2 ;;
+    esac
+done
+
+[ -d "$SOURCE/config" ] || { echo "iram-user-setup: no config/ in $SOURCE" >&2; exit 1; }
+
+CONFIG_HOME="$HOME/.config"
+MANIFEST="$CONFIG_HOME/iram/.installed-manifest"
+BACKUP_DIR="$CONFIG_HOME/iram/backups/backup_$(date +%Y%m%d_%H%M%S)"
+
+# Files the theme engine rewrites on every switch. A checksum mismatch here means
+# nothing about user intent, so they are always replaced.
+is_generated() {
+    case "$1" in
+        waybar/style.css|mako/config|cava/config|swaync/style.css|btop/*|hypr/theme.conf|hypr/hyprlock-colors.conf) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Files a helper tool owns once they exist (iram-cursor-switch, for one).
+is_seed_only() {
+    case "$1" in
+        hypr/cursor.conf|hypr/layout.conf) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+backup_existing() {
+    local top name
+    mkdir -p "$BACKUP_DIR"
+    for top in "$SOURCE/config"/*; do
+        name="$(basename "$top")"
+        [ -e "$CONFIG_HOME/$name" ] || continue
+        if [ "$name" = iram ]; then
+            # Skip the theme copies, and backups/ which would nest inside itself.
+            mkdir -p "$BACKUP_DIR/iram"
+            for sub in agent hooks; do
+                if [ -e "$CONFIG_HOME/iram/$sub" ]; then cp -a "$CONFIG_HOME/iram/$sub" "$BACKUP_DIR/iram/"; fi
+            done
+        else
+            cp -a "$CONFIG_HOME/$name" "$BACKUP_DIR/"
+        fi
+    done
+    if [ -d "$HOME/.local/bin" ]; then
+        mkdir -p "$BACKUP_DIR/local_bin"
+        find "$HOME/.local/bin" -maxdepth 1 \( -name 'iram*' -o -name 'craft*' \) -exec cp -a {} "$BACKUP_DIR/local_bin/" \;
+    fi
+    echo "Backed up existing configs to $BACKUP_DIR"
+}
+
+declare -A SHIPPED_BEFORE=()
+if [ -f "$MANIFEST" ]; then
+    while read -r sum rel; do
+        SHIPPED_BEFORE["$rel"]="$sum"
+    done < "$MANIFEST"
+fi
+
+install_configs() {
+    local src rel dest new_manifest kept=0 updated=0 added=0 sum current
+    new_manifest="$(mktemp)"
+    while IFS= read -r -d '' src; do
+        rel="${src#"$SOURCE/config/"}"
+        dest="$CONFIG_HOME/$rel"
+        sum="$(sha256sum "$src" | cut -d' ' -f1)"
+        printf '%s %s\n' "$sum" "$rel" >> "$new_manifest"
+
+        if [ ! -e "$dest" ]; then
+            mkdir -p "$(dirname "$dest")"
+            cp -a "$src" "$dest"
+            added=$((added + 1))
+            continue
+        fi
+        cmp -s "$src" "$dest" && continue
+        is_seed_only "$rel" && continue
+
+        current="$(sha256sum "$dest" | cut -d' ' -f1)"
+        # No manifest means a first install: replace, because the backup already has it.
+        if is_generated "$rel" || [ ! -f "$MANIFEST" ] || [ "${SHIPPED_BEFORE[$rel]:-}" = "$current" ]; then
+            cp -a "$src" "$dest"
+            updated=$((updated + 1))
+        else
+            cp -a "$src" "$dest.iram-new"
+            echo "Kept your edited $rel (new version: $dest.iram-new)"
+            kept=$((kept + 1))
+        fi
+    done < <(find "$SOURCE/config" -type f -print0)
+    mv "$new_manifest" "$MANIFEST"
+    echo "Configs: $added added, $updated updated, $kept kept with your edits."
+}
+
+seed_required_includes() {
+    # hyprland.conf sources these. A missing file is a red error banner at login.
+    local file
+    mkdir -p "$CONFIG_HOME/hypr"
+    for file in monitors.conf webapps.conf theme.conf gpu.conf; do
+        [ -e "$CONFIG_HOME/hypr/$file" ] || : > "$CONFIG_HOME/hypr/$file"
+    done
+    if [ ! -e "$CONFIG_HOME/hypr/user-overrides.conf" ]; then
+        cp "$SOURCE/config/hypr/user-overrides.conf.example" "$CONFIG_HOME/hypr/user-overrides.conf"
+    fi
+}
+
+install_mcp_config() {
+    # Scope the filesystem server to this user's projects, not all of $HOME (~/.ssh, keys).
+    local template="$SOURCE/config/mcp/iram_mcp_config.json"
+    [ -f "$template" ] || return 0
+    mkdir -p "$CONFIG_HOME/mcp" "$HOME/Projects"
+    sed "s|__PROJECTS_DIR__|$HOME/Projects|g" "$template" > "$CONFIG_HOME/mcp/iram_mcp_config.json"
+}
+
+install_desktop_entries() {
+    [ -d "$SOURCE/applications" ] || return 0
+    mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/128x128/apps"
+    find "$SOURCE/applications" -maxdepth 1 -name '*.desktop' -exec cp {} "$HOME/.local/share/applications/" \;
+    if [ -d "$SOURCE/applications/icons" ]; then
+        find "$SOURCE/applications/icons" -maxdepth 1 -name '*.png' -exec cp {} "$HOME/.local/share/icons/hicolor/128x128/apps/" \;
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || echo "Notice: icon cache not refreshed." >&2
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || echo "Notice: desktop database not refreshed." >&2
+    fi
+}
+
+install_scripts() {
+    mkdir -p "$HOME/.local/bin"
+    cp -a "$SOURCE/bin/"* "$HOME/.local/bin/"
+    find "$HOME/.local/bin" -maxdepth 1 -type f \( -name 'iram*' -o -name 'craft*' \) -exec chmod +x {} +
+}
+
+install_shell_integration() {
+    mkdir -p "$HOME/.local/bin"
+    if [ -x /usr/bin/batcat ]; then ln -sf /usr/bin/batcat "$HOME/.local/bin/bat"; fi
+    if [ -x /usr/bin/fdfind ]; then ln -sf /usr/bin/fdfind "$HOME/.local/bin/fd"; fi
+
+    # One file owns the aliases, so upgrades can change them without editing rc files.
+    cat > "$CONFIG_HOME/iram/shell-init.sh" << 'EOF'
+# IRAM OS shell integration, regenerated by iram-user-setup. Put your own changes in your rc file.
+export PATH="$HOME/.local/bin:$PATH"
+export IRAM_PATH=/usr/share/iram
+export EDITOR="${EDITOR:-nvim}"
+export VISUAL="${VISUAL:-nvim}"
+
+if [ -n "${BASH_VERSION:-}" ]; then
+    [ -f /usr/share/doc/fzf/examples/key-bindings.bash ] && . /usr/share/doc/fzf/examples/key-bindings.bash
+    [ -f /usr/share/doc/fzf/examples/completion.bash ] && . /usr/share/doc/fzf/examples/completion.bash
+    command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"
+elif [ -n "${ZSH_VERSION:-}" ]; then
+    command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
+fi
+
+alias a='iram-agent-prompt'
+alias video='iram-video'
+alias craft='artcraft-launcher'
+alias theme='iram-theme-switch'
+alias sidecar='iram-agent-sidecar'
+alias '??'='iram-ai-cmd'
+alias ai-cmd='iram-ai-cmd'
+alias ai-digest='iram-ai-digest'
+alias ai-memory='iram-memory'
+alias ai-ask='iram-assist'
+alias vision-ask='iram-vision-ask'
+alias repo-traffic='iram-repo-traffic'
+alias hub='iram hub'
+alias radar='iram-worldmonitor'
+alias condense='iram-context-condenser'
+alias hindsight='iram-hindsight'
+EOF
+    local rc
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        [ -f "$rc" ] || [ "$rc" = "$HOME/.bashrc" ] || continue
+        touch "$rc"
+        if ! grep -qF '.config/iram/shell-init.sh' "$rc"; then
+            printf '\n# IRAM OS\n[ -f "$HOME/.config/iram/shell-init.sh" ] && . "$HOME/.config/iram/shell-init.sh"\n' >> "$rc"
+        fi
+    done
+}
+
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY-RUN] Would back up current configs to $BACKUP_DIR"
+    echo "[DRY-RUN] Would install configs from $SOURCE/config, keeping files you edited"
+    [ "$WITH_BIN" = true ] && echo "[DRY-RUN] Would copy scripts to $HOME/.local/bin"
+    exit 0
+fi
+
+mkdir -p "$CONFIG_HOME/iram"
+[ "$FIRST_LOGIN" = true ] || backup_existing
+install_configs
+seed_required_includes
+install_mcp_config
+install_desktop_entries
+[ "$WITH_BIN" = true ] && install_scripts
+install_shell_integration
+chmod +x "$CONFIG_HOME"/iram/hooks/*/*.sh 2>/dev/null || true

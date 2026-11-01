@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=IRAM OS
 Comment=IRAM OS Hyprland Tiling Desktop
-Exec=start-hyprland
+Exec=hyprland-start
 Type=Application
 DesktopNames=Hyprland
 Keywords=tiling;wayland;compositor;iram;
