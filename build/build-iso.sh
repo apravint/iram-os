@@ -67,18 +67,23 @@ ISO_DIR="${BUILD_DIR}/iso"
 mkdir -p "${ROOTFS_DIR}" "${ISO_DIR}/casper" "${ISO_DIR}/boot/grub" "${OUTPUT_DIR}"
 rm -f "${OUTPUT_DIR}"/*.iso "${OUTPUT_DIR}/sha256sum.txt"
 
+# Not findmnt -R: it finds nothing when the directory itself is not a mountpoint,
+# which is the case here, and would report bind mounts as gone while they are live.
+mounts_under_rootfs() {
+    findmnt -rno TARGET | awk -v root="${ROOTFS_DIR}/" 'index($0, root) == 1' | sort -r
+}
+
 unmount_virtual_filesystems() {
     local mountpoint
-    findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | sort -r | while read -r mountpoint; do
-        [ "$mountpoint" = "${ROOTFS_DIR}" ] && continue
+    while read -r mountpoint; do
         umount "$mountpoint" || log_warn "Could not unmount $mountpoint"
-    done
+    done < <(mounts_under_rootfs)
 }
 
 cleanup() {
     log_info "Cleaning up build tree..."
     unmount_virtual_filesystems
-    if findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | grep -q .; then
+    if [ -n "$(mounts_under_rootfs)" ]; then
         log_warn "Mounts remain under ${ROOTFS_DIR}; leaving ${BUILD_DIR} for manual cleanup."
     else
         rm -rf --one-file-system "${BUILD_DIR}"
@@ -202,7 +207,7 @@ mkdir -p /usr/share/iram
 # Enable essential systemd services
 systemctl enable NetworkManager.service 2>/dev/null || true
 systemctl enable bluetooth.service 2>/dev/null || true
-systemctl enable sddm.service 2>/dev/null || true
+systemctl enable greetd.service
 
 # Clean caches so the ISO stays under GitHub's 2 GB release asset limit
 apt-get autoremove -y --purge
@@ -297,6 +302,17 @@ for unit in waybar swaybg swaync hypridle iram-cliphist iram-cliphist-image iram
 done
 ln -sf ../iram-battery.timer "$SKEL_WANTS/iram-battery.timer"
 
+# cp -a kept the build user's ownership. Left that way, whoever shares that UID on the
+# target could rewrite scripts on root's PATH, and sudo ignores the sudoers fragment.
+for owned_path in usr/share/iram usr/local/bin usr/local/share/fonts etc/skel etc/iram.conf etc/profile.d/iram.sh \
+    etc/sudoers.d/iram-theme-browser etc/systemd/system/iram-firstboot-auth.service; do
+    if [ -e "${ROOTFS_DIR}/${owned_path}" ]; then
+        chown -hR root:root "${ROOTFS_DIR}/${owned_path}"
+        chmod -R go-w "${ROOTFS_DIR}/${owned_path}"
+    fi
+done
+chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/iram-theme-browser"
+
 # Live user, created only now so that useradd copies the finished /etc/skel into its home.
 chroot "${ROOTFS_DIR}" /bin/bash << 'LIVE_USER_EOF'
 set -euo pipefail
@@ -305,12 +321,7 @@ useradd -m -s /bin/bash -G sudo,audio,video,render,input iram
 echo "iram:iram" | chpasswd
 echo "iram ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/iram
 chmod 0440 /etc/sudoers.d/iram
-mkdir -p /etc/sddm.conf.d
-cat << 'AUTOLOGIN_EOF' > /etc/sddm.conf.d/autologin.conf
-[Autologin]
-User=iram
-Session=iram.desktop
-AUTOLOGIN_EOF
+cp /usr/share/iram/system/greetd/live.toml /etc/greetd/config.toml
 sed -i 's|__PROJECTS_DIR__|/home/iram/Projects|' /home/iram/.config/mcp/iram_mcp_config.json
 LIVE_USER_EOF
 
@@ -346,6 +357,18 @@ ln -sf ../run/systemd/resolve/stub-resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
 : > "${ROOTFS_DIR}/etc/machine-id"
 rm -f "${ROOTFS_DIR}/var/lib/dbus/machine-id"
 
+# Without this, casper falls back to its defaults at boot: host "ubuntu", user "ubuntu".
+cat << EOF > "${ROOTFS_DIR}/etc/casper.conf"
+export USERNAME="iram"
+export USERFULLNAME="IRAM Live User"
+export HOST="iram"
+export BUILD_SYSTEM="Ubuntu"
+EOF
+printf 'IRAM OS %s \\n \\l\n\n' "${DISTRO_VERSION}" > "${ROOTFS_DIR}/etc/issue"
+printf 'IRAM OS %s\n' "${DISTRO_VERSION}" > "${ROOTFS_DIR}/etc/issue.net"
+# Bake casper.conf into the initramfs that the ISO boots from.
+chroot "${ROOTFS_DIR}" update-initramfs -u
+
 # Copy kernel & initrd into casper directory for ISO booting
 log_step "Extracting kernel and initrd for live boot..."
 KERNEL_FILE=$(ls -1 "${ROOTFS_DIR}"/boot/vmlinuz* 2>/dev/null | head -n 1)
@@ -372,7 +395,7 @@ chroot "${ROOTFS_DIR}" dpkg-query -W --showformat='${Package} ${Version}\n' > "$
 printf "%s" "$(du -sx --block-size=1 "${ROOTFS_DIR}" | cut -f1)" > "${ISO_DIR}/casper/filesystem.size"
 
 unmount_virtual_filesystems
-if findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | grep -q .; then
+if [ -n "$(mounts_under_rootfs)" ]; then
     log_err "Virtual filesystems are still mounted; refusing to squash host paths."
     exit 1
 fi

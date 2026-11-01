@@ -1,0 +1,54 @@
+name: IRAM OS VM Install Test
+
+# Tests an already-built ISO, so changes to the test need no 10-minute rebuild.
+# Installer changes live inside the ISO, and are tested by build-iso.yml instead.
+on:
+  push:
+    paths:
+      - build/vm-install-test.py
+      - .github/workflows/vm-test.yml
+  workflow_dispatch:
+    inputs:
+      iso_run_id:
+        description: 'build-iso.yml run to test (default: latest successful)'
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  vm-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf imagemagick
+
+      - name: Download ISO
+        run: |
+          RUN_ID="${{ inputs.iso_run_id }}"
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list --workflow build-iso.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          echo "Testing the ISO from run $RUN_ID"
+          gh run download "$RUN_ID" --name iram-os-Live-ISO --dir iso
+          (cd iso && sha256sum -c sha256sum.txt)
+
+      - name: End-to-End Install Test
+        run: sudo python3 build/vm-install-test.py iso/iram-os-*.iso --out vm-test-results
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-test-results
+          path: vm-test-results
+          if-no-files-found: ignore
+          retention-days: 14

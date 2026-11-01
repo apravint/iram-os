@@ -118,9 +118,9 @@ cleanup_mounts() {
     [ "$UNMOUNT_NEEDED" = true ] || return 0
     local mountpoint
     # Deepest first; never lazy, because a false "unmounted" is worse than an error here.
-    findmnt -Rno TARGET "$TARGET_ROOT" 2>/dev/null | sort -r | while read -r mountpoint; do
+    while read -r mountpoint; do
         umount "$mountpoint" 2>/dev/null || echo "Warning: could not unmount $mountpoint" >&2
-    done
+    done < <(findmnt -rno TARGET | awk -v root="$TARGET_ROOT" '$0 == root || index($0, root "/") == 1' | sort -r)
 }
 
 [ -n "$DISK" ] && [ -n "$USERNAME" ] || prompt_interactive
@@ -188,7 +188,9 @@ if [ -d /sys/firmware/efi/efivars ]; then
 fi
 
 echo "==> [4/6] Removing live-session artifacts"
-in_target rm -f /etc/sudoers.d/iram /etc/sudoers.d/casper /etc/sddm.conf.d/autologin.conf
+in_target rm -f /etc/sudoers.d/iram /etc/sudoers.d/casper /etc/casper.conf
+# Replaces the live config, which logs in as iram automatically.
+in_target cp /usr/share/iram/system/greetd/config.toml /etc/greetd/config.toml
 in_target bash -c 'if id -u iram >/dev/null 2>&1; then userdel --force --remove iram; fi'
 in_target rm -rf /home/iram
 in_target apt-get purge -y "${LIVE_ONLY_PACKAGES[@]}"

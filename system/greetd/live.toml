@@ -1,0 +1,11 @@
+# IRAM OS live session. iram-install-disk replaces this file with config.toml.
+[terminal]
+vt = 7
+
+[initial_session]
+command = "hyprland-start"
+user = "iram"
+
+[default_session]
+command = "tuigreet --time --remember --asterisks --cmd hyprland-start"
+user = "_greetd"

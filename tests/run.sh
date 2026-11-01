@@ -160,7 +160,10 @@ check "bashrc integration parses" 0 bash -n "$H2/.config/iram/shell-init.sh"
 PLAN="$(iram-install-disk --plan --disk /dev/nvme0n1 --user alice 2>&1)"
 contains "nvme partition naming" "$PLAN" "mkfs.ext4 -F -L iram-root /dev/nvme0n1p3"
 contains "live sudoers removed" "$PLAN" "rm -f /etc/sudoers.d/iram"
-contains "autologin removed" "$PLAN" "/etc/sddm.conf.d/autologin.conf"
+contains "autologin removed" "$PLAN" "system/greetd/config.toml /etc/greetd/config.toml"
+if grep -q initial_session "$REPO/system/greetd/config.toml"; then bad "installed greetd config must not autologin"; else ok; fi
+check "live greetd config autologins" 0 grep -q initial_session "$REPO/system/greetd/live.toml"
+if grep -nE 'sudo cp -a( |$)' "$REPO/install.sh" | grep -v no-preserve=ownership | grep -q .; then bad "sudo cp -a keeps the user as owner"; else ok; fi
 contains "live user removed" "$PLAN" "userdel --force --remove iram"
 contains "casper purged" "$PLAN" "purge -y casper"
 contains "machine-id reset" "$PLAN" "truncate -s 0 /etc/machine-id"

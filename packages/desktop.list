@@ -1,8 +1,16 @@
 # Runtime packages for the IRAM OS desktop. Single source of truth, consumed by
 # install.sh, build/build-iso.sh and build/package-deb.sh. One package per line.
 hyprland
+xwayland
+libgl1-mesa-dri
+libegl-mesa0
+dbus-user-session
 xdg-desktop-portal
 xdg-desktop-portal-hyprland
+xwayland
+libgl1-mesa-dri
+libegl-mesa0
+dbus-user-session
 xdg-desktop-portal-gtk
 waybar
 wofi

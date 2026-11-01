@@ -168,14 +168,13 @@ qemu-system-x86_64 \
     >/dev/null 2>&1 &
 QEMU_PID=$!
 
-# Pass only on evidence: the kernel started, and userspace came up from the squashfs.
-KERNEL_SEEN=0
+# Pass only on evidence that userspace came up from the squashfs. The kernel banner
+# is no signal either way, because the default boot entry passes `quiet`.
 USERSPACE_SEEN=0
 deadline=$((SECONDS + BOOT_TIMEOUT))
 while [[ $SECONDS -lt $deadline ]] && kill -0 $QEMU_PID 2>/dev/null; do
     sleep 3
-    grep -q "Linux version" "$BOOT_LOG" 2>/dev/null && KERNEL_SEEN=1
-    grep -qE "Reached target|systemd\[1\]|login:" "$BOOT_LOG" 2>/dev/null && USERSPACE_SEEN=1
+    grep -qE "iram login:|Reached target" "$BOOT_LOG" 2>/dev/null && USERSPACE_SEEN=1
     [[ $USERSPACE_SEEN -eq 1 ]] && break
     grep -qE "Kernel panic|\(initramfs\)" "$BOOT_LOG" 2>/dev/null && break
 done
@@ -188,8 +187,8 @@ if grep -qE "Kernel panic|\(initramfs\)" "$BOOT_LOG"; then
     tail -n 40 "$BOOT_LOG"
     exit 1
 fi
-if [[ $KERNEL_SEEN -ne 1 || $USERSPACE_SEEN -ne 1 ]]; then
-    log_err "CRITICAL: no evidence of a completed boot (kernel=$KERNEL_SEEN userspace=$USERSPACE_SEEN)."
+if [[ $USERSPACE_SEEN -ne 1 ]]; then
+    log_err "CRITICAL: no evidence of a completed boot."
     tail -n 40 "$BOOT_LOG"
     exit 1
 fi
