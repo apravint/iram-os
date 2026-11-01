@@ -90,6 +90,20 @@ jobs:
             out/sha256sum.txt
           retention-days: 14
 
+      - name: End-to-End Install Test in a VM
+        run: |
+          sudo apt-get install -y imagemagick
+          sudo python3 build/vm-install-test.py out/iram-os-*.iso --out vm-test-results
+
+      - name: Upload VM Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-test-results
+          path: vm-test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Attach ISO to GitHub Release
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') || inputs.publish_release
         continue-on-error: true
