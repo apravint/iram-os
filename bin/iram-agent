@@ -7,6 +7,7 @@
 
 set -euo pipefail
 
+[ "${1:-}" = "--" ] && shift
 PROMPT="${1:-}"
 
 # If no command line prompt passed, open Wofi GUI prompt
@@ -33,10 +34,17 @@ import os
 import datetime
 
 # Import AI Core & Hindsight
-SCRIPT_DIR = os.path.expanduser("~/iram-os/bin")
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
+import shutil
+agent_path = shutil.which("iram-agent")
+for script_dir in (
+    os.path.dirname(os.path.realpath(agent_path)) if agent_path else "",
+    os.path.expanduser("~/.local/bin"),
+    os.path.join(os.environ.get("IRAM_PATH", "/usr/share/iram"), "bin"),
+):
+    if script_dir and script_dir not in sys.path:
+        sys.path.append(script_dir)
 
+from iram_policy import parse_agent_command
 from iram_ai_core import (
     query_llm,
     hindsight_recall,
@@ -90,7 +98,7 @@ composite_system_prompt = f"""{sys_prompt_content}
 {tool_guidance_content}
 
 {memory_context}
-When replying, provide an explanation and list executable bash commands on separate lines starting with hyprctl, iram, wpctl, pactl, craft-, or notify-send.
+When replying, provide an explanation and list executable bash commands on separate lines starting with hyprctl, iram, wpctl, pactl, or notify-send. Commands run without a shell: pipes, redirects, and chaining are rejected.
 """
 
 # ------------------------------------------------------------------------------
@@ -111,9 +119,6 @@ print(f"► Agent Response [{provider}]:\n{answer}")
 # ------------------------------------------------------------------------------
 executed_commands = []
 failed_commands = []
-
-ALLOWED_PREFIXES = ["hyprctl", "iram", "notify-send", "pactl", "wpctl", "craft-"]
-FORBIDDEN_PATTERNS = ["rm -rf", "mkfs", "dd if=", ":(){ :|:& };:", "chmod -R 777 /"]
 
 candidates = []
 
@@ -144,19 +149,20 @@ for clean_line in candidates:
     if not clean_line:
         continue
 
-    # Invariant Guardrail Check
-    if any(fp in clean_line for fp in FORBIDDEN_PATTERNS):
-        print(f"⛔ Blocked by Guardrail: {clean_line}")
+    # Model output is untrusted: it runs only as one allowlisted argv, never via a shell.
+    argv, refusal = parse_agent_command(clean_line)
+    if argv is None:
+        if clean_line.split()[0] in ("hyprctl", "iram", "notify-send", "pactl", "wpctl"):
+            print(f"⛔ Blocked by policy ({refusal}): {clean_line}")
         continue
 
-    if any(clean_line.startswith(prefix) for prefix in ALLOWED_PREFIXES):
-        print(f"⚡ Dispatching: {clean_line}")
-        res = subprocess.run(clean_line, shell=True, text=True, capture_output=True)
-        if res.returncode == 0:
-            executed_commands.append(clean_line)
-        else:
-            print(f"⚠️ Command error ({res.returncode}): {res.stderr.strip()}")
-            failed_commands.append({"cmd": clean_line, "code": res.returncode, "err": res.stderr.strip()})
+    print(f"⚡ Dispatching: {clean_line}")
+    res = subprocess.run(argv, text=True, capture_output=True, timeout=30)
+    if res.returncode == 0:
+        executed_commands.append(clean_line)
+    else:
+        print(f"⚠️ Command error ({res.returncode}): {res.stderr.strip()}")
+        failed_commands.append({"cmd": clean_line, "code": res.returncode, "err": res.stderr.strip()})
 
 # ------------------------------------------------------------------------------
 # 4. Hindsight Memory & Reflection Persistence

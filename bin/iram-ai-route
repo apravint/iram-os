@@ -33,6 +33,7 @@ except ImportError:
     from iram_os.bin.iram_ai_core import (
         query_llm, is_gemini_healthy, hindsight_retain, hindsight_recall
     )
+from iram_ai_core import get_tuned_models
 
 CACHE_DIR = os.path.expanduser("~/.local/state/iram/ai_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -81,11 +82,11 @@ def score_prompt_complexity(prompt: str) -> Tuple[int, str]:
     score = max(1, min(10, score))
 
     if score <= 3:
-        tier = "Tier 3: Local Fast Sovereign (qwen2.5:1.5b)"
+        tier = "Tier 3: Local Fast"
     elif score <= 6:
-        tier = "Tier 2: Balanced Local Standard (qwen2.5:7b)"
+        tier = "Tier 2: Local Standard"
     else:
-        tier = "Tier 1: High-Reasoning Local Frontier (deepseek-r1:8b)"
+        tier = "Tier 1: Local Reasoning"
 
     return score, tier
 
@@ -129,12 +130,13 @@ def route_and_execute(prompt: str, force_tier: int = 0) -> Tuple[str, str]:
         score = force_tier * 3
 
     # Dynamic local model selection based on complexity
+    tuned = get_tuned_models()
     if score <= 3:
-        target_model = "qwen2.5:1.5b"
+        target_model = tuned.get("IRAM_MODEL_FAST", "qwen2.5:1.5b")
     elif score <= 6:
-        target_model = "qwen2.5:7b"
+        target_model = tuned.get("IRAM_MODEL_STANDARD", "qwen2.5:7b")
     else:
-        target_model = "deepseek-r1:8b"
+        target_model = tuned.get("IRAM_MODEL_REASONING", "deepseek-r1:8b")
 
     output, provider = query_llm(prompt, model=target_model, num_predict=512)
 

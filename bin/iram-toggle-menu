@@ -19,7 +19,7 @@ if [[ -f "$HOME/.local/state/iram/toggles/stay-awake" ]] || ! pgrep -x hypridle 
 fi
 
 dnd_state="Normal"
-if makoctl mode 2>/dev/null | grep -qw "dnd"; then
+if [ "$(swaync-client --get-dnd 2>/dev/null)" = "true" ]; then
     dnd_state="Active (Silenced)"
 fi
 

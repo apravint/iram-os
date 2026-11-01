@@ -12,7 +12,7 @@ fi
 RECORDING_DIR="$HOME/Videos"
 mkdir -p "$RECORDING_DIR"
 
-PID_FILE="/tmp/iram-screenrecord.pid"
+PID_FILE="${XDG_RUNTIME_DIR:-$HOME/.cache}/iram-screenrecord.pid"
 
 # If already recording, stop it cleanly
 if pgrep -x wf-recorder >/dev/null 2>&1; then

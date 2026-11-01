@@ -1,13 +1,15 @@
 [Unit]
-Description=IRAM OS Wayland Clipboard Watcher (cliphist)
+Description=IRAM OS Clipboard History (text)
 PartOf=graphical-session.target
 After=graphical-session.target
+Requisite=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/wl-paste --watch cliphist store
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/wl-paste --type text --watch cliphist store
 Restart=on-failure
-RestartSec=2
+RestartSec=2s
 
 [Install]
 WantedBy=graphical-session.target

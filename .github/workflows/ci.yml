@@ -22,7 +22,20 @@ jobs:
       - name: Install Lint & Validation Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq shellcheck zstd libgtk-3-bin apt-utils
+
+      - name: Run Test Suite (tests/run.sh)
+        run: bash tests/run.sh
+
+      - name: ShellCheck (errors fail the build)
+        run: |
+          shellcheck -S error install.sh build/*.sh migrations/*.sh tests/run.sh \
+            $(grep -lE '^#!.*(ba)?sh' bin/*)
+
+      - name: Build Debian Packages
+        run: |
+          bash build/package-deb.sh
+          for deb in out/*.deb; do dpkg-deb --info "$deb" > /dev/null; done
 
       - name: Verify Shell Scripts Syntax (bash -n)
         run: |
@@ -53,50 +66,12 @@ jobs:
         run: |
           echo "==> Compiling Python scripts..."
           if [ -f "mcp/iram-os-mcp" ]; then python3 -m py_compile mcp/iram-os-mcp; fi
-          for py_script in bin/*.py bin/iram-theme-sync-all bin/iram-waybar-ai bin/iram-welcome bin/iram-mcp-config build/*.py; do
+          for py_script in bin/*.py bin/iram-theme-sync-all bin/iram-waybar-ai bin/iram-welcome bin/iram-mcp-config bin/iram-os-mcp bin/iram-context bin/iram-ai-tune bin/iram-theme-color build/*.py; do
             if [ -f "$py_script" ]; then
               python3 -m py_compile "$py_script"
             fi
           done
           echo "✓ All Python scripts compiled without error."
-
-      - name: Validate Waybar JSON Configurations
-        run: |
-          echo "==> Validating Waybar JSON..."
-          jq . config/waybar/config.jsonc > /dev/null
-          echo "✓ config/waybar/config.jsonc is valid JSON."
-
-      - name: Verify 43 Sovereign Theme Palettes
-        run: |
-          echo "==> Auditing theme directories and colors.toml definitions..."
-          python3 -c "
-          import os, glob
-
-          themes_dir = 'themes'
-          assert os.path.isdir(themes_dir), 'themes directory missing'
-          theme_dirs = [d for d in os.listdir(themes_dir) if os.path.isdir(os.path.join(themes_dir, d))]
-          print(f'Auditing {len(theme_dirs)} sovereign themes...')
-          assert len(theme_dirs) >= 43, f'Expected at least 43 themes, found {len(theme_dirs)}'
-
-          required_keys = ['background', 'foreground', 'accent']
-          missing_errors = []
-
-          for t in theme_dirs:
-              colors_file = os.path.join(themes_dir, t, 'colors.toml')
-              if not os.path.exists(colors_file):
-                  missing_errors.append(f'{t}: missing colors.toml')
-                  continue
-              with open(colors_file, 'r', encoding='utf-8') as f:
-                  content = f.read()
-                  for rk in required_keys:
-                      if rk not in content:
-                          missing_errors.append(f'{t}: missing key \"{rk}\" in colors.toml')
-
-          if missing_errors:
-              print('\n'.join(missing_errors))
-              raise SystemExit(1)
-          print(f'✓ All {len(theme_dirs)} theme palettes are valid and contain essential color keys.')
-          "
 
       - name: Execute Installer Dry-Run Test
         run: |

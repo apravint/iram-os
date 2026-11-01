@@ -1,0 +1,15 @@
+[Unit]
+Description=IRAM OS Polkit Authentication Agent
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/env iram-launch-polkit
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=graphical-session.target

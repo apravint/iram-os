@@ -1,0 +1,15 @@
+[Unit]
+Description=IRAM OS Nexus Copilot Daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/env iram-nexus-server
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=graphical-session.target

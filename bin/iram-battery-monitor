@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Battery Monitor (iram-battery-monitor)
+# Oneshot run by iram-battery.timer. Warns once per threshold crossed while
+# discharging, and fires the battery-low lifecycle hook at the low threshold.
+# Exits quietly on machines without a battery. Test hooks: IRAM_SYS_ROOT, IRAM_STATE.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+SYS_ROOT="${IRAM_SYS_ROOT:-/sys}"
+STATE_FILE="${IRAM_STATE:-${XDG_RUNTIME_DIR:-/tmp}/iram-battery-level}"
+LOW="${IRAM_BATTERY_LOW:-20}"
+CRITICAL="${IRAM_BATTERY_CRITICAL:-10}"
+EMERGENCY="${IRAM_BATTERY_EMERGENCY:-5}"
+
+battery=""
+shopt -s nullglob
+for candidate in "$SYS_ROOT"/class/power_supply/BAT*; do
+    [ "$(cat "$candidate/type" 2>/dev/null || echo Battery)" = Battery ] && battery="$candidate" && break
+done
+shopt -u nullglob
+[ -n "$battery" ] || exit 0
+
+capacity="$(cat "$battery/capacity")"
+status="$(cat "$battery/status")"
+
+if [ "$status" != Discharging ]; then
+    rm -f "$STATE_FILE"
+    exit 0
+fi
+
+level=none
+if [ "$capacity" -le "$EMERGENCY" ]; then level=emergency
+elif [ "$capacity" -le "$CRITICAL" ]; then level=critical
+elif [ "$capacity" -le "$LOW" ]; then level=low
+fi
+[ "$level" != none ] || exit 0
+
+previous="$(cat "$STATE_FILE" 2>/dev/null || echo none)"
+[ "$previous" != "$level" ] || exit 0
+echo "$level" > "$STATE_FILE"
+
+case "$level" in
+    low)
+        notify-send -a "IRAM Power" -i battery-low "Battery low: ${capacity}%" "Plug in soon." 2>/dev/null || true
+        iram-lifecycle-dispatch battery-low "$capacity" 2>/dev/null || true
+        ;;
+    critical)
+        notify-send -u critical -a "IRAM Power" -i battery-caution "Battery critical: ${capacity}%" "Save your work." 2>/dev/null || true
+        ;;
+    emergency)
+        notify-send -u critical -a "IRAM Power" -i battery-empty "Battery at ${capacity}%" "The system will suspend soon unless plugged in." 2>/dev/null || true
+        ;;
+esac
+echo "$level $capacity"

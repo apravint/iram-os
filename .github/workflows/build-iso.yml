@@ -11,15 +11,15 @@ on:
       version:
         description: 'Release version tag (e.g. v26.10.0 or v26.04.0)'
         required: true
-        default: 'v26.10.0'
+        default: 'v26.04.3'
       base_codename:
-        description: 'Target base codename (stonking or resolute)'
+        description: 'Target base codename (resolute LTS or stonking)'
         required: true
-        default: 'stonking'
+        default: 'resolute'
       distro_version:
-        description: 'Target distro version (26.10 or 26.04)'
+        description: 'Target distro version (26.04 or 26.10)'
         required: true
-        default: '26.10'
+        default: '26.04'
 
 permissions:
   contents: write
@@ -62,14 +62,14 @@ jobs:
 
       - name: Run ISO Builder
         env:
-          BASE_CODENAME: ${{ github.event.inputs.base_codename || 'stonking' }}
-          DISTRO_VERSION: ${{ github.event.inputs.distro_version || '26.10' }}
+          BASE_CODENAME: ${{ github.event.inputs.base_codename || 'resolute' }}
+          DISTRO_VERSION: ${{ github.event.inputs.distro_version || '26.04' }}
         run: |
           sudo -E bash build/build-iso.sh
 
       - name: List Generated Artifacts
         run: |
-          sudo chmod -R 777 out/ 2>/dev/null || true
+          sudo chown -R "$(id -u):$(id -g)" out/
           ls -lh out/
 
       - name: Verify ISO Integrity & Headless Smoke Boot
@@ -107,14 +107,14 @@ jobs:
             3. Boot your PC, choose your USB drive in the boot menu (`F12`, `F11`, or `Esc`).
             4. Default Live Session Credentials:
                - **User**: `iram`
-               - **Password**: `iram` *(Passwordless sudo enabled for live trial; disk installations automatically enforce password update)*
+               - **Password**: `iram` *(Passwordless sudo applies to the live session only. `sudo iram-install-disk` creates your own user and removes this one.)*
 
             ### ✨ Key Features
             - Pre-configured Hyprland Wayland compositor with fluid animations
             - Dual-monitor auto-detection with GUI manager (`iram-displays-gui`)
-            - Out-of-the-box PipeWire audio routing & toggle shortcuts (`Super + Shift + A`)
+            - Out-of-the-box PipeWire audio routing
             - Persistent Waybar & wallpaper services with 0 collisions
-            - 43 custom built-in themes with instant live switching (`iram theme`)
+            - 55 built-in themes with live switching (`iram theme`)
           files: |
             out/*.iso
             out/sha256sum.txt

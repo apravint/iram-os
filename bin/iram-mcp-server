@@ -15,6 +15,9 @@ import urllib.request
 import urllib.parse
 from fastmcp import FastMCP
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from iram_policy import is_safe_dispatcher, is_valid_unit
+
 # Initialize FastMCP Server
 mcp = FastMCP(
     name="iram-desktop",
@@ -65,7 +68,9 @@ def focus_window(target: str) -> str:
 
 @mcp.tool()
 def dispatch_hyprland(dispatcher: str, args: str = "") -> str:
-    """Execute any Hyprland dispatch command (e.g. workspace 2, togglefloating, killactive, movetoworkspace)."""
+    """Execute an allowlisted Hyprland dispatcher (e.g. workspace 2, togglefloating, killactive). exec is refused."""
+    if not is_safe_dispatcher(dispatcher):
+        return f"Refused: dispatcher '{dispatcher}' is not allowlisted."
     try:
         cmd = ["hyprctl", "dispatch", dispatcher]
         if args:
@@ -110,7 +115,10 @@ def heal_system() -> str:
         for line in out.stdout.splitlines():
             parts = line.split()
             if parts:
-                unit = parts[0]
+                unit = parts[0] if is_valid_unit(parts[0]) else parts[1]
+                if not is_valid_unit(unit) or not unit.startswith(("iram-", "waybar", "swaybg", "hypridle", "swaync")):
+                    actions.append(f"Skipped non-IRAM unit: {unit}")
+                    continue
                 subprocess.run(["systemctl", "--user", "reset-failed", unit])
                 subprocess.run(["systemctl", "--user", "restart", unit])
                 actions.append(f"Restarted failed unit: {unit}")
@@ -442,6 +450,8 @@ def upscale_video_gpu(video_path: str, scale: int = 2) -> str:
 
 
 def main():
+    # SSE/HTTP have no client authentication: any local process can call every
+    # tool. Stay on stdio unless the user asks for a network transport.
     if "--sse" in sys.argv or os.environ.get("IRAM_MCP_TRANSPORT") == "sse":
         port = int(os.environ.get("IRAM_MCP_PORT", 8991))
         mcp.run(transport="sse", host="127.0.0.1", port=port)

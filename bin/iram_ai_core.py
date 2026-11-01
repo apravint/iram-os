@@ -70,10 +70,24 @@ def get_gemini_api_key() -> str:
     return ""
 
 
+def get_tuned_models() -> Dict[str, str]:
+    """Reads the hardware-appropriate selection written by iram-ai-tune."""
+    tuned = {}
+    try:
+        with open(os.path.expanduser("~/.config/iram/ai.env"), "r", encoding="utf-8") as f:
+            for line in f:
+                key, sep, value = line.strip().partition("=")
+                if sep and not key.startswith("#"):
+                    tuned[key] = value
+    except OSError:
+        pass
+    return tuned
+
+
 def get_default_models() -> Tuple[str, str]:
     """Returns (gemini_model, ollama_model) with sensible fallbacks."""
     g_model = os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash"
-    o_model = os.environ.get("OLLAMA_MODEL") or "qwen2.5:1.5b"
+    o_model = os.environ.get("OLLAMA_MODEL") or get_tuned_models().get("OLLAMA_MODEL") or "qwen2.5:1.5b"
     return g_model, o_model
 
 

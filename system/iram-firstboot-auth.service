@@ -1,11 +1,13 @@
 [Unit]
 Description=IRAM OS First Boot Security Hardening
 ConditionPathExists=!/var/lib/iram/.auth_secured
-After=systemd-user-sessions.service
+# Must finish before any greeter, or an autologin can race this hardening.
+Before=display-manager.service sddm.service getty@tty1.service
+After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/iram-firstboot-auth
+ExecStart=/usr/bin/env iram-firstboot-auth
 RemainAfterExit=yes
 
 [Install]

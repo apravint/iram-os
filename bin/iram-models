@@ -96,7 +96,7 @@ def show_model_menu():
         elif selected_option.startswith("⬇️ Pull Ollama:"):
             model_tag = selected_option.split(":")[1].split()[0].strip()
             subprocess.run(['notify-send', '-a', 'Iram Model Manager', f'⬇️ Pulling {model_tag}...', 'Downloading model weights...'])
-            subprocess.run(f"alacritty -e ollama pull {model_tag}", shell=True)
+            subprocess.run(["alacritty", "-e", "ollama", "pull", model_tag])
             subprocess.run(['notify-send', '-a', 'Iram Model Manager', f'✅ Model {model_tag} Installed!', 'Ready to use offline'])
     except Exception as e:
         print(f"Error: {e}")

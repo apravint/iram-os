@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS GPU & Virtualization Environment (iram-gpu-env)
+# Decides compositor settings from the hardware present at login, so a machine
+# never inherits NVIDIA variables it cannot honor (the classic black screen).
+#
+#   --detect   Print the detected profile (default)
+#   --shell    Print `export` lines, sourced by hyprland-start before the compositor
+#   --hypr     Print a Hyprland fragment for ~/.config/hypr/gpu.conf
+#
+# Primary GPU: the card with boot_vga=1. Test hooks: IRAM_SYS_ROOT, IRAM_VIRT,
+# IRAM_NVIDIA_LOADED.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+SYS_ROOT="${IRAM_SYS_ROOT:-/sys}"
+MODE="${1:---detect}"
+
+VIRT="${IRAM_VIRT:-$(systemd-detect-virt 2>/dev/null || true)}"
+VIRT="${VIRT:-none}"
+
+PRIMARY_CARD="" PRIMARY_VENDOR="" SECONDARY_CARD="" SECONDARY_VENDOR=""
+HAS_NVIDIA=false
+
+vendor_name() {
+    case "$1" in
+        0x10de) echo nvidia ;;
+        0x1002) echo amd ;;
+        0x8086) echo intel ;;
+        0x1af4|0x15ad|0x80ee|0x1234) echo virtual ;;
+        *) echo unknown ;;
+    esac
+}
+
+shopt -s nullglob
+for device in "$SYS_ROOT"/class/drm/card[0-9] "$SYS_ROOT"/class/drm/card[0-9][0-9]; do
+    [ -r "$device/device/vendor" ] || continue
+    card="$(basename "$device")"
+    vendor="$(vendor_name "$(cat "$device/device/vendor")")"
+    [ "$vendor" = nvidia ] && HAS_NVIDIA=true
+    boot_vga="$(cat "$device/device/boot_vga" 2>/dev/null || echo 0)"
+    if [ "$boot_vga" = 1 ] && [ -z "$PRIMARY_CARD" ]; then
+        PRIMARY_CARD="$card"; PRIMARY_VENDOR="$vendor"
+    elif [ -z "$SECONDARY_CARD" ]; then
+        SECONDARY_CARD="$card"; SECONDARY_VENDOR="$vendor"
+    fi
+done
+shopt -u nullglob
+
+if [ -z "$PRIMARY_CARD" ] && [ -n "$SECONDARY_CARD" ]; then
+    PRIMARY_CARD="$SECONDARY_CARD"; PRIMARY_VENDOR="$SECONDARY_VENDOR"
+    SECONDARY_CARD=""; SECONDARY_VENDOR=""
+fi
+
+# The proprietary driver must actually be loaded; nouveau needs none of this.
+NVIDIA_LOADED="${IRAM_NVIDIA_LOADED:-}"
+if [ -z "$NVIDIA_LOADED" ]; then
+    if [ -d "$SYS_ROOT/module/nvidia_drm" ] || [ -d /proc/driver/nvidia ]; then NVIDIA_LOADED=true; else NVIDIA_LOADED=false; fi
+fi
+
+PROFILE=generic
+if [ "$VIRT" != none ]; then
+    PROFILE=vm
+elif [ "$HAS_NVIDIA" = true ] && [ "$NVIDIA_LOADED" = true ]; then
+    if [ -n "$SECONDARY_CARD" ]; then PROFILE=hybrid-nvidia
+    else PROFILE=nvidia; fi
+elif [ "$PRIMARY_VENDOR" = amd ]; then PROFILE=amd
+elif [ "$PRIMARY_VENDOR" = intel ]; then PROFILE=intel
+fi
+
+emit_exports() {
+    case "$PROFILE" in
+        vm)
+            echo 'export WLR_NO_HARDWARE_CURSORS=1'
+            echo 'export WLR_RENDERER_ALLOW_SOFTWARE=1'
+            # VirtualBox and VMware without 3D acceleration have no usable GL driver.
+            case "$VIRT" in
+                oracle|vmware) echo 'export LIBGL_ALWAYS_SOFTWARE=1' ;;
+            esac
+            ;;
+        nvidia)
+            echo 'export LIBVA_DRIVER_NAME=nvidia'
+            echo 'export __GLX_VENDOR_LIBRARY_NAME=nvidia'
+            echo 'export GBM_BACKEND=nvidia-drm'
+            echo 'export NVD_BACKEND=direct'
+            ;;
+        hybrid-nvidia)
+            # Render on the boot GPU first; GBM_BACKEND would force the dGPU on and
+            # break the integrated display path, so it stays unset.
+            local integrated="$PRIMARY_CARD" discrete="$SECONDARY_CARD"
+            if [ "$PRIMARY_VENDOR" = nvidia ]; then
+                integrated="$SECONDARY_CARD"; discrete="$PRIMARY_CARD"
+            fi
+            echo "export AQ_DRM_DEVICES=/dev/dri/${integrated}:/dev/dri/${discrete}"
+            echo 'export __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0'
+            ;;
+        amd)
+            echo 'export LIBVA_DRIVER_NAME=radeonsi'
+            ;;
+        intel)
+            echo 'export LIBVA_DRIVER_NAME=iHD'
+            ;;
+    esac
+    return 0
+}
+
+emit_hypr() {
+    echo "# Generated at login by iram-gpu-env (profile: $PROFILE). Do not edit."
+    case "$PROFILE" in
+        vm)
+            cat << 'EOF'
+cursor {
+    no_hardware_cursors = true
+}
+decoration {
+    blur {
+        enabled = false
+    }
+}
+misc {
+    vfr = true
+}
+EOF
+            ;;
+        nvidia|hybrid-nvidia)
+            cat << 'EOF'
+cursor {
+    no_hardware_cursors = true
+}
+EOF
+            ;;
+    esac
+    return 0
+}
+
+case "$MODE" in
+    --detect)
+        echo "profile=$PROFILE virt=$VIRT primary=${PRIMARY_CARD:-none}:${PRIMARY_VENDOR:-none} secondary=${SECONDARY_CARD:-none}:${SECONDARY_VENDOR:-none} nvidia_driver=$NVIDIA_LOADED"
+        ;;
+    --shell) emit_exports ;;
+    --hypr) emit_hypr ;;
+    *) echo "Usage: iram-gpu-env [--detect|--shell|--hypr]" >&2; exit 2 ;;
+esac

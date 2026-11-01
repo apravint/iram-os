@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Context-Aware Assistant (iram-assist)
+# One shortcut: ask a question, and the agent already knows the active window,
+# working directory, and clipboard. --ocr adds a selected screen region.
+# Hotkeys: Super + C, and Super + Alt + C to add a selected screen region (OCR).
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+
+WITH_OCR=()
+if [ "${1:-}" = "--ocr" ]; then
+    WITH_OCR=(--ocr)
+    shift
+fi
+
+# Capture before wofi takes focus, or the launcher becomes the "active window".
+CONTEXT="$(iram-context --prompt "${WITH_OCR[@]}")"
+
+QUERY="${*:-}"
+if [ -z "$QUERY" ]; then
+    QUERY="$(wofi --dmenu --prompt "Ask IRAM AI (sees active window + clipboard):" --width 720 --height 120 2>/dev/null || true)"
+fi
+[ -n "$QUERY" ] || exit 0
+
+# Clipboard text must not reach argv (visible in ps) or a world-readable path.
+PROMPT_FILE="$(mktemp -p "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}" iram-assist-XXXXXX)"
+chmod 600 "$PROMPT_FILE"
+printf '%s\n\nTask: %s\n' "$CONTEXT" "$QUERY" > "$PROMPT_FILE"
+
+TERMINAL_BIN="$(command -v alacritty || command -v foot || true)"
+if [ -z "$TERMINAL_BIN" ]; then
+    notify-send -u critical "IRAM Assistant" "alacritty or foot is required." 2>/dev/null || true
+    rm -f "$PROMPT_FILE"
+    exit 1
+fi
+
+if [ "$(basename "$TERMINAL_BIN")" = "alacritty" ]; then
+    exec alacritty --class iram-ai-float --title "IRAM Assistant" -e iram-ai-launch --prompt-file "$PROMPT_FILE" --hold
+else
+    exec foot --app-id iram-ai-float --title "IRAM Assistant" iram-ai-launch --prompt-file "$PROMPT_FILE" --hold
+fi

@@ -81,7 +81,7 @@ else
 fi
 
 # 4. Systemd User Units
-for unit in waybar.service swaybg.service hypridle.service iram-cliphist.service iram-watchdog.service; do
+for unit in hyprland-session.target waybar.service swaybg.service swaync.service hypridle.service iram-cliphist.service iram-polkit-agent.service iram-watchdog.service; do
     if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
         add_result "Service: $unit" "PASS" "active (running)"
     elif systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then

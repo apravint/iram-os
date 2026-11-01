@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Waits for Hyprland to report at least one monitor. Usage: iram-wait-compositor [seconds]
+# Exits 1 on timeout, so a unit's ExecStartPre fails visibly and Restart= retries.
+set -u
+
+deadline=$(( $(date +%s) + ${1:-30} ))
+while [ "$(date +%s)" -lt "$deadline" ]; do
+    if hyprctl monitors 2>/dev/null | grep -q "^Monitor "; then
+        exit 0
+    fi
+    sleep 0.25
+done
+exit 1

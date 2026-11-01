@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Called by hypridle after long inactivity: suspends only on battery power, on bare
+# metal. A desktop on AC and a VM guest stay awake. Honors the stay-awake toggle.
+set -u
+
+[ -f "$HOME/.local/state/iram/toggles/stay-awake" ] && exit 0
+[ "$(systemd-detect-virt 2>/dev/null || echo none)" = none ] || exit 0
+
+shopt -s nullglob
+on_battery=false
+for battery in /sys/class/power_supply/BAT*; do
+    [ "$(cat "$battery/status" 2>/dev/null)" = Discharging ] && on_battery=true
+done
+[ "$on_battery" = true ] || exit 0
+
+exec systemctl suspend

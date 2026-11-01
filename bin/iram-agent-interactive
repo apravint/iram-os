@@ -307,7 +307,7 @@ def handle_slash_command(user_input: str) -> bool:
 
     elif cmd in ["/theme", "/themes"]:
         if arg:
-            subprocess.run(f"iram theme set '{arg}'", shell=True)
+            subprocess.run(["iram", "theme", "set", arg])
         else:
             subprocess.run("iram theme list", shell=True)
         return True

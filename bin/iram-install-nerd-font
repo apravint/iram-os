@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Installs the pinned JetBrainsMono Nerd Font system-wide. Every IRAM config names
+# this family, and Ubuntu's fonts-jetbrains-mono lacks its icon glyphs, so without
+# it Waybar and the terminal show empty boxes. Verified by SHA-256 before unpacking.
+# Run as root. Pass the target root for use in an image build: iram-install-nerd-font [ROOT]
+# ==============================================================================
+set -euo pipefail
+
+VERSION="v3.4.0"
+SHA256="ef552a3e638f25125c6ad4c51176a6adcdce295ab1d2ffacf0db060caf8c1582"
+URL="https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION}/JetBrainsMono.tar.xz"
+FONT_DIR="${1:-}/usr/local/share/fonts/JetBrainsMonoNerdFont"
+
+if [ -f "$FONT_DIR/.version" ] && [ "$(cat "$FONT_DIR/.version")" = "$VERSION" ]; then
+    exit 0
+fi
+
+ARCHIVE="$(mktemp)"
+trap 'rm -f "$ARCHIVE"' EXIT
+curl -fsSL --retry 3 -o "$ARCHIVE" "$URL"
+echo "$SHA256  $ARCHIVE" | sha256sum --check --quiet
+
+mkdir -p "$FONT_DIR"
+tar -xJf "$ARCHIVE" -C "$FONT_DIR" --no-same-owner --wildcards '*.ttf'
+echo "$VERSION" > "$FONT_DIR/.version"
+if [ -z "${1:-}" ] && command -v fc-cache >/dev/null 2>&1; then
+    fc-cache -f "$FONT_DIR"
+fi

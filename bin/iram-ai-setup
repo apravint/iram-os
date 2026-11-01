@@ -54,10 +54,12 @@ echo -e "\n${BOLD}${BLUE}[2/3] Verifying Ollama Local Inference Engine...${NC}"
 if ! command -v ollama >/dev/null 2>&1; then
     echo -e "  ${YELLOW}Ollama is not installed.${NC} Installing official Ollama runtime..."
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL https://ollama.com/install.sh | sh || {
+        OLLAMA_INSTALLER="$(mktemp)"
+        trap 'rm -f "$OLLAMA_INSTALLER"' EXIT
+        if ! curl -fsSL https://ollama.com/install.sh -o "$OLLAMA_INSTALLER" || ! sh "$OLLAMA_INSTALLER"; then
             echo -e "  ${RED}Failed to auto-install Ollama.${NC} Please visit https://ollama.com to install manually."
             exit 1
-        }
+        fi
     else
         echo -e "  ${RED}curl is required to install Ollama.${NC}" >&2
         exit 1
@@ -88,22 +90,17 @@ else
 fi
 
 # 3. Model Selection & Pulling
-echo -e "\n${BOLD}${BLUE}[3/3] Pulling Optimal Coding Model...${NC}"
+echo -e "\n${BOLD}${BLUE}[3/3] Selecting Models for This Hardware...${NC}"
 
-TARGET_MODEL="llama3.2:3b"
-if [ "$HAS_NVIDIA" = true ] && [ "$VRAM_MB" -ge 6000 ]; then
-    TARGET_MODEL="qwen2.5-coder:7b"
-    echo -e "  High-performance GPU detected (${VRAM_MB}MB VRAM). Selecting ${BOLD}${CYAN}$TARGET_MODEL${NC}."
-elif [ "$HAS_ROCM" = true ]; then
-    TARGET_MODEL="qwen2.5-coder:7b"
-    echo -e "  AMD ROCm GPU detected. Selecting ${BOLD}${CYAN}$TARGET_MODEL${NC}."
-else
-    TARGET_MODEL="llama3.2:3b"
-    echo -e "  Optimized lightweight architecture selected: ${BOLD}${CYAN}$TARGET_MODEL${NC} (Fast on CPU & low-VRAM GPUs)."
-fi
+iram-ai-tune
+# shellcheck source=/dev/null
+. "$HOME/.config/iram/ai.env"
+TARGET_MODEL="$IRAM_MODEL_STANDARD"
 
-echo -e "  Pulling ${BOLD}${CYAN}$TARGET_MODEL${NC} via Ollama..."
-ollama pull "$TARGET_MODEL"
+for model in "$IRAM_MODEL_FAST" "$IRAM_MODEL_STANDARD"; do
+    echo -e "  Pulling ${BOLD}${CYAN}$model${NC} via Ollama..."
+    ollama pull "$model"
+done
 
 echo -e "\n${BLUE}========================================================================${NC}"
 echo -e "${GREEN}🎉 Sovereign AI setup complete!${NC}"

@@ -12,7 +12,7 @@ import os
 def count_mcp_tools():
     for candidate in [
         os.path.expanduser("~/.local/bin/iram-mcp-server"),
-        "/home/apravint/iram-os/bin/iram-mcp-server",
+        os.path.expanduser("~/iram-os/bin/iram-mcp-server"),
         "/usr/local/bin/iram-mcp-server",
         "/usr/share/iram/bin/iram-mcp-server"
     ]:

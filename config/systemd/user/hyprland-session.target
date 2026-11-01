@@ -1,0 +1,7 @@
+[Unit]
+Description=Hyprland Compositor Session
+Documentation=man:systemd.special(7)
+# graphical-session.target refuses manual starts; it comes up through this BindsTo.
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
