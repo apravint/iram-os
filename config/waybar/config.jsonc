@@ -1,12 +1,12 @@
 {
     "layer": "top",
     "position": "top",
-    "height": 34,
-    "margin-top": 8,
-    "margin-left": 12,
-    "margin-right": 12,
+    "height": 32,
+    "margin-top": 0,
+    "margin-left": 0,
+    "margin-right": 0,
     "margin-bottom": 0,
-    "spacing": 4,
+    "spacing": 0,
 
     "modules-left": [
         "custom/menu",
@@ -41,7 +41,8 @@
         "format": "{name}",
         "on-click": "activate",
         "all-outputs": false,
-        "sort-by-number": true
+        "sort-by-number": true,
+        "active-only": false
     },
 
     "hyprland/window": {
@@ -84,11 +85,11 @@
     "custom/ai-agent": {
         "format": "{}",
         "return-type": "json",
-        "interval": 4,
+        "interval": 5,
         "exec": "~/.local/bin/iram-waybar-agent",
         "on-click": "~/.local/bin/iram-nexus",
-        "on-click-right": "~/.local/bin/iram-hub",
-        "on-click-middle": "~/.local/bin/iram-models"
+        "on-click-right": "~/.local/bin/iram-models",
+        "on-click-middle": "~/.local/bin/iram-health-agent"
     },
 
     "custom/mcp-status": {
@@ -174,10 +175,10 @@
     },
 
     "network": {
-        "format-wifi": "󰖩",
-        "format-ethernet": "󰈀",
-        "format-disconnected": "󰖪",
-        "tooltip-format": "{essid} ({signalStrength}%) | IP: {ipaddr}\nLeft-click: Network Manager | Right-click: Terminal TUI",
+        "format-wifi": "󰖩 {essid}",
+        "format-ethernet": "󰈀 ETH",
+        "format-disconnected": "󰖪 OFFLINE",
+        "tooltip-format": "Signal: {signalStrength}% | IP: {ipaddr}",
         "on-click": "nm-connection-editor",
         "on-click-right": "alacritty -e nmtui"
     },

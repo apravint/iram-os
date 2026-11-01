@@ -9,51 +9,50 @@
     min-height: 0;
 }
 
-/* Floating Transparent Base Container */
+/* Sharp Flush Edge-to-Edge Base Bar */
 window#waybar {
-    background: transparent;
+    background: rgba(18, 18, 28, 0.92);
     color: @fg;
+    border-bottom: 1px solid @border;
+    border-top: none;
+    border-left: none;
+    border-right: none;
     box-shadow: none;
 }
 
-/* Floating Sharp Frosted-Glass Island Modules */
+/* Module Group Containers - Flush & Transparent */
 .modules-left,
 .modules-center,
 .modules-right {
-    background: rgba(18, 18, 28, 0.75);
-    border: 1px solid @border;
-    border-radius: 0px;
-    padding: 3px 6px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
 }
 
-.modules-left:hover,
-.modules-center:hover,
-.modules-right:hover {
-    border-color: @accent;
-    box-shadow: 0 6px 24px @accent_rgba;
-}
-
-/* App Menu Sharp Block */
+/* App Menu Sharp Block - Starts Flush at x=0 */
 #custom-menu {
-    padding: 0 12px;
-    margin: 2px 4px 2px 2px;
+    padding: 0 14px;
+    margin: 0;
     background: @accent;
     color: #11111b;
     font-size: 14px;
     font-weight: 800;
-    border-radius: 0px;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-menu:hover {
     background: @fg;
     color: #11111b;
-    box-shadow: 0 0 10px @accent_glow;
+    box-shadow: none;
 }
 
-/* Animated Workspace Sharp Blocks & Expanding Active Block */
+/* Animated Workspace Sharp Blocks */
 #workspaces {
     background: transparent;
     padding: 0;
@@ -61,12 +60,12 @@ window#waybar {
 }
 
 #workspaces button {
-    padding: 0 6px;
-    margin: 2px 3px;
-    min-width: 10px;
-    min-height: 20px;
-    border-radius: 0px;
-    background: rgba(255, 255, 255, 0.14);
+    padding: 0 8px;
+    margin: 3px 2px;
+    min-width: 12px;
+    min-height: 24px;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.12);
     color: transparent;
     font-size: 1px;
     border: none;
@@ -79,6 +78,7 @@ window#waybar {
     min-width: 22px;
     color: @fg;
     font-size: 10px;
+    box-shadow: none;
 }
 
 #workspaces button.active {
@@ -86,18 +86,19 @@ window#waybar {
     color: #11111b;
     font-size: 11px;
     font-weight: 800;
-    min-width: 34px;
-    border-radius: 0px;
+    min-width: 32px;
+    border-radius: 0;
     padding: 0 10px;
-    box-shadow: 0 0 12px @accent_glow;
+    box-shadow: none;
 }
 
 #workspaces button.urgent {
     background: #f7768e;
     color: #11111b;
     min-width: 24px;
-    border-radius: 0px;
+    border-radius: 0;
     font-size: 11px;
+    box-shadow: none;
     animation: blink 0.5s linear infinite alternate;
 }
 
@@ -108,14 +109,15 @@ window#waybar {
     color: @muted;
 }
 
-/* Center Module Islands */
+/* Center Module Blocks */
 #custom-indicators {
     padding: 0 10px;
-    margin: 2px 2px;
-    border-radius: 0px;
+    margin: 3px 2px;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.05);
     color: @accent;
     font-weight: 700;
+    box-shadow: none;
     transition: all 0.2s ease;
 }
 
@@ -132,31 +134,34 @@ window#waybar {
 
 #custom-indicators:hover {
     background: @accent_rgba;
+    box-shadow: none;
 }
 
 #clock {
     padding: 0 14px;
-    margin: 2px 2px;
-    border-radius: 0px;
+    margin: 3px 2px;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.06);
     font-weight: 800;
     color: @accent;
     letter-spacing: 0.3px;
+    box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #clock:hover {
     background: @accent_rgba;
-    box-shadow: 0 0 10px @accent_glow;
+    box-shadow: none;
 }
 
 #custom-weather,
 #mpris {
     padding: 0 12px;
-    margin: 2px 2px;
-    border-radius: 0px;
+    margin: 3px 2px;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.04);
     color: @fg;
+    box-shadow: none;
     transition: all 0.2s ease;
 }
 
@@ -164,6 +169,7 @@ window#waybar {
 #mpris:hover {
     background: @accent_rgba;
     color: @fg;
+    box-shadow: none;
 }
 
 #mpris.paused {
@@ -183,10 +189,11 @@ window#waybar {
 #battery,
 #tray {
     padding: 0 10px;
-    margin: 2px 2px;
-    border-radius: 0px;
+    margin: 3px 2px;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.04);
     color: @fg;
+    box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
@@ -246,7 +253,7 @@ window#waybar {
 #custom-ai-agent:hover,
 #custom-iram-ai:hover {
     background: @accent_rgba;
-    box-shadow: 0 0 10px @accent_glow;
+    box-shadow: none;
     color: @fg;
 }
 
@@ -263,20 +270,23 @@ window#waybar {
     background-color: #f7768e;
 }
 
+/* Power Button - Ends Flush at x=1920 */
 #custom-power {
-    padding: 0 12px;
-    margin: 2px 2px 2px 4px;
-    border-radius: 0px;
+    padding: 0 14px;
+    margin: 0;
+    border-radius: 0;
     background: rgba(247, 118, 142, 0.2);
     color: #f7768e;
     font-weight: 800;
+    border: none;
+    box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-power:hover {
     background: #f7768e;
     color: #11111b;
-    box-shadow: 0 0 12px rgba(247, 118, 142, 0.5);
+    box-shadow: none;
 }
 
 #battery.warning {
