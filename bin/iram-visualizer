@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Multi-Row TrueColor Spectrum Visualizer
+Simulates high-fidelity CAVA audio spectrum visualizer in full ANSI color,
+dynamically syncing with active IRAM desktop themes.
+"""
+
+import sys
+import os
+import time
+import math
+import random
+import shutil
+import signal
+import re
+
+running = True
+
+def handle_signal(sig, frame):
+    global running
+    running = False
+
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
+
+def get_theme_colors():
+    """Extract primary and secondary accent RGB colors from active hyprland theme."""
+    p_rgb = (122, 162, 247)  # Tokyo Night primary default
+    s_rgb = (187, 154, 247)  # Tokyo Night secondary default
+    theme_conf = os.path.expanduser("~/.config/hypr/theme.conf")
+    
+    if os.path.isfile(theme_conf):
+        try:
+            with open(theme_conf, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Match: col.active_border = rgba(7aa2f7ee) rgba(bb9af7ee) 45deg
+            hexes = re.findall(r"rgba\(([0-9a-fA-F]{6})[0-9a-fA-F]{2}\)", content)
+            if len(hexes) >= 2:
+                p_rgb = tuple(int(hexes[0][i:i+2], 16) for i in (0, 2, 4))
+                s_rgb = tuple(int(hexes[1][i:i+2], 16) for i in (0, 2, 4))
+        except Exception:
+            pass
+    return p_rgb, s_rgb
+
+def lerp_color(c1, c2, t):
+    t = max(0.0, min(1.0, t))
+    return (
+        int(c1[0] + (c2[0] - c1[0]) * t),
+        int(c1[1] + (c2[1] - c1[1]) * t),
+        int(c1[2] + (c2[2] - c1[2]) * t),
+    )
+
+def main():
+    sys.stdout.write("\033[?25l\033[2J")  # Hide cursor, clear screen
+    sys.stdout.flush()
+
+    p_rgb, s_rgb = get_theme_colors()
+    last_theme_check = 0.0
+
+    t = 0.0
+    cols, rows = shutil.get_terminal_size((80, 24))
+    num_bars = max(8, (cols - 6) // 2)
+    max_h = max(4, rows - 5)
+
+    peaks = [0.0] * num_bars
+    peak_hold = [0] * num_bars
+
+    try:
+        while running:
+            now = time.time()
+            if now - last_theme_check > 1.0:
+                p_rgb, s_rgb = get_theme_colors()
+                cols, rows = shutil.get_terminal_size((80, 24))
+                num_bars = max(8, (cols - 6) // 2)
+                max_h = max(4, rows - 5)
+                if len(peaks) != num_bars:
+                    peaks = [0.0] * num_bars
+                    peak_hold = [0] * num_bars
+                last_theme_check = now
+
+            # Generate spectrum values (bass left, mid center, treble right)
+            bar_heights = []
+            for i in range(num_bars):
+                frac = i / float(num_bars)
+                # Bass
+                bass = (math.sin(t * 2.8) * 0.5 + 0.5) * (1.0 - frac) * 0.95
+                # Mid melody
+                mid = (math.sin(t * 4.2 + frac * 6.0) * 0.4 + 0.4) * math.sin(frac * math.pi) * 0.85
+                # Treble ripples
+                treble = (math.cos(t * 6.5 - frac * 12.0) * 0.3 + 0.3) * frac * 0.75
+                # Jitter / noise
+                jitter = random.uniform(0.02, 0.12)
+
+                raw = (bass + mid + treble + jitter) * max_h
+                val = max(0.0, min(float(max_h), raw))
+                bar_heights.append(val)
+
+                # Peak decay
+                if val >= peaks[i]:
+                    peaks[i] = val
+                    peak_hold[i] = 4
+                else:
+                    if peak_hold[i] > 0:
+                        peak_hold[i] -= 1
+                    else:
+                        peaks[i] = max(0.0, peaks[i] - 0.35)
+
+            # Build frame buffer
+            lines = []
+            title = " 󰝚  IRAM LIVE SPECTRUM VISUALIZER • 48kHz STEREO "
+            pad_left = max(0, (cols - len(title)) // 2)
+            lines.append(f"\033[1;38;2;{p_rgb[0]};{p_rgb[1]};{p_rgb[2]}m{' ' * pad_left}{title}\033[0m")
+            lines.append("")
+
+            # Vertical grid from top (max_h) down to 1
+            for row in range(max_h, 0, -1):
+                row_str = ["  "]
+                color = lerp_color(s_rgb, p_rgb, row / float(max_h))
+                c_code = f"\033[38;2;{color[0]};{color[1]};{color[2]}m"
+                white_code = "\033[38;2;240;240;255m"
+
+                for i in range(num_bars):
+                    bh = bar_heights[i]
+                    pk = peaks[i]
+
+                    if row <= int(bh):
+                        row_str.append(f"{c_code}██\033[0m")
+                    elif row == int(bh) + 1:
+                        frac = bh - int(bh)
+                        if frac > 0.6:
+                            row_str.append(f"{c_code}▆▆\033[0m")
+                        elif frac > 0.3:
+                            row_str.append(f"{c_code}▄▄\033[0m")
+                        elif frac > 0.1:
+                            row_str.append(f"{c_code}▂▂\033[0m")
+                        else:
+                            if int(pk) == row:
+                                row_str.append(f"{white_code}▔▔\033[0m")
+                            else:
+                                row_str.append("  ")
+                    elif int(pk) == row:
+                        row_str.append(f"{white_code}▔▔\033[0m")
+                    else:
+                        row_str.append("  ")
+                lines.append("".join(row_str))
+
+            # Bottom baseline
+            lines.append(f"  \033[38;2;{s_rgb[0]};{s_rgb[1]};{s_rgb[2]}m{'━' * (num_bars * 2)}\033[0m")
+
+            # Write frame using cursor home
+            sys.stdout.write("\033[H" + "\n".join(lines))
+            sys.stdout.flush()
+
+            time.sleep(0.033)  # ~30 fps
+            t += 0.07
+
+    finally:
+        sys.stdout.write("\033[?25h\033[2J\033[H")
+        sys.stdout.flush()
+
+if __name__ == "__main__":
+    main()

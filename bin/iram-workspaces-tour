@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Multi-Workspace Showcase Tour (Workspaces 4 to 10)
+#
+# Dedicated Showcase Map:
+#  • Workspace 4: Hero Terminal (Fastfetch 3D Logo + System Specs Card)
+#  • Workspace 5: Real-time System Dashboard (btop live resource graphs)
+#  • Workspace 6: Audio Spectrum Visualizer (real cava with live audio)
+#  • Workspace 7: IRAM OS System & AI Telemetry HUD
+#  • Workspace 8: Flagship 4-Tile "r/unixporn" Quad Grid
+#  • Workspace 9: Developer Rice (Neovim syntax editor + Starship git terminal)
+#  • Workspace 10: Pristine Desktop Background (Clean Wallpaper & Live Theme Carousel)
+# ==============================================================================
+set -euo pipefail
+
+OUTPUT_MP4="/home/apravint/iram-os-workspaces-tour.mp4"
+OUTPUT_GIF="/home/apravint/iram-os-workspaces-tour.gif"
+ORIGINAL_WS=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id // 2')
+
+cleanup_workspaces() {
+    echo "🧹 Cleaning up existing tour windows on Workspaces 4..10..."
+    if command -v hyprctl >/dev/null 2>&1; then
+        hyprctl clients -j | jq -r '.[] | select((.workspace.id >= 4 and .workspace.id <= 10) or (.class | startswith("iram-tour-"))) | .address' | while read -r addr; do
+            [ -n "$addr" ] && hyprctl dispatch closewindow address:"$addr" 2>/dev/null || true
+        done
+    fi
+}
+
+# Allow standalone cleanup via --close
+if [[ "${1:-}" == "--close" ]]; then
+    cleanup_workspaces
+    echo "✓ Cleaned up Workspaces 4..10."
+    exit 0
+fi
+
+cleanup_workspaces
+sleep 0.6
+
+echo -e "\033[1;34m================================================================\033[0m"
+echo -e "\033[1;32m      ✨ IRAM OS - Multi-Workspace Tour Setup (WS 4..10) ✨\033[0m"
+echo -e "\033[1;34m================================================================\033[0m"
+
+# Ensure ambient sound file exists for real cava reactive bars
+if [ ! -f /tmp/ambient_lofi.wav ]; then
+    ffmpeg -y -f lavfi -i "sine=frequency=110:duration=60" -f lavfi -i "sine=frequency=165:duration=60" -f lavfi -i "sine=frequency=220:duration=60" -f lavfi -i "sine=frequency=330:duration=60" -filter_complex "[0:a][1:a][2:a][3:a]amix=inputs=4,volume=0.06" /tmp/ambient_lofi.wav >/dev/null 2>&1 || true
+fi
+
+# ------------------------------------------------------------------------------
+# 1. SETUP WORKSPACE 4: Fastfetch Hero
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 4: Fastfetch Hero Terminal..."
+hyprctl dispatch exec "[workspace 4] alacritty --class iram-tour-ws4-fastfetch --title 'IRAM OS 26.04 LTS System Intelligence' --command bash -c '
+    export PATH=\"\$HOME/.local/bin:\$HOME/iram-os/bin:\$PATH\"
+    printf \"\033[?25l\"
+    LAST=\"\"
+    while true; do
+        CUR=\$(cat \"\$HOME/.local/state/iram/current/theme.name\" 2>/dev/null || echo \"\")
+        if [ \"\$CUR\" != \"\$LAST\" ]; then
+            clear
+            fastfetch -c \"\$HOME/.config/fastfetch/config.jsonc\"
+            LAST=\"\$CUR\"
+        fi
+        sleep 0.4
+    done
+'" >/dev/null 2>&1
+sleep 0.5
+
+# ------------------------------------------------------------------------------
+# 2. SETUP WORKSPACE 5: btop System Dashboard
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 5: btop Resource Dashboard..."
+hyprctl dispatch exec "[workspace 5] alacritty --class iram-tour-ws5-btop --title 'IRAM Resource & Process Telemetry' --command btop" >/dev/null 2>&1
+sleep 0.5
+
+# ------------------------------------------------------------------------------
+# 3. SETUP WORKSPACE 6: Real CAVA Audio Spectrum Visualizer
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 6: Real CAVA Audio Spectrum Visualizer..."
+hyprctl dispatch exec "[workspace 6] alacritty --class iram-tour-ws6-visualizer --title 'IRAM Spectrum Visualizer' --command /home/apravint/.local/bin/cava" >/dev/null 2>&1
+sleep 0.5
+
+# ------------------------------------------------------------------------------
+# 4. SETUP WORKSPACE 7: IRAM OS System & Keybindings Telemetry
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 7: System & Keybinding Telemetry HUD..."
+hyprctl dispatch exec "[workspace 7] alacritty --class iram-tour-ws7-telemetry --title 'IRAM System Diagnostics & Keybinding Matrix' --command bash -c '
+    export PATH=\"\$HOME/.local/bin:\$HOME/iram-os/bin:\$PATH\"
+    printf \"\033[?25l\"
+    LAST=\"\"
+    while true; do
+        CUR=\$(cat \"\$HOME/.local/state/iram/current/theme.name\" 2>/dev/null || echo \"\")
+        if [ \"\$CUR\" != \"\$LAST\" ]; then
+            clear
+            echo -e \"\033[1;36m╭────────────────────────────────────────────────────────────────────────╮\033[0m\"
+            echo -e \"\033[1;36m│          🛡️   IRAM OS 26.04 COMPOSITOR & SERVICE TELEMETRY              │\033[0m\"
+            echo -e \"\033[1;36m╰────────────────────────────────────────────────────────────────────────╯\033[0m\"
+            iram info 2>/dev/null || uptime
+            echo \"\"
+            echo -e \"\033[1;33m  ⚡ Flagship Rice Keybindings:\033[0m\"
+            echo -e \"    • \033[1;37mSuper + N\033[0m               : SwayNC Notification Control Center\"
+            echo -e \"    • \033[1;37mSuper + Ctrl+Shift+Space\033[0m: 22-Theme Live Switcher Menu\"
+            echo -e \"    • \033[1;37mSuper + Shift + R\033[0m       : Rice Showcase Mode\"
+            echo -e \"    • \033[1;37mSuper + Shift + W\033[0m       : Next Wallpaper & Auto-Chameleon Sync\"
+            echo -e \"    • \033[1;37mSuper + Return\033[0m          : Terminal (Alacritty)\"
+            echo -e \"    • \033[1;37mSuper + Space\033[0m           : Wofi Application Launcher\"
+            echo \"\"
+            LAST=\"\$CUR\"
+        fi
+        sleep 0.4
+    done
+'" >/dev/null 2>&1
+sleep 0.5
+
+# ------------------------------------------------------------------------------
+# 5. SETUP WORKSPACE 8: Flagship 4-Tile Quad Grid
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 8: 2x2 Flagship Quad Grid..."
+hyprctl dispatch workspace 8 >/dev/null 2>&1
+sleep 0.3
+
+# Top-Left: Fastfetch
+alacritty --class iram-tour-ws8-ff --title "IRAM System Card" --command bash -c '
+    export PATH="$HOME/.local/bin:$HOME/iram-os/bin:$PATH"
+    printf "\033[?25l"
+    LAST=""
+    while true; do
+        CUR=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "")
+        if [ "$CUR" != "$LAST" ]; then
+            clear
+            fastfetch -c "$HOME/.config/fastfetch/config.jsonc"
+            LAST="$CUR"
+        fi
+        sleep 0.4
+    done
+' &
+sleep 0.5
+
+# Preselect right -> Top-Right: Btop
+hyprctl dispatch layoutmsg preselect r >/dev/null 2>&1 || true
+sleep 0.15
+alacritty --class iram-tour-ws8-btop --title "IRAM Resource Graph" --command btop &
+sleep 0.5
+
+# Focus Fastfetch -> Preselect down -> Bottom-Left: Visualizer
+hyprctl dispatch focuswindow class:iram-tour-ws8-ff >/dev/null 2>&1 || true
+sleep 0.2
+hyprctl dispatch layoutmsg preselect d >/dev/null 2>&1 || true
+sleep 0.15
+alacritty --class iram-tour-ws8-cava --title "IRAM Spectrum" --command /home/apravint/.local/bin/cava &
+sleep 0.5
+
+# Focus Btop -> Preselect down -> Bottom-Right: Telemetry
+hyprctl dispatch focuswindow class:iram-tour-ws8-btop >/dev/null 2>&1 || true
+sleep 0.2
+hyprctl dispatch layoutmsg preselect d >/dev/null 2>&1 || true
+sleep 0.15
+alacritty --class iram-tour-ws8-telem --title "IRAM Telemetry" --command bash -c '
+    export PATH="$HOME/.local/bin:$HOME/iram-os/bin:$PATH"
+    printf "\033[?25l"
+    LAST=""
+    while true; do
+        CUR=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "")
+        if [ "$CUR" != "$LAST" ]; then
+            clear
+            echo -e "\033[1;36m╭──────────────────────────────────────────────────────────╮\033[0m"
+            echo -e "\033[1;36m│          🛡️   IRAM OS COMPOSITOR & SERVICE TELEMETRY     │\033[0m"
+            echo -e "\033[1;36m╰──────────────────────────────────────────────────────────╯\033[0m"
+            iram info 2>/dev/null || uptime
+            LAST="$CUR"
+        fi
+        sleep 0.4
+    done
+' &
+sleep 0.5
+
+# ------------------------------------------------------------------------------
+# 6. SETUP WORKSPACE 9: Developer Rice (Neovim + Starship Terminal)
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 9: Developer Rice (Neovim + Starship)..."
+hyprctl dispatch workspace 9 >/dev/null 2>&1
+sleep 0.3
+
+# Left Tile: Neovim with hyprland.conf
+alacritty --class iram-tour-ws9-nvim --title "Neovim: hyprland.conf" --command nvim -R /home/apravint/iram-os/config/hypr/hyprland.conf &
+sleep 0.5
+
+# Preselect right -> Right Tile: Starship Terminal
+hyprctl dispatch layoutmsg preselect r >/dev/null 2>&1 || true
+sleep 0.15
+alacritty --class iram-tour-ws9-term --title "IRAM Development Environment" --command bash -c '
+    export PATH="$HOME/.local/bin:$HOME/iram-os/bin:$PATH"
+    cd "$HOME/iram-os"
+    clear
+    echo -e "\033[1;36m╭──────────────────────────────────────────────────────────╮\033[0m"
+    echo -e "\033[1;36m│       ⚡  IRAM OS 26.04 ACTIVE WORKSPACE REPOSITORY      │\033[0m"
+    echo -e "\033[1;36m╰──────────────────────────────────────────────────────────╯\033[0m"
+    git status -s
+    echo ""
+    fastfetch -c "$HOME/.config/fastfetch/config.jsonc"
+    sleep 60
+' &
+sleep 0.5
+
+# ------------------------------------------------------------------------------
+# 7. SETUP WORKSPACE 10: Pristine Desktop Background (No Open Apps)
+# ------------------------------------------------------------------------------
+echo "Configuring Workspace 10: Pristine Desktop Background (No Open Apps)..."
+# Keep Workspace 10 completely empty to showcase wallpaper art and Waybar live sync!
+
+echo -e "\033[1;32m✓ All Workspaces 4..10 configured!\033[0m"
+
+# ------------------------------------------------------------------------------
+# 8. START VIDEO RECORDING TOUR
+# ------------------------------------------------------------------------------
+echo -e "\n\033[1;33m🎬 Starting High-Definition Recording across Workspaces 4..10...\033[0m"
+rm -f "$OUTPUT_MP4" "$OUTPUT_GIF"
+
+# Start subtle ambient sound loop for cava
+pw-play /tmp/ambient_lofi.wav &
+SOUND_PID=$!
+
+# Record primary output (DVI-I-1)
+wf-recorder -o DVI-I-1 -f "$OUTPUT_MP4" -c libx264 -x yuv420p -r 30 -y &
+REC_PID=$!
+sleep 1.5
+
+# Switch to Workspace 4 and begin walkthrough
+echo "  [Tour] Sliding to Workspace 4 (Fastfetch Hero)..."
+hyprctl dispatch workspace 4
+sleep 3.0
+
+echo "  [Tour] Sliding to Workspace 5 (btop Monitor)..."
+hyprctl dispatch workspace 5
+sleep 3.0
+
+echo "  [Tour] Sliding to Workspace 6 (Real CAVA Audio Spectrum)..."
+hyprctl dispatch workspace 6
+sleep 3.5
+
+echo "  [Tour] Sliding to Workspace 7 (Telemetry HUD)..."
+hyprctl dispatch workspace 7
+sleep 3.0
+
+echo "  [Tour] Sliding to Workspace 8 (2x2 Quad Grid)..."
+hyprctl dispatch workspace 8
+sleep 4.0
+
+echo "  [Tour] Sliding to Workspace 9 (Developer Rice: Neovim + Starship)..."
+hyprctl dispatch workspace 9
+sleep 3.5
+
+echo "  [Tour] Sliding to Workspace 10 (Pristine Wallpaper Background)..."
+hyprctl dispatch workspace 10
+sleep 2.0
+
+# On Workspace 10, showcase pure desktop wallpaper and Waybar live theme sync
+FLAGSHIP_THEMES=("Tokyo Night" "Catppuccin Mocha" "Gruvbox" "Nord" "Everforest")
+for theme_name in "${FLAGSHIP_THEMES[@]}"; do
+    echo "    🎨 [Desktop Wallpaper Sync] Applying: $theme_name..."
+    iram theme set "$theme_name" >/dev/null 2>&1 || true
+    sleep 2.6
+done
+
+# Return cleanly to Tokyo Night
+echo "    🎨 [Desktop Wallpaper Sync] Returning to: Tokyo Night..."
+iram theme set "Tokyo Night" >/dev/null 2>&1 || true
+sleep 2.0
+
+# ------------------------------------------------------------------------------
+# 9. STOP RECORDING & FINALIZE MEDIA
+# ------------------------------------------------------------------------------
+echo "=== Stopping wf-recorder & Audio ==="
+kill "$SOUND_PID" 2>/dev/null || true
+kill -2 "$REC_PID" 2>/dev/null || true
+wait "$REC_PID" 2>/dev/null || true
+sleep 1.0
+
+# Return user to original workspace
+hyprctl dispatch workspace "$ORIGINAL_WS" >/dev/null 2>&1 || true
+
+echo "=== Generating Reddit-optimized GIF ==="
+ffmpeg -y -i "$OUTPUT_MP4" -vf "fps=15,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" "$OUTPUT_GIF"
+
+echo -e "\n\033[1;32m🎉 Multi-Workspace Tour Video Captured Successfully!\033[0m"
+ls -lh "$OUTPUT_MP4" "$OUTPUT_GIF"

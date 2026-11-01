@@ -8,9 +8,9 @@
             "2": "magenta"
         },
         "padding": {
-            "top": 1,
+            "top": 0,
             "left": 1,
-            "right": 3
+            "right": 2
         }
     },
     "display": {
@@ -22,7 +22,7 @@
     "modules": [
         {
             "type": "custom",
-            "format": "╭───────────────────────── System Intelligence ─────────────────────────╮"
+            "format": "╭─────────────── System Intelligence ───────────────╮"
         },
         {
             "type": "os",
@@ -48,11 +48,6 @@
             "text": "tr '[:lower:]' '[:upper:]' < ~/.local/state/iram/current/theme.name 2>/dev/null || echo 'TOKYO NIGHT'"
         },
         {
-            "type": "packages",
-            "key": "  󰏖 Packages",
-            "keyColor": "blue"
-        },
-        {
             "type": "uptime",
             "key": "  󱎫 Uptime",
             "keyColor": "blue"
@@ -60,12 +55,15 @@
         {
             "type": "cpu",
             "key": "  󰍛 CPU",
-            "keyColor": "green"
+            "keyColor": "green",
+            "format": "{1} ({4}) @ {7}"
         },
         {
             "type": "gpu",
             "key": "  󰢮 GPU",
-            "keyColor": "green"
+            "keyColor": "green",
+            "hideType": "integrated",
+            "format": "{1} {2}"
         },
         {
             "type": "memory",
@@ -73,8 +71,15 @@
             "keyColor": "yellow"
         },
         {
+            "type": "display",
+            "key": "  󰍹 Screen",
+            "keyColor": "yellow",
+            "compactType": "original",
+            "format": "{1} ({2})"
+        },
+        {
             "type": "custom",
-            "format": "╰───────────────────────────────────────────────────────────────────────╯"
+            "format": "╰───────────────────────────────────────────────────╯"
         },
         "break",
         {

@@ -3,22 +3,22 @@
 # IRAM OS - Flagship "r/unixporn" Rice Showcase Mode
 # Keybind: Super + Shift + R
 #
-# Automatically switches to Workspace 8 and tiles a 4-quadrant layout:
-#  1. Master Left Top:    Alacritty running fastfetch
-#  2. Master Left Bottom: Alacritty running cava (or animated audio spectrum)
-#  3. Right Top:          Alacritty running btop (system graphs)
-#  4. Right Bottom:       Alacritty running iram doctor / telemetry
+# Automatically switches to Workspace 8 and tiles a balanced 4-quadrant layout:
+#  1. Top Left:     Alacritty running fastfetch (dynamic live theme sync)
+#  2. Bottom Left:  Alacritty running iram-visualizer (multi-row audio spectrum)
+#  3. Top Right:    Alacritty running btop (system graphs)
+#  4. Bottom Right: Alacritty running iram telemetry & doctor
 #
 # Options:
-#  --cycle                Automatically cycle 5 flagship themes every 2s
-#  --interval <sec>       Custom cycle duration (default: 2)
+#  --cycle                Automatically cycle 5 flagship themes every 2.5s
+#  --interval <sec>       Custom cycle duration (default: 2.5)
 #  --workspace <num>      Target workspace (default: 8)
 #  --close                Close all showcase windows on target workspace
 # ==============================================================================
 set -euo pipefail
 
 WORKSPACE="${WORKSPACE:-8}"
-INTERVAL=2
+INTERVAL=2.5
 DO_CYCLE=false
 
 while [[ $# -gt 0 ]]; do
@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --interval|-i)
-            INTERVAL="${2:-2}"
+            INTERVAL="${2:-2.5}"
             shift 2
             ;;
         --workspace|-w)
@@ -62,94 +62,111 @@ echo -e "\033[1;34m========================================================\033[
 echo -e "\033[1;32m      ✨ IRAM OS - Flagship Rice Showcase Mode ✨\033[0m"
 echo -e "\033[1;34m========================================================\033[0m"
 
-# 1. Switch to clean showcase workspace
+# 1. Close existing showcase windows and switch to clean showcase workspace
 if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-    echo "Switching to Workspace $WORKSPACE..."
+    hyprctl clients -j | jq -r ".[] | select(.class | startswith(\"iram-showcase\")) | .address" | while read -r addr; do
+        [ -n "$addr" ] && hyprctl dispatch closewindow address:"$addr" 2>/dev/null || true
+    done
+    sleep 0.3
     hyprctl dispatch workspace "$WORKSPACE" >/dev/null 2>&1 || true
-    sleep 0.2
+    sleep 0.3
 fi
 
-# 2. Window 1: Fastfetch (Master Left Top)
-echo "Launching Fastfetch System Card..."
+# 2. Window 1: Fastfetch (Top Left)
+echo "Launching Fastfetch System Card (Top Left)..."
 alacritty \
     --class "iram-showcase-fastfetch" \
     --title "IRAM OS System Intelligence" \
-    --command bash -c "fastfetch -c ~/.config/fastfetch/config.jsonc; echo ''; read -r -p '  [Press Enter to close]' || bash" &
-sleep 0.35
+    --command bash -c '
+        printf "\033[?25l"
+        LAST=""
+        while true; do
+            CUR=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "")
+            if [ "$CUR" != "$LAST" ]; then
+                clear
+                fastfetch -c "$HOME/.config/fastfetch/config.jsonc"
+                LAST="$CUR"
+            fi
+            sleep 0.4
+        done
+    ' &
+sleep 0.55
 
-# 3. Window 2: btop System Monitor (Right Top)
-echo "Launching btop System Graph..."
+# 3. Window 2: Preselect Right -> Btop (Top Right)
+echo "Launching Btop System Monitor (Top Right)..."
+if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    hyprctl dispatch layoutmsg preselect r >/dev/null 2>&1 || true
+    sleep 0.15
+fi
 alacritty \
     --class "iram-showcase-btop" \
     --title "IRAM Resource Monitor" \
     --command btop &
-sleep 0.35
+sleep 0.55
 
-# 4. Window 3: Cava Audio Spectrum (Master Left Bottom)
-echo "Launching Cava Audio Spectrum..."
-if command -v cava >/dev/null 2>&1; then
-    alacritty \
-        --class "iram-showcase-cava" \
-        --title "IRAM Spectrum Visualizer" \
-        --command cava &
-else
-    # High-quality fallback equalizer simulation
-    alacritty \
-        --class "iram-showcase-cava" \
-        --title "IRAM Spectrum Visualizer" \
-        --command python3 -c '
-import time, math, random, sys, os
-colors = ["\033[38;2;122;162;247m", "\033[38;2;125;207;255m", "\033[38;2;187;154;247m", "\033[38;2;247;118;142m", "\033[38;2;158;206;106m"]
-reset = "\033[0m"
-chars = [" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-cols = 40
-print("\033[?25l\033[2J")
-t = 0.0
-try:
-    while True:
-        bars = []
-        for i in range(cols):
-            val = math.sin(t * 1.5 + i * 0.25) * 0.4 + math.cos(t * 2.2 - i * 0.15) * 0.3 + random.uniform(0.1, 0.3)
-            idx = min(len(chars) - 1, max(0, int(val * (len(chars) - 1))))
-            c = colors[i % len(colors)]
-            bars.append(f"{c}{chars[idx] * 2}{reset}")
-        sys.stdout.write("\r  " + " ".join(bars) + "  ")
-        sys.stdout.flush()
-        time.sleep(0.04)
-        t += 0.08
-except KeyboardInterrupt:
-    print("\033[?25h")
-' &
+# 4. Window 3: Focus Fastfetch -> Preselect Down -> Visualizer (Bottom Left)
+echo "Launching Spectrum Visualizer (Bottom Left)..."
+if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    hyprctl dispatch focuswindow class:iram-showcase-fastfetch >/dev/null 2>&1 || true
+    sleep 0.2
+    hyprctl dispatch layoutmsg preselect d >/dev/null 2>&1 || true
+    sleep 0.15
 fi
-sleep 0.35
 
-# 5. Window 4: IRAM Telemetry & Doctor (Right Bottom)
-echo "Launching IRAM OS Telemetry & Doctor..."
+VISUALIZER_CMD="iram-visualizer"
+if ! command -v "$VISUALIZER_CMD" >/dev/null 2>&1; then
+    VISUALIZER_CMD="$HOME/iram-os/bin/iram-visualizer"
+fi
+
+alacritty \
+    --class "iram-showcase-cava" \
+    --title "IRAM Live Spectrum Visualizer" \
+    --command "$VISUALIZER_CMD" &
+sleep 0.55
+
+# 5. Window 4: Focus Btop -> Preselect Down -> Telemetry (Bottom Right)
+echo "Launching IRAM OS Telemetry & Doctor (Bottom Right)..."
+if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    hyprctl dispatch focuswindow class:iram-showcase-btop >/dev/null 2>&1 || true
+    sleep 0.2
+    hyprctl dispatch layoutmsg preselect d >/dev/null 2>&1 || true
+    sleep 0.15
+fi
+
 alacritty \
     --class "iram-showcase-telemetry" \
     --title "IRAM OS Health Telemetry" \
-    --command bash -c "
-        echo -e '\033[1;36m╭──────────────────────────────────────────────────────────╮\033[0m'
-        echo -e '\033[1;36m│          🛡️  IRAM OS COMPOSITOR & SERVICE TELEMETRY      │\033[0m'
-        echo -e '\033[1;36m╰──────────────────────────────────────────────────────────╯\033[0m'
-        iram info 2>/dev/null || iram doctor 2>/dev/null || agy --version 2>/dev/null || uptime
-        echo ''
-        echo -e '\033[1;33m  ⚡ Active Keybinds:\033[0m'
-        echo -e '    • Super + N               : SwayNC Notification Center'
-        echo -e '    • Super + Ctrl+Shift+Space: 22-Theme Switcher'
-        echo -e '    • Super + Shift + R       : Rice Showcase Mode'
-        echo -e '    • Super + Shift + W       : Next Wallpaper'
-        echo ''
-        read -r -p '  [Press Enter to close]' || bash
-    " &
-sleep 0.35
+    --command bash -c '
+        printf "\033[?25l"
+        LAST=""
+        while true; do
+            CUR=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "")
+            if [ "$CUR" != "$LAST" ]; then
+                clear
+                echo -e "\033[1;36m╭──────────────────────────────────────────────────────────╮\033[0m"
+                echo -e "\033[1;36m│          🛡️   IRAM OS COMPOSITOR & SERVICE TELEMETRY     │\033[0m"
+                echo -e "\033[1;36m╰──────────────────────────────────────────────────────────╯\033[0m"
+                iram info 2>/dev/null || uptime
+                echo ""
+                echo -e "\033[1;33m  ⚡ Active Keybinds:\033[0m"
+                echo -e "    • \033[1;37mSuper + N\033[0m               : SwayNC Notification Center"
+                echo -e "    • \033[1;37mSuper + Ctrl+Shift+Space\033[0m: 22-Theme Switcher"
+                echo -e "    • \033[1;37mSuper + Shift + R\033[0m       : Rice Showcase Mode"
+                echo -e "    • \033[1;37mSuper + Shift + W\033[0m       : Next Wallpaper"
+                echo ""
+                LAST="$CUR"
+            fi
+            sleep 0.4
+        done
+    ' &
+sleep 0.55
 
-# Rebalance tiles if on Hyprland
+# Focus Fastfetch for clean visual aesthetics
 if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
     hyprctl dispatch focuswindow class:iram-showcase-fastfetch >/dev/null 2>&1 || true
 fi
 
-echo -e "\033[1;32m✓ 4-Tile Rice Showcase arranged on Workspace $WORKSPACE!\033[0m"
+echo -e "\033[1;32m✓ Perfect 2x2 Rice Showcase arranged on Workspace $WORKSPACE!\033[0m"
 
 # 6. Flagship Theme Cycling Mode
 if [ "$DO_CYCLE" = true ]; then
