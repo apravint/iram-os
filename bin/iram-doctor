@@ -84,6 +84,8 @@ fi
 for unit in hyprland-session.target waybar.service swaybg.service swaync.service hypridle.service iram-cliphist.service iram-polkit-agent.service iram-watchdog.service; do
     if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
         add_result "Service: $unit" "PASS" "active (running)"
+    elif systemctl --user is-failed --quiet "$unit" 2>/dev/null; then
+        add_result "Service: $unit" "FAIL" "failed; see: journalctl --user -u $unit"
     elif systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then
         add_result "Service: $unit" "WARN" "enabled (currently inactive)"
     elif [ -f "$HOME/.config/systemd/user/$unit" ] || [ -f "/usr/share/iram/systemd/user/$unit" ]; then

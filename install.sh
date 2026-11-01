@@ -67,6 +67,11 @@ echo -e "${BLUE}------------------------------------------------------${NC}"
 
 # Check for sudo/root in real mode
 if [ "$DRY_RUN" = false ]; then
+    if grep -q '^NoNewPrivs:[[:space:]]*1' /proc/self/status 2>/dev/null; then
+        echo -e "${RED}Error: this terminal blocks sudo (the \"no new privileges\" flag is set).${NC}"
+        echo "Apps and sandboxes can set this flag. Run the installer from a regular terminal, such as Konsole or Alacritty."
+        exit 1
+    fi
     if ! sudo -v &>/dev/null; then
         echo -e "${RED}Error: sudo access is required to install system packages.${NC}"
         exit 1
@@ -258,6 +263,7 @@ else
         iram theme set "Cyberpunk Neon" || iram theme set "Tokyo Storm" || warn "Could not apply a default theme."
     else
         iram-theme-sync-all || warn "Theme sync failed."
+        iram-theme-set-toolkits || warn "GTK/Qt theme sync failed."
     fi
 
     # Opt-in only, and deliberately absent here: iram-organizer.timer (moves files in
@@ -280,6 +286,9 @@ else
         if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
             hyprctl reload >/dev/null || warn "hyprctl reload failed."
             iram-session-bootstrap || warn "Could not restart the session services."
+            # graphical-session.target is already active here, so systemd will not pull
+            # in newly enabled units until the next login. Start them directly.
+            systemctl --user start --no-block "${ENABLE_UNITS[@]}" || warn "Could not start every session unit."
         fi
     else
         warn "No user systemd instance here; units were not enabled. Re-run install.sh from a login session."
