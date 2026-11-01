@@ -222,49 +222,44 @@ SOUND_PID=$!
 # Record primary output (DVI-I-1)
 wf-recorder -o DVI-I-1 -f "$OUTPUT_MP4" -c libx264 -x yuv420p -r 30 -y &
 REC_PID=$!
-sleep 1.5
+sleep 0.8
 
-# Switch to Workspace 4 and begin walkthrough
+# Switch to Workspace 4 and begin snappy walkthrough
 echo "  [Tour] Sliding to Workspace 4 (Fastfetch Hero)..."
 hyprctl dispatch workspace 4
-sleep 3.0
+sleep 0.9
 
 echo "  [Tour] Sliding to Workspace 5 (btop Monitor)..."
 hyprctl dispatch workspace 5
-sleep 3.0
+sleep 0.8
 
 echo "  [Tour] Sliding to Workspace 6 (Real CAVA Audio Spectrum)..."
 hyprctl dispatch workspace 6
-sleep 3.5
+sleep 1.0
 
 echo "  [Tour] Sliding to Workspace 7 (Telemetry HUD)..."
 hyprctl dispatch workspace 7
-sleep 3.0
+sleep 0.8
 
 echo "  [Tour] Sliding to Workspace 8 (2x2 Quad Grid)..."
 hyprctl dispatch workspace 8
-sleep 4.0
+sleep 1.2
 
 echo "  [Tour] Sliding to Workspace 9 (Developer Rice: Neovim + Starship)..."
 hyprctl dispatch workspace 9
-sleep 3.5
+sleep 1.0
 
 echo "  [Tour] Sliding to Workspace 10 (Pristine Wallpaper Background)..."
 hyprctl dispatch workspace 10
-sleep 2.0
+sleep 0.6
 
 # On Workspace 10, showcase pure desktop wallpaper and Waybar live theme sync
-FLAGSHIP_THEMES=("Tokyo Night" "Catppuccin Mocha" "Gruvbox" "Nord" "Everforest")
+FLAGSHIP_THEMES=("Catppuccin Mocha" "Gruvbox" "Tokyo Night")
 for theme_name in "${FLAGSHIP_THEMES[@]}"; do
     echo "    🎨 [Desktop Wallpaper Sync] Applying: $theme_name..."
     iram theme set "$theme_name" >/dev/null 2>&1 || true
-    sleep 2.6
+    sleep 0.4
 done
-
-# Return cleanly to Tokyo Night
-echo "    🎨 [Desktop Wallpaper Sync] Returning to: Tokyo Night..."
-iram theme set "Tokyo Night" >/dev/null 2>&1 || true
-sleep 2.0
 
 # ------------------------------------------------------------------------------
 # 9. STOP RECORDING & FINALIZE MEDIA
@@ -273,7 +268,7 @@ echo "=== Stopping wf-recorder & Audio ==="
 kill "$SOUND_PID" 2>/dev/null || true
 kill -2 "$REC_PID" 2>/dev/null || true
 wait "$REC_PID" 2>/dev/null || true
-sleep 1.0
+sleep 0.8
 
 # Return user to original workspace
 hyprctl dispatch workspace "$ORIGINAL_WS" >/dev/null 2>&1 || true
