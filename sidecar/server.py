@@ -12,6 +12,8 @@ import json
 import re
 import time
 import base64
+import shutil
+import asyncio
 import subprocess
 import urllib.request
 import urllib.error
@@ -239,6 +241,25 @@ async def stream_ollama(prompt: str, system_instruction: str = SYSTEM_PROMPT, mo
         yield f"Ollama Error: {str(e)}"
 
 
+async def stream_claude(prompt: str, system_instruction: str = SYSTEM_PROMPT) -> AsyncGenerator[str, None]:
+    cmd = ["claude", "-p", f"{system_instruction}\n\nTask: {prompt}"]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=45)
+        text = stdout.decode("utf-8")
+        if text:
+            for line in text.splitlines(keepends=True):
+                yield line
+        elif stderr:
+            yield f"Claude Error: {stderr.decode('utf-8')}"
+    except Exception as e:
+        yield f"Claude Error: {str(e)}"
+
+
 @app.get("/")
 async def get_index():
     index_file = os.path.join(STATIC_DIR, "index.html")
@@ -251,6 +272,7 @@ async def get_index():
 async def get_health():
     key_present = bool(get_gemini_api_key())
     gemini_up = key_present and is_gemini_healthy()
+    claude_up = shutil.which("claude") is not None
     ollama_up = is_ollama_available()
 
     # Get system RAM
@@ -265,10 +287,13 @@ async def get_health():
     except Exception:
         pass
 
+    preferred = "gemini" if gemini_up else ("claude" if claude_up else "ollama")
+
     return {
         "gemini": gemini_up,
+        "claude": claude_up,
         "ollama": ollama_up,
-        "preferred": "gemini" if gemini_up else "ollama",
+        "preferred": preferred,
         "memory": mem_info,
         "compositor": "Hyprland 0.56.2"
     }
@@ -441,12 +466,21 @@ async def chat_endpoint(request: Request):
     if not user_prompt:
         return JSONResponse({"error": "Empty prompt"}, status_code=400)
 
-    # Decide provider
-    use_gemini = True
-    if model_pref == "ollama":
-        use_gemini = False
+    # Decide provider: Antigravity/Gemini -> Claude -> Ollama
+    provider = "gemini"
+    if model_pref == "claude":
+        provider = "claude"
+    elif model_pref == "ollama":
+        provider = "ollama"
+    elif model_pref == "gemini":
+        provider = "gemini"
     elif model_pref == "auto":
-        use_gemini = bool(get_gemini_api_key())
+        if bool(get_gemini_api_key()) and is_gemini_healthy():
+            provider = "gemini"
+        elif shutil.which("claude"):
+            provider = "claude"
+        else:
+            provider = "ollama"
 
     # Build conversation context
     history_context = ""
@@ -460,12 +494,15 @@ async def chat_endpoint(request: Request):
     full_query = f"{history_context}USER: {user_prompt}\nASSISTANT:"
 
     async def sse_event_stream():
-        nonlocal use_gemini
+        nonlocal provider
         first_pass_text = ""
 
         # Step 1: Query LLM to see if it calls a tool
-        if use_gemini:
+        if provider == "gemini":
             async for chunk in stream_gemini(full_query):
+                first_pass_text += chunk
+        elif provider == "claude":
+            async for chunk in stream_claude(full_query):
                 first_pass_text += chunk
         else:
             async for chunk in stream_ollama(full_query):
@@ -495,11 +532,14 @@ async def chat_endpoint(request: Request):
                 f"Provide a friendly, beautifully formatted markdown response summarizing the findings directly for the user."
             )
 
-            if use_gemini:
-                async for chunk in stream_gemini(summary_prompt, system_instruction="You are the IRAM OS Gemini Assistant. Summarize tool findings concisely and helpfully in markdown."):
+            if provider == "gemini":
+                async for chunk in stream_gemini(summary_prompt, system_instruction="You are IRAM Nexus. Summarize tool findings concisely and helpfully in markdown."):
+                    yield f"event: token\ndata: {json.dumps({'text': chunk})}\n\n"
+            elif provider == "claude":
+                async for chunk in stream_claude(summary_prompt, system_instruction="You are IRAM Nexus. Summarize tool findings concisely and helpfully in markdown."):
                     yield f"event: token\ndata: {json.dumps({'text': chunk})}\n\n"
             else:
-                async for chunk in stream_ollama(summary_prompt, system_instruction="You are the IRAM OS Gemini Assistant. Summarize tool findings concisely and helpfully in markdown."):
+                async for chunk in stream_ollama(summary_prompt, system_instruction="You are IRAM Nexus. Summarize tool findings concisely and helpfully in markdown."):
                     yield f"event: token\ndata: {json.dumps({'text': chunk})}\n\n"
 
         else:

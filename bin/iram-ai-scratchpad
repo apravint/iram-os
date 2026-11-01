@@ -23,11 +23,13 @@ if ! command -v "$TERMINAL_BIN" >/dev/null 2>&1; then
     fi
 fi
 
-# Determine AI command to execute
-AI_CMD="agy"
-if ! command -v agy >/dev/null 2>&1; then
-    if [ -x "$HOME/.gemini/antigravity-cli/bin/agy" ]; then
-        AI_CMD="$HOME/.gemini/antigravity-cli/bin/agy"
+# Determine AI command to execute: Antigravity -> Claude -> Ollama
+AI_CMD="iram-ai-launch"
+if ! command -v iram-ai-launch >/dev/null 2>&1; then
+    if command -v agy >/dev/null 2>&1 || [ -x "$HOME/.gemini/antigravity-cli/bin/agy" ]; then
+        AI_CMD="agy"
+    elif command -v claude >/dev/null 2>&1; then
+        AI_CMD="claude"
     elif command -v ollama >/dev/null 2>&1; then
         # Check active model
         active_model=$(ollama list 2>/dev/null | awk 'NR>1 {print $1}' | head -n 1 || echo "")

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS Agent Launcher (iram-ai-launch)
-# Starts the best available agent: Claude Code, then Antigravity, then local
+# Starts the best available agent: Antigravity, then Claude Code, then local
 # Ollama. Cloud agents are skipped when the machine is offline, so the same
 # hotkey keeps working on a plane.
 #
@@ -55,8 +55,8 @@ select_provider() {
         return
     fi
     if is_online; then
-        if command -v claude >/dev/null 2>&1; then echo claude; return; fi
         if [ -n "$(agy_bin)" ]; then echo agy; return; fi
+        if command -v claude >/dev/null 2>&1; then echo claude; return; fi
     fi
     if command -v ollama >/dev/null 2>&1 && [ -n "$(local_model)" ]; then echo ollama; return; fi
     echo none
