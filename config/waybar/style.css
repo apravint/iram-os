@@ -9,35 +9,33 @@
     min-height: 0;
 }
 
-/* Sharp Flush Edge-to-Edge Base Bar */
+/* The bar itself is invisible; each module group floats as its own island.
+   Margins in config.jsonc match Hyprland's gaps_out, so islands line up with windows.
+   Corners stay square to match window rounding = 0. */
 window#waybar {
-    background: rgba(18, 18, 28, 0.92);
+    background: transparent;
     color: @fg;
-    border-bottom: 1px solid @border;
-    border-top: none;
-    border-left: none;
-    border-right: none;
+    border: none;
     box-shadow: none;
 }
 
-/* Module Group Containers - Flush & Transparent */
 .modules-left,
 .modules-center,
 .modules-right {
-    background: transparent;
-    border: none;
+    background: @bar_bg;
+    border: 1px solid @border;
     border-radius: 0;
     padding: 0;
     margin: 0;
     box-shadow: none;
 }
 
-/* App Menu Sharp Block - Starts Flush at x=0 */
+/* App Menu Block - Fills the Start of the Left Island */
 #custom-menu {
     padding: 0 14px;
     margin: 0;
     background: @accent;
-    color: #11111b;
+    color: @on_accent;
     font-size: 14px;
     font-weight: 600;
     border-radius: 0;
@@ -48,7 +46,7 @@ window#waybar {
 
 #custom-menu:hover {
     background: @fg;
-    color: #11111b;
+    color: @on_accent;
     box-shadow: none;
 }
 
@@ -65,7 +63,7 @@ window#waybar {
     min-width: 12px;
     min-height: 24px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.12);
+    background: @surface_strong;
     color: transparent;
     font-size: 1px;
     border: none;
@@ -83,7 +81,7 @@ window#waybar {
 
 #workspaces button.active {
     background: @accent;
-    color: #11111b;
+    color: @on_accent;
     font-size: 11px;
     font-weight: 700;
     min-width: 32px;
@@ -93,8 +91,8 @@ window#waybar {
 }
 
 #workspaces button.urgent {
-    background: #f7768e;
-    color: #11111b;
+    background: @danger;
+    color: @on_danger;
     min-width: 24px;
     border-radius: 0;
     font-size: 11px;
@@ -106,7 +104,7 @@ window#waybar {
 #window {
     padding: 0 12px;
     font-weight: 500;
-    color: @muted;
+    color: @muted_text;
 }
 
 /* Center Module Blocks */
@@ -114,8 +112,8 @@ window#waybar {
     padding: 0 10px;
     margin: 3px 2px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.05);
-    color: @accent;
+    background: @surface;
+    color: @accent_text;
     font-weight: 600;
     box-shadow: none;
     transition: all 0.2s ease;
@@ -128,8 +126,8 @@ window#waybar {
 }
 
 #custom-indicators.recording {
-    background: rgba(235, 77, 75, 0.3);
-    color: #ff5252;
+    background: @danger_soft;
+    color: @danger_text;
 }
 
 #custom-indicators:hover {
@@ -141,9 +139,9 @@ window#waybar {
     padding: 0 14px;
     margin: 3px 2px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.06);
+    background: @surface;
     font-weight: 600;
-    color: @accent;
+    color: @accent_text;
     letter-spacing: 0.3px;
     box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
@@ -159,7 +157,7 @@ window#waybar {
     padding: 0 12px;
     margin: 3px 2px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.04);
+    background: @surface;
     color: @fg;
     box-shadow: none;
     transition: all 0.2s ease;
@@ -173,7 +171,7 @@ window#waybar {
 }
 
 #mpris.paused {
-    color: @muted;
+    color: @muted_text;
 }
 
 /* Right Modules Sharp Blocks */
@@ -191,25 +189,25 @@ window#waybar {
     padding: 0 10px;
     margin: 3px 2px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.04);
+    background: @surface;
     color: @fg;
     box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-ai-agent {
-    color: @accent;
+    color: @accent_text;
     font-weight: 600;
 }
 
 #custom-ai-agent.executing {
-    color: #f7768e;
-    background: rgba(247, 118, 142, 0.25);
+    color: @danger_text;
+    background: @danger_soft;
     animation: blink 0.8s linear infinite alternate;
 }
 
 #custom-iram-ai {
-    color: @accent;
+    color: @accent_text;
     font-weight: 600;
 }
 
@@ -218,28 +216,28 @@ window#waybar {
 }
 
 #custom-iram-ai.executing {
-    color: #ff5252;
-    background: rgba(255, 82, 82, 0.25);
+    color: @danger_text;
+    background: @danger_soft;
     animation: blink 1s linear infinite alternate;
 }
 
 #custom-mcp-status.busy {
-    color: #e0af68;
+    color: @warning_text;
     font-weight: 600;
 }
 
 #custom-mcp-status.idle {
-    color: @muted;
+    color: @muted_text;
 }
 
 #custom-theme {
-    color: @accent;
+    color: @accent_text;
     font-size: 13px;
 }
 
 #custom-audio-sink,
 #pulseaudio {
-    color: @accent;
+    color: @accent_text;
 }
 
 #cpu:hover,
@@ -267,16 +265,16 @@ window#waybar {
 
 #tray > .needs-attention {
     -gtk-icon-effect: highlight;
-    background-color: #f7768e;
+    background-color: @danger;
 }
 
-/* Power Button - Ends Flush at x=1920 */
+/* Power Button - Fills the End of the Right Island */
 #custom-power {
     padding: 0 14px;
     margin: 0;
     border-radius: 0;
-    background: rgba(247, 118, 142, 0.2);
-    color: #f7768e;
+    background: @danger_soft;
+    color: @danger_text;
     font-weight: 600;
     border: none;
     box-shadow: none;
@@ -284,24 +282,24 @@ window#waybar {
 }
 
 #custom-power:hover {
-    background: #f7768e;
-    color: #11111b;
+    background: @danger;
+    color: @on_danger;
     box-shadow: none;
 }
 
 #battery.warning {
-    color: #e0af68;
+    color: @warning_text;
 }
 
 #battery.critical {
-    background-color: #f7768e;
-    color: #11111b;
+    background-color: @danger;
+    color: @on_danger;
     animation: blink 0.5s linear infinite alternate;
 }
 
 @keyframes blink {
     to {
-        background-color: rgba(255, 255, 255, 0.2);
-        color: #f7768e;
+        background-color: @surface_strong;
+        color: @danger_text;
     }
 }

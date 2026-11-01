@@ -25,6 +25,7 @@ lacks() {
 
 python3 "$REPO/tests/test_policy.py" -q || bad "test_policy.py"
 python3 "$REPO/tests/test_mcp.py" -q || bad "test_mcp.py"
+python3 "$REPO/tests/test_theme_sync.py" -q || bad "test_theme_sync.py"
 
 # ---- GPU profiles ---------------------------------------------------------------
 fake_gpu() { # root card vendor boot_vga

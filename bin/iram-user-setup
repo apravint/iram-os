@@ -38,7 +38,7 @@ BACKUP_DIR="$CONFIG_HOME/iram/backups/backup_$(date +%Y%m%d_%H%M%S)"
 # nothing about user intent, so they are always replaced.
 is_generated() {
     case "$1" in
-        waybar/style.css|mako/config|cava/config|swaync/style.css|btop/*|hypr/theme.conf|hypr/hyprlock-colors.conf) return 0 ;;
+        waybar/colors.css|wofi/style.css|cava/config|swaync/style.css|btop/*|hypr/theme.conf|hypr/hyprlock-colors.conf) return 0 ;;
         *) return 1 ;;
     esac
 }
