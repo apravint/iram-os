@@ -218,6 +218,8 @@ check "waybar config is JSON" 0 jq empty "$REPO/config/waybar/config.jsonc"
 check "swaync config is JSON" 0 jq empty "$REPO/config/swaync/config.json"
 check "MCP config is JSON" 0 jq empty "$REPO/config/mcp/iram_mcp_config.json"
 check "installer dry-run" 0 env HOME="$WORK/dry" bash "$REPO/install.sh" --dry-run
+check "doctor reports failed units" 0 grep -q 'is-failed' "$REPO/bin/iram-doctor"
+check "installer starts units inside a session" 0 grep -q 'start --no-block "${ENABLE_UNITS' "$REPO/install.sh"
 [ ! -e "$WORK/dry/.config" ] && ok || bad "dry-run wrote to HOME"
 
 # Hyprland config lines must not start what systemd already manages
