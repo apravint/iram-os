@@ -20,6 +20,11 @@ on:
         description: 'Target distro version (26.04 or 26.10)'
         required: true
         default: '26.04'
+      publish_release:
+        description: 'Publish the ISO as a GitHub Release (leave false for a test build)'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: write
@@ -86,7 +91,7 @@ jobs:
           retention-days: 14
 
       - name: Attach ISO to GitHub Release
-        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') || inputs.publish_release
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
