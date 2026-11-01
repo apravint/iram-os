@@ -37,10 +37,18 @@ case "$MODE" in
             grim -g "$GEOM" "$FILEPATH"
         fi
         ;;
-    region|*)
+    region)
         GEOM=$(slurp -b "#1a1b2688" -c "#7aa2f7" -s "#7aa2f722" 2>/dev/null || true)
         if [[ -z "${GEOM:-}" ]]; then
             exit 0 # User cancelled selection
+        fi
+        grim -g "$GEOM" "$FILEPATH"
+        ;;
+    *)
+        echo "Unknown mode '$MODE', defaulting to region capture." >&2
+        GEOM=$(slurp -b "#1a1b2688" -c "#7aa2f7" -s "#7aa2f722" 2>/dev/null || true)
+        if [[ -z "${GEOM:-}" ]]; then
+            exit 0
         fi
         grim -g "$GEOM" "$FILEPATH"
         ;;

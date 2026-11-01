@@ -214,11 +214,19 @@ apt-get install -y \
     fonts-jetbrains-mono \
     fonts-font-awesome \
     btop \
-    jq || true
+    jq
 
 # Install Ollama & OpenClaw Agentic OS Stack inside ISO
-curl -fsSL https://ollama.com/install.sh | sh || true
-pip3 install --break-system-packages openclaw edge-tts ddgs || pip3 install openclaw edge-tts ddgs || true
+OLLAMA_TMP=$(mktemp)
+if curl -fsSL https://ollama.com/install.sh -o "$OLLAMA_TMP"; then
+    if grep -q "OLLAMA" "$OLLAMA_TMP"; then
+        sh "$OLLAMA_TMP" || echo "Notice: Ollama install exited with non-fatal code"
+    fi
+    rm -f "$OLLAMA_TMP"
+else
+    echo "Notice: Could not download Ollama install script, skipping"
+fi
+pip3 install --break-system-packages openclaw edge-tts ddgs || pip3 install openclaw edge-tts ddgs || echo "Notice: Optional AI python packages skipped"
 
 # Setup IRAM OS system core directory
 mkdir -p /usr/share/iram
@@ -229,8 +237,10 @@ groupadd -f sudo
 groupadd -f audio
 groupadd -f video
 
-useradd -m -s /bin/bash -G sudo,audio,video iram || true
-echo "iram:iram" | chpasswd || true
+if ! id -u iram >/dev/null 2>&1; then
+    useradd -m -s /bin/bash -G sudo,audio,video iram
+fi
+echo "iram:iram" | chpasswd
 echo "iram ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/iram
 chmod 0440 /etc/sudoers.d/iram
 
@@ -306,15 +316,18 @@ fi
 mkdir -p "${ROOTFS_DIR}/etc/skel/.config" "${ROOTFS_DIR}/etc/skel/.local/bin" "${ROOTFS_DIR}/etc/skel/.local/share/applications" "${ROOTFS_DIR}/etc/skel/.local/share/icons/hicolor/128x128/apps"
 cp -a --remove-destination "${REPO_ROOT}/config/"* "${ROOTFS_DIR}/etc/skel/.config/"
 cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/etc/skel/.local/bin/"
-cp -a --remove-destination "${REPO_ROOT}/applications/"*.desktop "${ROOTFS_DIR}/etc/skel/.local/share/applications/" 2>/dev/null || true
-cp -a --remove-destination "${REPO_ROOT}/applications/icons/"*.png "${ROOTFS_DIR}/etc/skel/.local/share/icons/hicolor/128x128/apps/" 2>/dev/null || true
-
-# Also copy into the live user's home directly
-mkdir -p "${ROOTFS_DIR}/home/iram/.config" "${ROOTFS_DIR}/home/iram/.local/bin" "${ROOTFS_DIR}/home/iram/.local/share/applications" "${ROOTFS_DIR}/home/iram/.local/share/icons/hicolor/128x128/apps"
-cp -a --remove-destination "${REPO_ROOT}/config/"* "${ROOTFS_DIR}/home/iram/.config/"
-cp -a --remove-destination "${REPO_ROOT}/bin/"* "${ROOTFS_DIR}/home/iram/.local/bin/"
-cp -a --remove-destination "${REPO_ROOT}/applications/"*.desktop "${ROOTFS_DIR}/home/iram/.local/share/applications/" 2>/dev/null || true
-cp -a --remove-destination "${REPO_ROOT}/applications/icons/"*.png "${ROOTFS_DIR}/home/iram/.local/share/icons/hicolor/128x128/apps/" 2>/dev/null || true
+for f in "${REPO_ROOT}/applications/"*.desktop; do
+    if [ -e "$f" ]; then
+        cp -a --remove-destination "$f" "${ROOTFS_DIR}/etc/skel/.local/share/applications/"
+        cp -a --remove-destination "$f" "${ROOTFS_DIR}/home/iram/.local/share/applications/"
+    fi
+done
+for f in "${REPO_ROOT}/applications/icons/"*.png; do
+    if [ -e "$f" ]; then
+        cp -a --remove-destination "$f" "${ROOTFS_DIR}/etc/skel/.local/share/icons/hicolor/128x128/apps/"
+        cp -a --remove-destination "$f" "${ROOTFS_DIR}/home/iram/.local/share/icons/hicolor/128x128/apps/"
+    fi
+done
 
 # Copy systemd units
 mkdir -p "${ROOTFS_DIR}/etc/skel/.config/systemd/user" "${ROOTFS_DIR}/home/iram/.config/systemd/user"
@@ -374,8 +387,8 @@ cp -L "${INITRD_FILE}" "${ISO_DIR}/casper/initrd"
 log_step "Compressing root filesystem into filesystem.squashfs (this may take a few minutes)..."
 
 # Generate filesystem manifest and size metadata for casper before unmounting
-chroot "${ROOTFS_DIR}" dpkg-query -W --showformat='${Package} ${Version}\n' > "${ISO_DIR}/casper/filesystem.manifest" 2>/dev/null || true
-printf $(du -sx --block-size=1 "${ROOTFS_DIR}" | cut -f1) > "${ISO_DIR}/casper/filesystem.size"
+chroot "${ROOTFS_DIR}" dpkg-query -W --showformat='${Package} ${Version}\n' > "${ISO_DIR}/casper/filesystem.manifest"
+printf "%s" "$(du -sx --block-size=1 "${ROOTFS_DIR}" | cut -f1)" > "${ISO_DIR}/casper/filesystem.size"
 
 # Unmount virtual mounts before squashing
 umount -lf "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
@@ -432,7 +445,7 @@ EOF
 
 # Generate md5sum.txt inside the ISO root for Casper integrity checks
 log_step "Generating ISO root md5sum.txt for Casper media check..."
-(cd "${ISO_DIR}" && find . -type f -not -name "md5sum.txt" -not -path "./boot/grub/*" -not -path "./isolinux/*" | sort | xargs md5sum > "${ISO_DIR}/md5sum.txt" 2>/dev/null || true)
+(cd "${ISO_DIR}" && find . -type f -not -name "md5sum.txt" -not -path "./boot/grub/*" -not -path "./isolinux/*" | sort | xargs md5sum > "${ISO_DIR}/md5sum.txt")
 
 # ------------------------------------------------------------------------------
 # 8. Generate Hybrid UEFI/BIOS Bootable ISO
