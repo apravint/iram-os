@@ -30,9 +30,13 @@ iram-wait-compositor 15 || echo "iram-session-bootstrap: no monitor yet, startin
 # silently: screen sharing and file pickers break. Restart picks up the real one.
 systemctl --user try-restart xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service xdg-desktop-portal.service 2>/dev/null
 
-# A new account from the ISO or a package has no theme yet, so it would get no wallpaper.
-if [ ! -e "$HOME/.local/state/iram/current/theme.name" ]; then
-    iram theme set "Cyberpunk Neon" || echo "iram-session-bootstrap: could not apply the default theme" >&2
-fi
-
 systemctl --user start --no-block hyprland-session.target
+
+# A new account from the ISO or a package has no theme, so it would get no wallpaper.
+# Runs after the target so a slow or failing theme can never keep the desktop down;
+# applying it restarts swaybg, whose start condition is then met.
+if [ ! -e "$HOME/.local/state/iram/current/theme.name" ]; then
+    mkdir -p "$HOME/.local/state/iram"
+    timeout 120 iram theme set "Cyberpunk Neon" > "$HOME/.local/state/iram/first-theme.log" 2>&1 ||
+        echo "iram-session-bootstrap: default theme failed; see first-theme.log" >&2
+fi

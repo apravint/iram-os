@@ -197,13 +197,20 @@ def test_live(results, vm):
         time.sleep(5)
     results.record(stage, "Hyprland started by autologin", desktop, vm.run("journalctl -b -u greetd --no-pager -n 20")[1])
     time.sleep(25)
-    vm.screenshot("live-desktop")
     if desktop:
         out = vm.run("XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user list-units --no-pager --plain --no-legend 'waybar*' 'swaync*' 'swaybg*' 'hypridle*' 'hyprland-session*'")[1]
         results.record(stage, "session units running", "waybar.service" in out and "running" in out, out)
-        expect_zero(results, vm, stage, "first login gets a theme and wallpaper", "test -s ~/.local/state/iram/current/theme.name && test -e ~/.local/state/iram/current/background && pgrep -x swaybg")
+        themed = False
+        for _ in range(30):
+            if vm.run("test -s ~/.local/state/iram/current/theme.name && test -e ~/.local/state/iram/current/background && pgrep -x swaybg")[0] == 0:
+                themed = True
+                break
+            time.sleep(5)
+        results.record(stage, "first login gets a theme and wallpaper", themed, vm.run("cat ~/.local/state/iram/first-theme.log; pgrep -a iram; ls ~/.local/state/iram/current")[1])
+        time.sleep(5)
+    vm.screenshot("live-desktop")
     with open(os.path.join(vm.out_dir, "live-diagnostics.txt"), "w") as f:
-        for cmd in ("lsblk -f", "findmnt", "sudo journalctl -b -u greetd --no-pager -n 60", "tail -n 60 /run/user/$(id -u)/hypr/*/hyprland.log", "sudo cat /etc/greetd/config.toml", "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user --failed --no-pager", "XDG_RUNTIME_DIR=/run/user/$(id -u) journalctl --user -b --no-pager -n 40"):
+        for cmd in ("lsblk -f", "findmnt", "sudo journalctl -b -u greetd --no-pager -n 60", "tail -n 60 /run/user/$(id -u)/hypr/*/hyprland.log", "sudo cat /etc/greetd/config.toml", "cat ~/.local/state/iram/first-theme.log", "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user --failed --no-pager", "XDG_RUNTIME_DIR=/run/user/$(id -u) journalctl --user -b --no-pager -n 40"):
             f.write(f"$ {cmd}\n{vm.run(cmd, timeout=30)[1]}\n\n")
     return vm.run("cat /etc/machine-id")[1].strip()
 
