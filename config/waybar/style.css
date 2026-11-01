@@ -5,7 +5,7 @@
     border-radius: 0;
     font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     min-height: 0;
 }
 
@@ -39,7 +39,7 @@ window#waybar {
     background: @accent;
     color: #11111b;
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 600;
     border-radius: 0;
     border: none;
     box-shadow: none;
@@ -85,7 +85,7 @@ window#waybar {
     background: @accent;
     color: #11111b;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 700;
     min-width: 32px;
     border-radius: 0;
     padding: 0 10px;
@@ -105,7 +105,7 @@ window#waybar {
 /* Active Window Title */
 #window {
     padding: 0 12px;
-    font-weight: 600;
+    font-weight: 500;
     color: @muted;
 }
 
@@ -116,7 +116,7 @@ window#waybar {
     border-radius: 0;
     background: rgba(255, 255, 255, 0.05);
     color: @accent;
-    font-weight: 700;
+    font-weight: 600;
     box-shadow: none;
     transition: all 0.2s ease;
 }
@@ -142,7 +142,7 @@ window#waybar {
     margin: 3px 2px;
     border-radius: 0;
     background: rgba(255, 255, 255, 0.06);
-    font-weight: 800;
+    font-weight: 600;
     color: @accent;
     letter-spacing: 0.3px;
     box-shadow: none;
@@ -199,7 +199,7 @@ window#waybar {
 
 #custom-ai-agent {
     color: @accent;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 #custom-ai-agent.executing {
@@ -210,7 +210,7 @@ window#waybar {
 
 #custom-iram-ai {
     color: @accent;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 #custom-iram-ai.active {
@@ -225,7 +225,7 @@ window#waybar {
 
 #custom-mcp-status.busy {
     color: #e0af68;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 #custom-mcp-status.idle {
@@ -277,7 +277,7 @@ window#waybar {
     border-radius: 0;
     background: rgba(247, 118, 142, 0.2);
     color: #f7768e;
-    font-weight: 800;
+    font-weight: 600;
     border: none;
     box-shadow: none;
     transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
