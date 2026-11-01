@@ -13,15 +13,19 @@ if [[ "${1:-}" == "--dmenu" || "${1:-}" == "--wofi" || "${1:-}" == "--text" ]]; 
         notify-send -u critical "Theme Switcher" "wofi is not installed." 2>/dev/null || echo "wofi not installed" >&2
         exit 1
     fi
-    THEMES=$(iram theme list)
+    THEMES=$(printf "23 - Auto Wallpaper (Chameleon)\n%s" "$(iram theme list)")
     CURRENT=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo "None")
     SELECTED=$(echo "$THEMES" | wofi --dmenu --prompt "Theme (Current: $CURRENT):" --width 380 --height 450)
     if [[ -n "${SELECTED:-}" ]]; then
-        iram theme set "$SELECTED"
-        if [[ -x "$HOME/.local/bin/iram-theme-sync-all" ]]; then
-            "$HOME/.local/bin/iram-theme-sync-all" || true
+        if [[ "$SELECTED" == *"Auto Wallpaper"* || "$SELECTED" == *"Chameleon"* ]]; then
+            iram theme auto
+        else
+            iram theme set "$SELECTED"
+            if [[ -x "$HOME/.local/bin/iram-theme-sync-all" ]]; then
+                "$HOME/.local/bin/iram-theme-sync-all" || true
+            fi
+            notify-send -a "Iram" "Theme Changed" "Applied theme: $SELECTED" 2>/dev/null || true
         fi
-        notify-send -a "Iram" "Theme Changed" "Applied theme: $SELECTED" 2>/dev/null || true
     fi
     exit 0
 fi
@@ -30,7 +34,9 @@ fi
 if [[ -n "${1:-}" && "${1:-}" != "--dmenu" && "${1:-}" != "--wofi" && "${1:-}" != "--text" && "${1:-}" != "--gui" ]]; then
     target="$1"
     [[ "$target" == "set" ]] && target="${2:-}"
-    if [[ -n "$target" ]]; then
+    if [[ "$target" == "auto" || "$target" == "chameleon" || "$target" == *"Auto Wallpaper"* ]]; then
+        exec iram theme auto
+    elif [[ -n "$target" ]]; then
         iram theme set "$target"
         notify-send -a "Iram" "Theme Changed" "Applied theme: $target" 2>/dev/null || true
         exit 0

@@ -1,0 +1,65 @@
+# IRAM OS Flagship Starship Prompt Configuration
+format = """
+$os$username$hostname$directory$git_branch$git_status$cmd_duration
+$character"""
+
+# Don't print a new line at the start of the prompt
+add_newline = false
+
+[character]
+success_symbol = "[⚡](bold #7aa2f7) "
+error_symbol = "[⚡](bold #f7768e) "
+vimcmd_symbol = "[❮](bold #9ece6a) "
+
+[os]
+disabled = false
+style = "bold #7dcfff"
+symbols = { Ubuntu = "󰌽 " }
+
+[directory]
+truncation_length = 4
+truncation_symbol = "…/"
+home_symbol = " ~"
+style = "bold #7aa2f7"
+format = "[$path]($style) "
+
+[git_branch]
+symbol = " "
+style = "bold #bb9af7"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "bold #f7768e"
+format = "([\\[$all_status$ahead_behind\\]]($style) )"
+conflicted = "="
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked = "?"
+modified = "!"
+staged = "+"
+renamed = "»"
+deleted = "✘"
+
+[cmd_duration]
+min_time = 2000
+style = "bold #e0af68"
+format = "[⏱ $duration]($style) "
+
+[package]
+disabled = true
+
+[python]
+symbol = " "
+format = "via [${symbol}${pyenv_prefix}(${version} )]($style)"
+style = "bold #ff9e64"
+
+[nodejs]
+symbol = " "
+format = "via [$symbol($version )]($style)"
+style = "bold #9ece6a"
+
+[rust]
+symbol = " "
+format = "via [$symbol($version )]($style)"
+style = "bold #e0af68"

@@ -490,6 +490,15 @@ case "$cmd" in
             current)
                 cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || echo "Default"
                 ;;
+            auto|chameleon)
+                if [ -x "$LOCAL_BIN/iram-theme-auto" ]; then
+                    exec "$LOCAL_BIN/iram-theme-auto" "$@"
+                elif [ -x "${IRAM_PATH:-$HOME/iram-os}/bin/iram-theme-auto" ]; then
+                    exec "${IRAM_PATH:-$HOME/iram-os}/bin/iram-theme-auto" "$@"
+                else
+                    exec python3 "$HOME/iram-os/bin/iram-theme-auto" "$@"
+                fi
+                ;;
             random)
                 rand_theme=$(ls -1 "$HOME/iram-os/themes" 2>/dev/null | shuf -n 1)
                 if [ -n "$rand_theme" ]; then

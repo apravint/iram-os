@@ -1,12 +1,12 @@
 {
     "layer": "top",
     "position": "top",
-    "height": 30,
-    "margin-top": 4,
-    "margin-left": 4,
-    "margin-right": 4,
+    "height": 34,
+    "margin-top": 8,
+    "margin-left": 12,
+    "margin-right": 12,
     "margin-bottom": 0,
-    "spacing": 0,
+    "spacing": 4,
 
     "modules-left": [
         "custom/menu",
@@ -59,7 +59,7 @@
     },
 
     "clock": {
-        "format": "󰃭 {:%a %b %d  %H:%M}",
+        "format": "󰃭 {:%a %b %d  󰥔 %H:%M}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
         "on-click-middle": "~/.local/bin/iram-menu-timezone"
     },

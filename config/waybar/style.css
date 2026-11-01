@@ -3,96 +3,131 @@
 * {
     border: none;
     border-radius: 0;
-    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
     font-size: 12px;
+    font-weight: 600;
     min-height: 0;
 }
 
+/* Floating Transparent Base Container */
 window#waybar {
-    background-color: rgba(18, 18, 28, 0.95);
+    background: transparent;
     color: @fg;
-    border: 1px solid @border;
-    border-radius: 0;
     box-shadow: none;
 }
 
+/* Floating Frosted-Glass Island Modules */
+.modules-left,
+.modules-center,
+.modules-right {
+    background: rgba(18, 18, 28, 0.72);
+    border: 1px solid @border;
+    border-radius: 16px;
+    padding: 3px 6px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: all 0.25s cubic-bezier(0.05, 0.9, 0.1, 1.05);
+}
+
+.modules-left:hover,
+.modules-center:hover,
+.modules-right:hover {
+    border-color: @accent;
+    box-shadow: 0 6px 24px @accent_rgba;
+}
+
+/* App Menu Pill */
 #custom-menu {
-    padding: 0 14px;
-    margin: 0;
+    padding: 0 12px;
+    margin: 2px 4px 2px 2px;
     background: @accent;
     color: #11111b;
     font-size: 14px;
     font-weight: 800;
-    border-radius: 0;
-    transition: all 0.15s ease-in-out;
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-menu:hover {
     background: @fg;
     color: #11111b;
+    box-shadow: 0 0 10px @accent_glow;
 }
 
+/* Animated Workspace Dots & Expanding Active Pill */
 #workspaces {
-    margin: 0;
+    background: transparent;
     padding: 0;
+    margin: 0 4px;
 }
 
 #workspaces button {
-    padding: 0 12px;
-    margin: 0;
-    background: transparent;
-    color: @muted;
-    border-radius: 0;
-    border-bottom: 2px solid transparent;
-    font-weight: 700;
-    transition: all 0.15s ease-in-out;
-}
-
-#workspaces button.active {
-    background: @accent_rgba;
-    color: @accent;
-    border-bottom: 2px solid @accent;
-    font-weight: 800;
+    padding: 0 6px;
+    margin: 2px 3px;
+    min-width: 10px;
+    min-height: 20px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.14);
+    color: transparent;
+    font-size: 1px;
+    border: none;
+    box-shadow: none;
+    transition: all 0.25s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #workspaces button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: @accent_rgba;
+    min-width: 22px;
     color: @fg;
+    font-size: 10px;
+}
+
+#workspaces button.active {
+    background: @accent;
+    color: #11111b;
+    font-size: 11px;
+    font-weight: 800;
+    min-width: 34px;
+    border-radius: 10px;
+    padding: 0 10px;
+    box-shadow: 0 0 12px @accent_glow;
 }
 
 #workspaces button.urgent {
     background: #f7768e;
     color: #11111b;
-    border-bottom: 2px solid #f7768e;
+    min-width: 24px;
+    border-radius: 10px;
+    font-size: 11px;
+    animation: blink 0.5s linear infinite alternate;
 }
 
+/* Active Window Title */
 #window {
-    padding: 0 14px;
+    padding: 0 12px;
     font-weight: 600;
     color: @muted;
 }
 
+/* Center Module Islands */
 #custom-indicators {
     padding: 0 10px;
-    margin: 0 2px;
+    margin: 2px 2px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
-    font-weight: 700;
     color: @accent;
-    border-bottom: 2px solid @accent;
-    transition: all 0.15s ease;
+    font-weight: 700;
+    transition: all 0.2s ease;
 }
 
 #custom-indicators.empty {
     padding: 0;
     margin: 0;
     background: transparent;
-    border-bottom: none;
 }
 
 #custom-indicators.recording {
-    background: rgba(235, 77, 75, 0.25);
+    background: rgba(235, 77, 75, 0.3);
     color: #ff5252;
-    border-bottom: 2px solid #ff5252;
 }
 
 #custom-indicators:hover {
@@ -101,122 +136,84 @@ window#waybar {
 
 #clock {
     padding: 0 14px;
-    margin: 0 1px;
-    background: rgba(255, 255, 255, 0.04);
+    margin: 2px 2px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
     font-weight: 800;
     color: @accent;
-    letter-spacing: 0.5px;
-    border-bottom: 2px solid @accent;
-    transition: all 0.15s ease;
+    letter-spacing: 0.3px;
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #clock:hover {
     background: @accent_rgba;
+    box-shadow: 0 0 10px @accent_glow;
 }
 
-#custom-weather {
-    padding: 0 12px;
-    margin: 0 1px;
-    background: rgba(255, 255, 255, 0.03);
-    color: @fg;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s ease;
-}
-
-#custom-weather:hover {
-    background: @accent_rgba;
-    border-bottom: 2px solid @accent;
-}
-
+#custom-weather,
 #mpris {
     padding: 0 12px;
-    margin: 0 1px;
-    background: rgba(255, 255, 255, 0.03);
+    margin: 2px 2px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
     color: @fg;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
+}
+
+#custom-weather:hover,
+#mpris:hover {
+    background: @accent_rgba;
+    color: @fg;
 }
 
 #mpris.paused {
     color: @muted;
 }
 
-#mpris:hover {
-    background: @accent_rgba;
-    border-bottom: 2px solid @accent;
-}
-
+/* Right Modules Pills */
 #custom-ai-agent,
 #custom-mcp-status,
+#custom-iram-ai,
 #custom-theme,
 #cpu,
 #memory,
 #custom-audio-sink,
 #pulseaudio,
 #network,
-#battery {
+#battery,
+#tray {
     padding: 0 10px;
-    margin: 0 1px;
-    background: rgba(255, 255, 255, 0.03);
-    color: @fg;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s ease;
-}
-
-#custom-iram-ai {
-    padding: 0 12px;
-    margin: 0 1px;
+    margin: 2px 2px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.04);
-    color: @accent;
-    font-weight: 800;
-    border-bottom: 2px solid @accent;
-    transition: all 0.15s ease-in-out;
-}
-
-#custom-iram-ai:hover {
-    background: @accent_rgba;
     color: @fg;
-}
-
-#custom-iram-ai.active {
-    color: @accent;
-    background: @accent_rgba;
-    border-bottom: 2px solid @accent;
-}
-
-#custom-iram-ai.executing {
-    color: #ff5252;
-    background: rgba(255, 82, 82, 0.2);
-    border-bottom: 2px solid #ff5252;
-    animation: blink 1s linear infinite alternate;
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-ai-agent {
     color: @accent;
     font-weight: 800;
-    padding: 0 12px;
-}
-
-#custom-ai-agent:hover {
-    background: @accent_rgba;
-    border-bottom: 2px solid @accent;
 }
 
 #custom-ai-agent.executing {
     color: #f7768e;
-    background: rgba(247, 118, 142, 0.18);
-    border-bottom: 2px solid #f7768e;
+    background: rgba(247, 118, 142, 0.25);
     animation: blink 0.8s linear infinite alternate;
 }
 
-#custom-mcp-status {
+#custom-iram-ai {
     color: @accent;
-    font-weight: 700;
-    padding: 0 10px;
+    font-weight: 800;
 }
 
-#custom-mcp-status.active {
-    color: @accent;
+#custom-iram-ai.active {
+    background: @accent_rgba;
+}
+
+#custom-iram-ai.executing {
+    color: #ff5252;
+    background: rgba(255, 82, 82, 0.25);
+    animation: blink 1s linear infinite alternate;
 }
 
 #custom-mcp-status.busy {
@@ -231,36 +228,30 @@ window#waybar {
 #custom-theme {
     color: @accent;
     font-size: 13px;
-    padding: 0 10px;
 }
 
-#custom-audio-sink {
-    color: @accent;
-    font-weight: 700;
-    padding: 0 10px;
-    transition: all 0.15s ease-in-out;
-}
-
+#custom-audio-sink,
 #pulseaudio {
     color: @accent;
 }
 
-#custom-mcp-status:hover,
-#custom-audio-sink:hover,
 #cpu:hover,
 #memory:hover,
+#custom-audio-sink:hover,
 #pulseaudio:hover,
 #network:hover,
 #battery:hover,
-#custom-theme:hover {
+#custom-theme:hover,
+#custom-mcp-status:hover,
+#custom-ai-agent:hover,
+#custom-iram-ai:hover {
     background: @accent_rgba;
-    border-bottom: 2px solid @accent;
+    box-shadow: 0 0 10px @accent_glow;
+    color: @fg;
 }
 
 #tray {
     padding: 0 8px;
-    margin: 0 1px;
-    background: rgba(255, 255, 255, 0.03);
 }
 
 #tray > .passive {
@@ -273,28 +264,34 @@ window#waybar {
 }
 
 #custom-power {
-    padding: 0 14px;
-    margin: 0;
-    background: rgba(247, 118, 142, 0.18);
+    padding: 0 12px;
+    margin: 2px 2px 2px 4px;
+    border-radius: 12px;
+    background: rgba(247, 118, 142, 0.2);
     color: #f7768e;
     font-weight: 800;
-    border-bottom: 2px solid #f7768e;
-    transition: all 0.15s ease;
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-power:hover {
     background: #f7768e;
     color: #11111b;
+    box-shadow: 0 0 12px rgba(247, 118, 142, 0.5);
 }
 
 #battery.warning {
-    color: #f7768e;
-    border-bottom: 2px solid #f7768e;
+    color: #e0af68;
 }
 
 #battery.critical {
     background-color: #f7768e;
     color: #11111b;
-    border-bottom: 2px solid #f7768e;
     animation: blink 0.5s linear infinite alternate;
+}
+
+@keyframes blink {
+    to {
+        background-color: rgba(255, 255, 255, 0.2);
+        color: #f7768e;
+    }
 }

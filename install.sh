@@ -45,6 +45,10 @@ sudo apt install -y \
     hyprlock \
     hypridle \
     mako-notifier \
+    sway-notification-center \
+    cava \
+    fastfetch \
+    imagemagick \
     grim \
     slurp \
     wl-clipboard \
@@ -84,6 +88,12 @@ sudo apt install -y \
     xdg-desktop-portal-gtk \
     git \
     socat
+
+# Install Starship cross-shell prompt (if not already present)
+if ! command -v starship >/dev/null 2>&1; then
+    echo "Installing Starship prompt..."
+    curl -sS https://starship.rs/install.sh | sh -s -- -y >/dev/null 2>&1 || true
+fi
 
 # Install Ollama & OpenClaw Agentic Stack (if profile is 'all' or 'ai')
 if [ "$INSTALL_TARGET" = "all" ] || [ "$INSTALL_TARGET" = "ai" ]; then
@@ -244,6 +254,9 @@ if [[ -f /usr/share/doc/fzf/examples/completion.bash ]]; then
 fi
 
 # IRAM OS Shell Shortcuts & Agent Dispatchers
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init bash)"
+fi
 alias a='~/.local/bin/a'
 alias agy='agy'
 alias iram='iram'
@@ -341,7 +354,10 @@ echo -e "  • ${GREEN}Super + Return${NC}                : Terminal (Alacritty)
 echo -e "  • ${GREEN}Super + Alt + Return${NC}          : Tmux Terminal Session"
 echo -e "  • ${GREEN}Super + K${NC}                     : Keybindings Cheat Sheet Menu"
 echo -e "  • ${GREEN}Super + V${NC}                     : Clipboard History Manager"
-echo -e "  • ${GREEN}Super + Ctrl + Shift + Space${NC}  : Iram 22-Theme Switcher"
+echo -e "  • ${GREEN}Super + N${NC}                     : 🔔 SwayNC Notification Center"
+echo -e "  • ${GREEN}Super + Shift + R${NC}             : 🌟 Flagship Rice Showcase Mode (4-Tile Fastfetch/Cava/Btop/Telemetry)"
+echo -e "  • ${GREEN}Super + Ctrl + Shift + Space${NC}  : 🎨 Iram 22-Theme Switcher (Zero-Restart)"
+echo -e "  • ${GREEN}iram theme auto${NC}               : 🦎 23rd Dynamic Wallpaper Theme (Auto-Chameleon)"
 echo -e "  • ${GREEN}Super + Ctrl + Space${NC}          : Next Background in Active Theme"
 echo -e "  • ${GREEN}Super + \` (Grave)${NC} / ${GREEN}Super + S${NC} : Toggle Scratchpad"
 echo -e "  • ${GREEN}Super + Ctrl + T${NC}              : Activity Monitor (btop)"

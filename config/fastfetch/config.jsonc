@@ -1,0 +1,85 @@
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    "logo": {
+        "source": "~/.config/fastfetch/iram-logo.txt",
+        "type": "file",
+        "color": {
+            "1": "cyan",
+            "2": "magenta"
+        },
+        "padding": {
+            "top": 1,
+            "left": 1,
+            "right": 3
+        }
+    },
+    "display": {
+        "separator": " 󰄾 ",
+        "color": {
+            "separator": "cyan"
+        }
+    },
+    "modules": [
+        {
+            "type": "custom",
+            "format": "╭───────────────────────── System Intelligence ─────────────────────────╮"
+        },
+        {
+            "type": "os",
+            "key": "  󰌽 OS",
+            "keyColor": "cyan",
+            "format": "IRAM OS 26.04 LTS ({12})"
+        },
+        {
+            "type": "kernel",
+            "key": "  󰌽 Kernel",
+            "keyColor": "cyan"
+        },
+        {
+            "type": "wm",
+            "key": "  󰖲 WM",
+            "keyColor": "magenta",
+            "format": "Hyprland (Wayland)"
+        },
+        {
+            "type": "command",
+            "key": "  󰔎 Theme",
+            "keyColor": "magenta",
+            "text": "tr '[:lower:]' '[:upper:]' < ~/.local/state/iram/current/theme.name 2>/dev/null || echo 'TOKYO NIGHT'"
+        },
+        {
+            "type": "packages",
+            "key": "  󰏖 Packages",
+            "keyColor": "blue"
+        },
+        {
+            "type": "uptime",
+            "key": "  󱎫 Uptime",
+            "keyColor": "blue"
+        },
+        {
+            "type": "cpu",
+            "key": "  󰍛 CPU",
+            "keyColor": "green"
+        },
+        {
+            "type": "gpu",
+            "key": "  󰢮 GPU",
+            "keyColor": "green"
+        },
+        {
+            "type": "memory",
+            "key": "  󰘚 Memory",
+            "keyColor": "yellow"
+        },
+        {
+            "type": "custom",
+            "format": "╰───────────────────────────────────────────────────────────────────────╯"
+        },
+        "break",
+        {
+            "type": "colors",
+            "symbol": "circle"
+        }
+    ]
+}

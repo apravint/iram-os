@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""
+IRAM OS 23rd Dynamic Theme Engine: Auto-Chameleon
+Extracts dominant color palettes from the active wallpaper and
+dynamically synthesizes an authentic IRAM OS theme on the fly.
+https://github.com/apravint/iram-os
+"""
+
+import os
+import sys
+import shutil
+import colorsys
+import subprocess
+from PIL import Image, ImageDraw
+
+def hex_to_rgb(hex_code: str) -> tuple:
+    clean = hex_code.lstrip("#")
+    if len(clean) == 3:
+        clean = "".join([c*2 for c in clean])
+    if len(clean) >= 6:
+        return int(clean[0:2], 16), int(clean[2:4], 16), int(clean[4:6], 16)
+    return (26, 27, 38)
+
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    return f"#{max(0, min(255, int(r))):02x}{max(0, min(255, int(g))):02x}{max(0, min(255, int(b))):02x}"
+
+def get_current_wallpaper() -> str:
+    home = os.path.expanduser("~")
+    # 1. Direct symlink check
+    bg_link = os.path.join(home, ".local/state/iram/current/background")
+    if os.path.islink(bg_link) or os.path.exists(bg_link):
+        target = os.path.realpath(bg_link)
+        if os.path.isfile(target):
+            return target
+
+    # 2. Search theme background folders
+    search_dirs = [
+        os.path.expanduser("~/iram-os/themes"),
+        "/usr/share/iram/themes"
+    ]
+    for sdir in search_dirs:
+        if os.path.isdir(sdir):
+            for root, _, files in os.walk(sdir):
+                for f in files:
+                    if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")) and "preview" not in f.lower():
+                        return os.path.join(root, f)
+    return None
+
+def extract_palette(image_path: str):
+    """
+    Extracts high-quality harmonious colors from the wallpaper.
+    """
+    img = Image.open(image_path).convert("RGB")
+    # Downsample for fast processing
+    sample = img.resize((160, 160), Image.Resampling.LANCZOS)
+    q_img = sample.quantize(colors=32, method=Image.Quantize.MEDIANCUT)
+    raw_palette = q_img.getpalette()[:32 * 3]
+
+    color_counts = q_img.getcolors() or []
+    # Sort by frequency
+    color_counts.sort(key=lambda x: x[0], reverse=True)
+
+    extracted = []
+    for count, idx in color_counts:
+        r = raw_palette[idx * 3]
+        g = raw_palette[idx * 3 + 1]
+        b = raw_palette[idx * 3 + 2]
+        h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        extracted.append({
+            "hex": rgb_to_hex(r, g, b),
+            "rgb": (r, g, b),
+            "h": h,
+            "s": s,
+            "v": v,
+            "count": count
+        })
+
+    # 1. Primary Accent: Vibrant color with high saturation and healthy brightness
+    vibrant = [c for c in extracted if c["s"] >= 0.35 and 0.50 <= c["v"] <= 0.96]
+    if vibrant:
+        # Score by saturation * brightness
+        vibrant.sort(key=lambda c: c["s"] * 1.5 + c["v"], reverse=True)
+        primary_accent = vibrant[0]
+    else:
+        # Boost most saturated
+        extracted.sort(key=lambda c: c["s"], reverse=True)
+        best = extracted[0]
+        r, g, b = colorsys.hsv_to_rgb(best["h"], max(best["s"], 0.65), 0.88)
+        primary_accent = {
+            "hex": rgb_to_hex(int(r * 255), int(g * 255), int(b * 255)),
+            "h": best["h"],
+            "s": 0.65,
+            "v": 0.88
+        }
+
+    # 2. Secondary Accent: Vibrant color with distinct hue
+    p_h = primary_accent["h"]
+    distinct_candidates = [
+        c for c in extracted
+        if c["s"] >= 0.25 and c["v"] >= 0.50 and min(abs(c["h"] - p_h), 1.0 - abs(c["h"] - p_h)) >= 0.12
+    ]
+    if distinct_candidates:
+        distinct_candidates.sort(key=lambda c: c["s"] + c["v"], reverse=True)
+        secondary_accent = distinct_candidates[0]
+    else:
+        # Hue shift primary accent by 45 degrees
+        s_h = (p_h + 0.125) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(s_h, max(primary_accent["s"], 0.55), 0.85)
+        secondary_accent = {
+            "hex": rgb_to_hex(int(r * 255), int(g * 255), int(b * 255)),
+            "h": s_h,
+            "s": 0.55,
+            "v": 0.85
+        }
+
+    # 3. Deep Background (Frosted Dark Glass)
+    dark_colors = [c for c in extracted if c["v"] <= 0.25]
+    if dark_colors:
+        dark_colors.sort(key=lambda c: c["v"])
+        base_dark = dark_colors[0]
+        # Ensure deep tone for comfortable contrast
+        r, g, b = colorsys.hsv_to_rgb(base_dark["h"], min(base_dark["s"], 0.35), min(base_dark["v"], 0.12))
+    else:
+        # Synthesize from primary hue
+        r, g, b = colorsys.hsv_to_rgb(p_h, 0.25, 0.08)
+
+    bg_hex = rgb_to_hex(int(r * 255), int(g * 255), int(b * 255))
+    dark_bg_hex = rgb_to_hex(max(0, int(r * 255) - 4), max(0, int(g * 255) - 4), max(0, int(b * 255) - 4))
+    darker_bg_hex = rgb_to_hex(max(0, int(r * 255) - 8), max(0, int(g * 255) - 8), max(0, int(b * 255) - 8))
+    lighter_bg_hex = rgb_to_hex(min(255, int(r * 255) + 16), min(255, int(g * 255) + 16), min(255, int(b * 255) + 16))
+    sel_hex = rgb_to_hex(min(255, int(r * 255) + 24), min(255, int(g * 255) + 24), min(255, int(b * 255) + 24))
+
+    # 4. Foreground (Tinted high-contrast white)
+    fg_r, fg_g, fg_b = colorsys.hsv_to_rgb(p_h, 0.10, 0.94)
+    fg_hex = rgb_to_hex(int(fg_r * 255), int(fg_g * 255), int(fg_b * 255))
+    muted_r, muted_g, muted_b = colorsys.hsv_to_rgb(p_h, 0.18, 0.52)
+    muted_hex = rgb_to_hex(int(muted_r * 255), int(muted_g * 255), int(muted_b * 255))
+
+    # 5. Harmonious ANSI palette
+    def make_ansi(h_deg, s, v):
+        ar, ag, ab = colorsys.hsv_to_rgb((h_deg % 360) / 360.0, s, v)
+        return rgb_to_hex(int(ar * 255), int(ag * 255), int(ab * 255))
+
+    palette = {
+        "mode": "dark",
+        "accent": primary_accent["hex"],
+        "secondary": secondary_accent["hex"],
+        "selection": sel_hex,
+        "muted": muted_hex,
+        "background": bg_hex,
+        "dark_background": dark_bg_hex,
+        "darker_background": darker_bg_hex,
+        "lighter_background": lighter_bg_hex,
+        "foreground": fg_hex,
+        "dark_foreground": muted_hex,
+        "light_foreground": fg_hex,
+        "bright_foreground": "#ffffff",
+        "red": make_ansi(350, 0.70, 0.92),
+        "green": make_ansi(135, 0.65, 0.88),
+        "yellow": make_ansi(42, 0.75, 0.92),
+        "blue": primary_accent["hex"],
+        "magenta": secondary_accent["hex"],
+        "cyan": make_ansi(185, 0.65, 0.90),
+        "orange": make_ansi(25, 0.80, 0.92),
+        "brown": make_ansi(20, 0.50, 0.55),
+        "bright_red": make_ansi(352, 0.60, 0.98),
+        "bright_green": make_ansi(135, 0.55, 0.95),
+        "bright_yellow": make_ansi(45, 0.65, 0.98),
+        "bright_blue": make_ansi(215, 0.55, 0.98),
+        "bright_magenta": make_ansi(290, 0.55, 0.98),
+        "bright_cyan": make_ansi(185, 0.55, 0.98),
+        "hyprland_active_border": f"rgba({primary_accent['hex'].lstrip('#')}ee) rgba({secondary_accent['hex'].lstrip('#')}ee) 45deg"
+    }
+
+    return palette
+
+def main():
+    wp_path = sys.argv[1] if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]) else get_current_wallpaper()
+    if not wp_path or not os.path.isfile(wp_path):
+        print("Error: Could not locate a valid wallpaper image.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"🎨 [IRAM Auto-Chameleon] Extracting palette from: {os.path.basename(wp_path)} ...")
+    palette = extract_palette(wp_path)
+
+    # Prepare theme directory
+    home = os.path.expanduser("~")
+    theme_slug = "auto-wallpaper"
+    theme_name = "Auto Wallpaper"
+    theme_dir = os.path.join(home, "iram-os/themes", theme_slug)
+    os.makedirs(os.path.join(theme_dir, "backgrounds"), exist_ok=True)
+
+    # 1. Write colors.toml
+    colors_toml = os.path.join(theme_dir, "colors.toml")
+    lines = [f'mode = "{palette["mode"]}"\n']
+    for k, v in palette.items():
+        if k != "mode":
+            lines.append(f'{k} = "{v}"\n')
+    with open(colors_toml, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+    # 2. Copy/link wallpaper into backgrounds
+    dest_bg = os.path.join(theme_dir, "backgrounds", "wallpaper" + os.path.splitext(wp_path)[1])
+    try:
+        shutil.copy2(wp_path, dest_bg)
+    except Exception:
+        pass
+
+    # 3. Create visual preview card
+    try:
+        preview_img = Image.new("RGB", (480, 270), hex_to_rgb(palette["background"]))
+        draw = ImageDraw.Draw(preview_img)
+        # Gradient banner
+        acc_rgb = hex_to_rgb(palette["accent"])
+        sec_rgb = hex_to_rgb(palette["secondary"])
+        for x in range(480):
+            t = x / 480.0
+            r = int(acc_rgb[0] * (1 - t) + sec_rgb[0] * t)
+            g = int(acc_rgb[1] * (1 - t) + sec_rgb[1] * t)
+            b = int(acc_rgb[2] * (1 - t) + sec_rgb[2] * t)
+            draw.line([(x, 0), (x, 18)], fill=(r, g, b))
+        # Color dots
+        dots = [palette["accent"], palette["secondary"], palette["cyan"], palette["green"], palette["yellow"], palette["red"]]
+        for i, d in enumerate(dots):
+            draw.ellipse([30 + i * 40, 200, 56 + i * 40, 226], fill=hex_to_rgb(d))
+        preview_img.save(os.path.join(theme_dir, "preview.png"))
+    except Exception:
+        pass
+
+    # 4. Activate theme in ~/.local/state/iram/current
+    current_dir = os.path.join(home, ".local/state/iram/current")
+    os.makedirs(current_dir, exist_ok=True)
+    os.makedirs(os.path.join(current_dir, "theme"), exist_ok=True)
+
+    # Copy generated files to current/theme
+    for item in os.listdir(theme_dir):
+        s = os.path.join(theme_dir, item)
+        d = os.path.join(current_dir, "theme", item)
+        if os.path.isdir(s):
+            shutil.copytree(s, d, dirs_exist_ok=True)
+        else:
+            shutil.copy2(s, d)
+
+    with open(os.path.join(current_dir, "theme.name"), "w", encoding="utf-8") as f:
+        f.write(theme_name + "\n")
+
+    # Set background symlink
+    if os.path.isfile(dest_bg):
+        bg_link = os.path.join(current_dir, "background")
+        try:
+            if os.path.islink(bg_link) or os.path.exists(bg_link):
+                os.remove(bg_link)
+            os.symlink(dest_bg, bg_link)
+        except Exception:
+            pass
+
+    # 5. Broadcast live to all desktop components
+    sync_bin = os.path.join(home, ".local/bin/iram-theme-sync-all")
+    if os.path.isfile(sync_bin):
+        subprocess.run([sync_bin], check=False)
+
+    print(f"✨ [IRAM Auto-Chameleon] Activated dynamic theme: {theme_name}")
+    print(f"   Accent:    {palette['accent']}")
+    print(f"   Secondary: {palette['secondary']}")
+    print(f"   Background:{palette['background']}")
+
+    # Desktop notification
+    try:
+        subprocess.run([
+            "notify-send",
+            "-a", "IRAM OS",
+            "🎨 23rd Dynamic Theme Active",
+            f"Auto-Chameleon synthesized live palette from {os.path.basename(wp_path)}"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+if __name__ == "__main__":
+    main()

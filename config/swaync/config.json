@@ -1,0 +1,47 @@
+{
+  "$schema": "/etc/xdg/swaync/configSchema.json",
+  "positionX": "right",
+  "positionY": "top",
+  "layer": "overlay",
+  "control-center-layer": "top",
+  "layer-shell": true,
+  "cssPriority": "application",
+  "control-center-margin-top": 8,
+  "control-center-margin-bottom": 8,
+  "control-center-margin-right": 12,
+  "control-center-margin-left": 12,
+  "notification-2nd-image": true,
+  "notification-window-width": 380,
+  "keyboard-shortcuts": true,
+  "image-visibility": "when-available",
+  "transition-time": 200,
+  "hide-on-clear": false,
+  "hide-on-action": true,
+  "script-fail-notify": true,
+  "scripts": {},
+  "notification-visibility": {},
+  "widgets": [
+    "title",
+    "dnd",
+    "notifications",
+    "mpris",
+    "volume"
+  ],
+  "widget-config": {
+    "title": {
+      "text": "IRAM Notifications",
+      "clear-all-button": true,
+      "button-text": "Clear All"
+    },
+    "dnd": {
+      "text": "Do Not Disturb"
+    },
+    "mpris": {
+      "image-size": 64,
+      "image-radius": 12
+    },
+    "volume": {
+      "label": "󰕾 "
+    }
+  }
+}
