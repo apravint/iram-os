@@ -20,6 +20,16 @@ A high-performance Linux operating system powered by Hyprland, featuring sharp g
 
 ### 📸 Desktop Visual Showcase
 
+<p align="center">
+  <img src="assets/iram-os-workspaces-tour.gif" alt="IRAM OS Multi-Workspace Desktop Tour & Live Dynamic Themes" width="100%" />
+  <br/>
+  <em>Live 15-second multi-workspace showcase: Fastfetch System Card (WS 4) ➔ btop Resource Dashboard (WS 5) ➔ CAVA Audio Spectrum (WS 6) ➔ Telemetry HUD (WS 7) ➔ 2x2 Flagship Quad Grid (WS 8) ➔ Neovim Dev Rice (WS 9) ➔ Dynamic Wallpaper & Waybar Live Theme Sync (WS 10).</em>
+  <br/>
+  <b><a href="assets/iram-os-workspaces-tour.mp4">▶ Download / View Full 1080p MP4 Video (assets/iram-os-workspaces-tour.mp4)</a></b>
+</p>
+
+<br/>
+
 <table>
   <tr>
     <td width="50%">
