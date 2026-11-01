@@ -133,7 +133,7 @@ def main():
         css_class = "error"
     else:
         icon = "✨" if api_key else "󱙺"
-        label = "Gemini" if api_key else "AI Ready"
+        label = "Nexus"
         css_class = "idle"
 
     text = f"{icon} {label}"

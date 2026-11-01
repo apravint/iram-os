@@ -20,6 +20,8 @@
         "mpris"
     ],
     "modules-right": [
+        "custom/ai-agent",
+        "custom/mcp-status",
         "custom/iram-ai",
         "custom/theme",
         "cpu",
