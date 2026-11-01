@@ -151,7 +151,7 @@ install_desktop_entries() {
 
 install_scripts() {
     mkdir -p "$HOME/.local/bin"
-    cp -a "$SOURCE/bin/"* "$HOME/.local/bin/"
+    cp -a --remove-destination "$SOURCE/bin/"* "$HOME/.local/bin/"
     find "$HOME/.local/bin" -maxdepth 1 -type f \( -name 'iram*' -o -name 'craft*' \) -exec chmod +x {} +
 }
 
