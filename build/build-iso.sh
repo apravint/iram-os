@@ -351,6 +351,18 @@ ln -sf ../run/systemd/resolve/stub-resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
 : > "${ROOTFS_DIR}/etc/machine-id"
 rm -f "${ROOTFS_DIR}/var/lib/dbus/machine-id"
 
+# Without this, casper falls back to its defaults at boot: host "ubuntu", user "ubuntu".
+cat << EOF > "${ROOTFS_DIR}/etc/casper.conf"
+export USERNAME="iram"
+export USERFULLNAME="IRAM Live User"
+export HOST="iram"
+export BUILD_SYSTEM="Ubuntu"
+EOF
+printf 'IRAM OS %s \\n \\l\n\n' "${DISTRO_VERSION}" > "${ROOTFS_DIR}/etc/issue"
+printf 'IRAM OS %s\n' "${DISTRO_VERSION}" > "${ROOTFS_DIR}/etc/issue.net"
+# Bake casper.conf into the initramfs that the ISO boots from.
+chroot "${ROOTFS_DIR}" update-initramfs -u
+
 # Copy kernel & initrd into casper directory for ISO booting
 log_step "Extracting kernel and initrd for live boot..."
 KERNEL_FILE=$(ls -1 "${ROOTFS_DIR}"/boot/vmlinuz* 2>/dev/null | head -n 1)
