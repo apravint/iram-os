@@ -67,18 +67,23 @@ ISO_DIR="${BUILD_DIR}/iso"
 mkdir -p "${ROOTFS_DIR}" "${ISO_DIR}/casper" "${ISO_DIR}/boot/grub" "${OUTPUT_DIR}"
 rm -f "${OUTPUT_DIR}"/*.iso "${OUTPUT_DIR}/sha256sum.txt"
 
+# Not findmnt -R: it finds nothing when the directory itself is not a mountpoint,
+# which is the case here, and would report bind mounts as gone while they are live.
+mounts_under_rootfs() {
+    findmnt -rno TARGET | awk -v root="${ROOTFS_DIR}/" 'index($0, root) == 1' | sort -r
+}
+
 unmount_virtual_filesystems() {
     local mountpoint
-    findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | sort -r | while read -r mountpoint; do
-        [ "$mountpoint" = "${ROOTFS_DIR}" ] && continue
+    while read -r mountpoint; do
         umount "$mountpoint" || log_warn "Could not unmount $mountpoint"
-    done
+    done < <(mounts_under_rootfs)
 }
 
 cleanup() {
     log_info "Cleaning up build tree..."
     unmount_virtual_filesystems
-    if findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | grep -q .; then
+    if [ -n "$(mounts_under_rootfs)" ]; then
         log_warn "Mounts remain under ${ROOTFS_DIR}; leaving ${BUILD_DIR} for manual cleanup."
     else
         rm -rf --one-file-system "${BUILD_DIR}"
@@ -372,7 +377,7 @@ chroot "${ROOTFS_DIR}" dpkg-query -W --showformat='${Package} ${Version}\n' > "$
 printf "%s" "$(du -sx --block-size=1 "${ROOTFS_DIR}" | cut -f1)" > "${ISO_DIR}/casper/filesystem.size"
 
 unmount_virtual_filesystems
-if findmnt -Rno TARGET "${ROOTFS_DIR}" 2>/dev/null | grep -q .; then
+if [ -n "$(mounts_under_rootfs)" ]; then
     log_err "Virtual filesystems are still mounted; refusing to squash host paths."
     exit 1
 fi

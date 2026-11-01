@@ -118,9 +118,9 @@ cleanup_mounts() {
     [ "$UNMOUNT_NEEDED" = true ] || return 0
     local mountpoint
     # Deepest first; never lazy, because a false "unmounted" is worse than an error here.
-    findmnt -Rno TARGET "$TARGET_ROOT" 2>/dev/null | sort -r | while read -r mountpoint; do
+    while read -r mountpoint; do
         umount "$mountpoint" 2>/dev/null || echo "Warning: could not unmount $mountpoint" >&2
-    done
+    done < <(findmnt -rno TARGET | awk -v root="$TARGET_ROOT" '$0 == root || index($0, root "/") == 1' | sort -r)
 }
 
 [ -n "$DISK" ] && [ -n "$USERNAME" ] || prompt_interactive
