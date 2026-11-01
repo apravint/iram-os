@@ -21,12 +21,9 @@
     ],
     "modules-right": [
         "custom/ai-agent",
-        "custom/mcp-status",
-        "custom/iram-ai",
         "custom/theme",
         "cpu",
         "memory",
-        "custom/audio-sink",
         "pulseaudio",
         "network",
         "tray",
@@ -87,11 +84,11 @@
     "custom/ai-agent": {
         "format": "{}",
         "return-type": "json",
-        "interval": 5,
+        "interval": 4,
         "exec": "~/.local/bin/iram-waybar-agent",
         "on-click": "~/.local/bin/iram-nexus",
-        "on-click-right": "~/.local/bin/iram-models",
-        "on-click-middle": "~/.local/bin/iram-health-agent"
+        "on-click-right": "~/.local/bin/iram-hub",
+        "on-click-middle": "~/.local/bin/iram-models"
     },
 
     "custom/mcp-status": {
@@ -177,10 +174,10 @@
     },
 
     "network": {
-        "format-wifi": "󰖩 {essid}",
-        "format-ethernet": "󰈀 ETH",
-        "format-disconnected": "󰖪 OFFLINE",
-        "tooltip-format": "Signal: {signalStrength}% | IP: {ipaddr}",
+        "format-wifi": "󰖩",
+        "format-ethernet": "󰈀",
+        "format-disconnected": "󰖪",
+        "tooltip-format": "{essid} ({signalStrength}%) | IP: {ipaddr}\nLeft-click: Network Manager | Right-click: Terminal TUI",
         "on-click": "nm-connection-editor",
         "on-click-right": "alacritty -e nmtui"
     },

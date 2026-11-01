@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Iram Waybar AI Agent Telemetry Provider (iram-waybar-agent)
-Provides real-time agent status, Phoenix traces, Qdrant memory stats, and interactive click actions for Waybar.
+IRAM OS Waybar Unified AI & MCP Telemetry Provider (iram-waybar-agent)
+Unified status pill for Nexus Copilot Chat, FastMCP 38 Tools, and Active In-Flight Workloads.
 https://github.com/apravint/iram-os
 """
 import os
 import sys
 import json
 import time
+import subprocess
 import urllib.request
 
 STATUS_FILE = os.path.expanduser("~/.local/state/iram/agent_status.json")
@@ -32,128 +33,110 @@ def get_api_key():
             pass
     return ""
 
-def get_current_model():
-    m = os.environ.get("GEMINI_MODEL")
-    if m:
-        return m
-    env_file = os.path.expanduser("~/.config/environment.d/20-gemini.conf")
-    if os.path.exists(env_file):
-        try:
-            with open(env_file, "r") as f:
-                for line in f:
-                    if line.startswith("GEMINI_MODEL="):
-                        return line.split("=", 1)[1].strip().strip('"').strip("'")
-        except Exception:
-            pass
-    return "gemini-3.5-flash-lite"
+def count_mcp_tools():
+    for candidate in [
+        os.path.expanduser("~/.local/bin/iram-mcp-server"),
+        "/home/apravint/iram-os/bin/iram-mcp-server",
+        "/usr/local/bin/iram-mcp-server",
+        "/usr/share/iram/bin/iram-mcp-server"
+    ]:
+        if os.path.isfile(candidate):
+            try:
+                import re
+                with open(candidate, "r", encoding="utf-8") as f:
+                    tools = re.findall(r"@mcp\.tool\(\)\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)", f.read())
+                    if tools:
+                        return len(tools)
+            except Exception:
+                pass
+    return 38
 
-def get_knowledge_stats():
-    entities_count = 0
-    edges_count = 0
-    if os.path.exists(GRAPH_FILE):
-        try:
-            with open(GRAPH_FILE, "r") as f:
-                kg = json.load(f)
-                entities_count = len(kg.get("entities", {}))
-                edges_count = len(kg.get("edges", []))
-        except Exception:
-            pass
-    return entities_count, edges_count
-
-def get_last_trace():
-    if os.path.exists(TRACES_FILE):
-        try:
-            with open(TRACES_FILE, "r") as f:
-                lines = f.readlines()
-                if lines:
-                    return json.loads(lines[-1])
-        except Exception:
-            pass
-    return None
-
-def get_agent_usage_summary():
-    usage_dir = os.path.expanduser("~/.local/state/iram/agents/usage")
-    agy_info = ""
-    ollama_info = ""
+def get_active_tasks():
+    tasks = []
+    # 1. Ollama model inference
     try:
-        agy_path = os.path.join(usage_dir, "agy.json")
-        if os.path.exists(agy_path):
-            with open(agy_path) as f:
-                d = json.load(f)
-                m = d.get("metrics", {})
-                agy_info = f"• Antigravity: {d.get('active_model')} ({m.get('total_steps', 0):,} steps, {m.get('conversations', 0)} sessions)\n"
+        req = urllib.request.Request("http://127.0.0.1:11434/api/ps", headers={"User-Agent": "Waybar"})
+        with urllib.request.urlopen(req, timeout=0.2) as resp:
+            data = json.loads(resp.read().decode())
+            for m in data.get("models", []):
+                tasks.append(f"LLM: {m.get('name', 'Active')}")
     except Exception:
         pass
-    try:
-        ollama_path = os.path.join(usage_dir, "ollama.json")
-        if os.path.exists(ollama_path):
-            with open(ollama_path) as f:
-                d = json.load(f)
-                count = len(d.get("models_installed", []))
-                ollama_info = f"• Ollama ({d.get('status')}): {count} local models installed\n"
-    except Exception:
-        pass
-    return agy_info + ollama_info
+
+    # 2. Monitored real-time pipelines
+    monitored = [
+        ("iram-video", "Video Render"),
+        ("iram-audit", "Security Audit"),
+        ("iram-voice", "Voice TTS"),
+        ("wf-recorder", "Screen Record"),
+        ("iram-agent-interactive", "Copilot Chat"),
+        ("agy", "Antigravity AI")
+    ]
+    my_pid = os.getpid()
+    for pattern, label in monitored:
+        try:
+            res = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True)
+            pids = [int(p) for p in res.stdout.strip().split() if p and int(p) != my_pid]
+            if pids:
+                tasks.append(label)
+        except Exception:
+            pass
+    return tasks
 
 def main():
     api_key = get_api_key()
-    active_model = get_current_model()
-    default_name = f"Gemini ({active_model})" if api_key else "Local (Qwen 2.5)"
-    engine_name = "Google Gemini Cloud" if api_key else "Ollama Local Engine"
-    
-    entities, edges = get_knowledge_stats()
-    last_trace = get_last_trace()
-    
-    # Read active agent status
+    tools_count = count_mcp_tools()
+    active_tasks = get_active_tasks()
+    active_count = len(active_tasks)
+
     agent_state = "idle"
     details = ""
+
     if os.path.exists(STATUS_FILE):
         try:
             with open(STATUS_FILE, "r") as f:
                 st = json.load(f)
-                # Expire status after 30 seconds if not refreshed
                 if time.time() - st.get("timestamp", 0) < 30:
                     agent_state = st.get("state", "idle")
                     details = st.get("details", "")
         except Exception:
             pass
 
-    # State icon and label
+    # Dynamic compact label & styling
     if agent_state == "thinking":
         icon = "󰑮"
-        label = "Thinking..."
+        label = f"Nexus [Thinking...]"
         css_class = "thinking"
-    elif agent_state == "executing":
-        icon = ""
-        label = details[:15] if details else "Executing"
+    elif agent_state == "executing" or active_count > 0:
+        icon = "✨"
+        label = f"Nexus [{tools_count} | ⚡{active_count}]" if active_count > 0 else f"Nexus [{tools_count}]"
         css_class = "executing"
     elif agent_state == "error":
         icon = "󰅚"
-        label = "Error"
+        label = f"Nexus [Error]"
         css_class = "error"
     else:
         icon = "✨" if api_key else "󱙺"
-        label = "Nexus"
+        label = f"Nexus [{tools_count}]"
         css_class = "idle"
 
     text = f"{icon} {label}"
-    
-    last_span_info = "None"
-    if last_trace:
-        last_span_info = f"{last_trace.get('span')} ({last_trace.get('duration_ms')}ms) [{last_trace.get('status')}]"
 
-    usage_summary = get_agent_usage_summary()
+    # Active workloads summary for tooltip
+    if active_tasks:
+        active_summary = "• In-Flight Workloads:\n" + "\n".join([f"  ⚡ {t}" for t in active_tasks]) + "\n"
+    else:
+        active_summary = "• In-Flight Workloads: Standby (Zero Idle Compute)\n"
 
     tooltip = (
-        f"🤖 Iram Agentic OS HUD\n"
-        f"• State: {agent_state.upper()} {f'({details})' if details else ''}\n"
-        f"• Model: {default_name}\n"
-        f"{usage_summary}"
-        f"• Graphiti Memory: {entities} entities, {edges} edges\n"
-        f"• Last Trace: {last_span_info}\n\n"
-        f"🖱️ Left-Click: Open IRAM Nexus Copilot\n"
-        f"🖱️ Right-Click: AI Model Manager\n"
-        f"🖱️ Middle-Click: Phoenix Observability UI"
+        f"🤖 IRAM OS Sovereign AI & MCP Gateway\n"
+        f"• Status: {agent_state.upper()} {f'({details})' if details else ''}\n"
+        f"• FastMCP Gateway: {tools_count} Registered Tools (Port 8990/8991)\n"
+        f"{active_summary}"
+        f"• Model: Gemini 3.5 Flash / Local Ollama\n\n"
+        f"🖱️ Left-Click: Open Nexus Copilot Chat (Super+Shift+A)\n"
+        f"🖱️ Right-Click: Open Sovereign Command Hub (:8990)\n"
+        f"🖱️ Middle-Click: AI Model Manager GUI"
     )
 
     print(json.dumps({"text": text, "tooltip": tooltip, "class": css_class}))
