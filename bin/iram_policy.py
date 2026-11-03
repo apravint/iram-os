@@ -46,6 +46,10 @@ UNIT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9@_.:-]{0,127}\.(service|timer|soc
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
+# Password managers and secret prompts. Their contents never reach an agent,
+# whether as clipboard text or as pixels.
+SENSITIVE_WINDOW_CLASSES = ("keepass", "bitwarden", "1password", "lastpass", "pinentry", "seahorse", "protonpass", "gcr-prompter")
+
 # Common credential shapes, masked before text reaches a model or a log.
 SECRET_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL),
@@ -72,6 +76,10 @@ def redact_secrets(text: str) -> str:
 
 def is_valid_unit(name: str) -> bool:
     return isinstance(name, str) and bool(UNIT_NAME.match(name))
+
+
+def is_sensitive_window(window_class: str) -> bool:
+    return isinstance(window_class, str) and any(s in window_class.lower() for s in SENSITIVE_WINDOW_CLASSES)
 
 
 def is_safe_dispatcher(dispatcher: str) -> bool:

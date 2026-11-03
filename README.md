@@ -29,8 +29,8 @@ Then pick **IRAM OS** at your login screen. Before changing anything, the instal
 
 | Tier | Examples | Control |
 | :--- | :--- | :--- |
-| `read` | `hypr_query`, `system_telemetry` (per-GPU VRAM, battery), `crash_report`, `service_diagnostics` | No side effects. Credential-shaped strings are masked in logs. |
-| `desktop` (default ceiling) | `manage_windows`, `workspace_control`, `window_rule`, `self_heal`, `switch_theme` | Limited to your session and logged to `~/.local/state/iram-os/mcp-audit.jsonl`. No tool can reach Hyprland's `exec`. |
+| `read` | `hypr_query`, `system_telemetry` (per-GPU VRAM, battery), `crash_report`, `service_diagnostics`, `list_apps`, `screenshot` | No side effects. Credential-shaped strings are masked in logs. `screenshot` is refused while a password manager is on screen, and every capture is logged. |
+| `desktop` (default ceiling) | `manage_windows`, `workspace_control`, `window_rule`, `self_heal`, `switch_theme`, `notify`, `launch_app` | Limited to your session and logged to `~/.local/state/iram-os/mcp-audit.jsonl`. No tool can reach Hyprland's `exec`: `launch_app` takes an installed app's desktop ID, never a command, and notifications are always labelled `IRAM agent`. |
 | `privileged` (off by default) | `privileged_action`: restart network or Bluetooth, `fstrim`, journal vacuum | Fixed commands only, and each run needs your approval in a polkit prompt. |
 
 ```bash
