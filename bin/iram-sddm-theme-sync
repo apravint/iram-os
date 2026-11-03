@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Login Theme Sync (iram-sddm-theme-sync)
+# Colors the IRAM SDDM login screen with an installed IRAM theme.
+# Runs as root through a narrow sudoers rule, so it trusts nothing it is given:
+# the theme must be one installed under /usr/share/iram/themes, and the
+# wallpaper, if named, must be a plain file name inside that theme's backgrounds.
+#
+# Usage: sudo iram-sddm-theme-sync <theme-slug> [wallpaper-file-name]
+# Test hooks: IRAM_THEMES_ROOT, IRAM_SDDM_THEME_DIR.
+# https://github.com/apravint/iram-os
+# ==============================================================================
+set -euo pipefail
+umask 022
+
+THEMES_ROOT="${IRAM_THEMES_ROOT:-/usr/share/iram/themes}"
+SDDM_THEME_DIR="${IRAM_SDDM_THEME_DIR:-/usr/share/sddm/themes/iram}"
+SLUG="${1:-}"
+WALLPAPER_NAME="${2:-}"
+
+die() { echo "iram-sddm-theme-sync: $*" >&2; exit 1; }
+
+[ $# -le 2 ] || die "too many arguments."
+[[ "$SLUG" =~ ^[a-z0-9][a-z0-9-]{0,63}$ ]] || die "invalid theme name '$SLUG'."
+if [ -n "$WALLPAPER_NAME" ]; then
+    [[ "$WALLPAPER_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(jpg|jpeg|png|webp)$ ]] || die "invalid wallpaper name '$WALLPAPER_NAME'."
+fi
+[ -d "$SDDM_THEME_DIR" ] || die "the IRAM login theme is not installed at $SDDM_THEME_DIR."
+
+THEME_DIR="$THEMES_ROOT/$SLUG"
+COLORS="$THEME_DIR/colors.toml"
+[ -f "$COLORS" ] || die "no installed theme '$SLUG'."
+
+# Resolve the wallpaper and refuse anything that leaves the theme's directory,
+# so a symlink planted in a theme cannot make root publish another file.
+BACKGROUND=""
+if [ -n "$WALLPAPER_NAME" ] && [ -f "$THEME_DIR/backgrounds/$WALLPAPER_NAME" ]; then
+    BACKGROUND="$THEME_DIR/backgrounds/$WALLPAPER_NAME"
+else
+    BACKGROUND="$(find "$THEME_DIR/backgrounds" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) 2>/dev/null | sort | head -n 1)"
+fi
+if [ -n "$BACKGROUND" ]; then
+    REAL_BACKGROUND="$(realpath -e -- "$BACKGROUND")"
+    REAL_THEMES="$(realpath -e -- "$THEMES_ROOT")"
+    case "$REAL_BACKGROUND" in
+        "$REAL_THEMES"/*) BACKGROUND="$REAL_BACKGROUND" ;;
+        *) die "wallpaper resolves outside $THEMES_ROOT." ;;
+    esac
+fi
+
+color() { iram-theme-color --file "$COLORS" "$1"; }
+hex() {
+    local value
+    value="$(color "$1" || true)"
+    [[ "$value" =~ ^#[0-9A-Fa-f]{6}$ ]] && echo "$value" || echo "$2"
+}
+
+TMP="$(mktemp "$SDDM_THEME_DIR/.theme.conf.user.XXXXXX")"
+trap 'rm -f "$TMP"' EXIT
+{
+    echo "# Written by iram-sddm-theme-sync for theme '$SLUG'. Regenerated on every theme change."
+    echo "[General]"
+    echo "background=$BACKGROUND"
+    echo "background_color=$(hex background '#16161e')"
+    echo "foreground=$(hex foreground '#c0caf5')"
+    echo "muted=$(hex muted '#565f89')"
+    echo "accent=$(hex accent '#7aa2f7')"
+    echo "accent_secondary=$(hex magenta "$(hex accent '#7aa2f7')")"
+    echo "error=$(hex red '#f7768e')"
+} > "$TMP"
+chmod 0644 "$TMP"
+mv -f "$TMP" "$SDDM_THEME_DIR/theme.conf.user"
+trap - EXIT
+echo "Login screen now uses theme '$SLUG'."

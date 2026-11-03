@@ -92,7 +92,11 @@ cp "$REPO_ROOT/system/iram.conf" "$STAGE/etc/iram.conf"
 install -m 0644 "$REPO_ROOT/system/iram.sh" "$STAGE/etc/profile.d/iram.sh"
 install -m 0644 "$REPO_ROOT/system/sysctl.d/99-iram-performance.conf" "$STAGE/etc/sysctl.d/"
 install -m 0644 "$REPO_ROOT/system/modules-load.d/bbr.conf" "$STAGE/etc/modules-load.d/bbr.conf"
-install -m 0440 "$REPO_ROOT/system/sudoers.d/iram-theme-browser" "$STAGE/etc/sudoers.d/iram-theme-browser"
+for sudoers_file in "$REPO_ROOT"/system/sudoers.d/*; do
+    install -m 0440 "$sudoers_file" "$STAGE/etc/sudoers.d/$(basename "$sudoers_file")"
+done
+mkdir -p "$STAGE/usr/share/sddm/themes"
+cp -r "$REPO_ROOT/system/sddm/iram" "$STAGE/usr/share/sddm/themes/iram"
 install -m 0644 "$REPO_ROOT/system/iram-firstboot-auth.service" "$STAGE/usr/lib/systemd/system/"
 
 find "$REPO_ROOT/applications" -maxdepth 1 -name '*.desktop' -exec cp {} "$STAGE/usr/share/applications/" \;
@@ -112,10 +116,12 @@ cat > "$STAGE/DEBIAN/postinst" << 'SCRIPT'
 set -e
 if [ "$1" = configure ]; then
     # A sudoers fragment with bad syntax can disable sudo for the whole machine.
-    if ! visudo -cf /etc/sudoers.d/iram-theme-browser >/dev/null 2>&1; then
-        echo "iram-desktop: removing invalid sudoers fragment" >&2
-        rm -f /etc/sudoers.d/iram-theme-browser
-    fi
+    for fragment in /etc/sudoers.d/iram-theme-browser /etc/sudoers.d/iram-login-theme; do
+        if [ -f "$fragment" ] && ! visudo -cf "$fragment" >/dev/null 2>&1; then
+            echo "iram-desktop: removing invalid sudoers fragment $fragment" >&2
+            rm -f "$fragment"
+        fi
+    done
     grep -q '^IRAM_PATH=' /etc/environment 2>/dev/null || echo "IRAM_PATH=/usr/share/iram" >> /etc/environment
     command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor || true
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true

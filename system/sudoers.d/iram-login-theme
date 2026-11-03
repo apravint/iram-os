@@ -1,0 +1,4 @@
+# Lets members of sudo recolor the IRAM login screen when they change theme.
+# sudo-rs allows no wildcards in arguments, so the helper itself is the boundary: it
+# accepts only a theme name and a wallpaper file name, and reads only installed themes.
+%sudo ALL=(root) NOPASSWD: /usr/local/bin/iram-sddm-theme-sync, /usr/bin/iram-sddm-theme-sync
