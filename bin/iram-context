@@ -21,11 +21,10 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from iram_policy import redact_secrets
+from iram_policy import is_sensitive_window, redact_secrets
 
 MAX_CLIPBOARD_CHARS = 8000
 PROBE_TIMEOUT = 0.4
-SENSITIVE_WINDOW_CLASSES = ("keepass", "bitwarden", "1password", "lastpass", "pinentry", "seahorse", "protonpass", "gcr-prompter")
 SENSITIVE_MIME_TYPES = ("x-kde-passwordManagerHint", "application/vnd.password")
 
 
@@ -67,7 +66,7 @@ def probe_window():
 
 
 def probe_clipboard(window_class):
-    if any(s in window_class.lower() for s in SENSITIVE_WINDOW_CLASSES):
+    if is_sensitive_window(window_class):
         return {"withheld": "a password manager has focus"}
     types = run(["wl-paste", "--list-types"])
     if any(t in types for t in SENSITIVE_MIME_TYPES):
