@@ -1,1 +1,20 @@
-/home/apravint/iram-harness2/bin/iram-harness2
+#!/usr/bin/env bash
+# iram:summary=IRAM Harness v2 Launcher
+# Harness v2 lives outside this repository. This launcher finds a local
+# checkout or install and hands off to it, and never execs itself.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+
+for candidate in \
+    "${IRAM_HARNESS2_BIN:-}" \
+    "$HOME/iram-harness2/bin/iram-harness2" \
+    "$(command -v iram-harness2-bin 2>/dev/null || true)"; do
+    [[ -n "$candidate" && -x "$candidate" ]] || continue
+    [[ "$(readlink -f "$candidate")" == "$self" ]] && continue
+    exec "$candidate" "$@"
+done
+
+echo "iram-harness2: Harness v2 is not installed." >&2
+echo "Clone it to ~/iram-harness2, or set IRAM_HARNESS2_BIN to its launcher." >&2
+exit 1

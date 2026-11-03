@@ -176,6 +176,18 @@ check "bad username refused" 1 iram-install-disk --plan --disk /dev/sda --user '
 check "non-device path refused" 1 iram-install-disk --plan --disk /tmp/x --user bob
 check "non-root real run refused" 1 iram-install-disk --disk /dev/sda --user bob
 
+# ---- Shipped scripts ----------------------------------------------------------------
+# install.sh and the .deb copy bin/ verbatim, so a link out of the repo ships dangling.
+for link in "$REPO"/bin/*; do
+    [ -L "$link" ] || continue
+    case "$(readlink "$link")" in /*|../*) bad "$(basename "$link") links outside bin/: $(readlink "$link")" ;; *) ok ;; esac
+done
+H3="$WORK/h3"; mkdir -p "$H3"
+check "harness2 launcher fails cleanly when absent" 1 env HOME="$H3" IRAM_HARNESS2_BIN= iram-harness2 task
+printf '#!/bin/sh\necho "real:$*"\n' > "$WORK/fake-harness2"; chmod +x "$WORK/fake-harness2"
+contains "harness2 launcher hands off" "$(HOME="$H3" IRAM_HARNESS2_BIN="$WORK/fake-harness2" iram-harness2 task 2>&1)" "real:task"
+check "harness2 launcher never execs itself" 1 env HOME="$H3" IRAM_HARNESS2_BIN="$REPO/bin/iram-harness2" timeout 5 iram-harness2 task
+
 # ---- Battery monitor --------------------------------------------------------------
 B="$WORK/sys"; mkdir -p "$B/class/power_supply/BAT0" "$WORK/fake"
 printf '#!/bin/sh\necho "$@" >> "%s/calls"\n' "$WORK" > "$WORK/fake/notify-send"; chmod +x "$WORK/fake/notify-send"
