@@ -449,6 +449,14 @@ case "$cmd" in
                 fi
             fi
 
+            # Recolor the IRAM login screen. sudo -n never prompts: without the sudoers rule
+            # (no SDDM, or not installed system-wide) this is skipped silently.
+            if [ -d /usr/share/sddm/themes/iram ] && command -v iram-sddm-theme-sync >/dev/null 2>&1; then
+                local login_bg
+                login_bg="$(basename "$(readlink -f "$HOME/.local/state/iram/current/background" 2>/dev/null)" 2>/dev/null || true)"
+                sudo -n "$(command -v iram-sddm-theme-sync)" "$slug" ${login_bg:+"$login_bg"} >/dev/null 2>&1 || true
+            fi
+
             # Sync GTK, Qt and cursor settings with the theme's light/dark mode
             if [ -x "$LOCAL_BIN/iram-theme-set-toolkits" ]; then
                 "$LOCAL_BIN/iram-theme-set-toolkits" "$HOME/.local/state/iram/current/theme/colors.toml" || \

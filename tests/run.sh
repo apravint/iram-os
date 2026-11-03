@@ -218,6 +218,26 @@ check "waybar config is JSON" 0 jq empty "$REPO/config/waybar/config.jsonc"
 check "swaync config is JSON" 0 jq empty "$REPO/config/swaync/config.json"
 check "MCP config is JSON" 0 jq empty "$REPO/config/mcp/iram_mcp_config.json"
 check "installer dry-run" 0 env HOME="$WORK/dry" bash "$REPO/install.sh" --dry-run
+# ---- Login screen ----------------------------------------------------------------
+check "login sudoers is valid" 0 bash -c "! command -v visudo >/dev/null || visudo -cf '$REPO/system/sudoers.d/iram-login-theme'"
+LT="$WORK/login"; mkdir -p "$LT/themes" "$LT/sddm"; cp -r "$REPO/themes/tokyo-storm" "$LT/themes/"
+sync_login() { IRAM_THEMES_ROOT="$LT/themes" IRAM_SDDM_THEME_DIR="$LT/sddm" iram-sddm-theme-sync "$@"; }
+check "login theme sync" 0 sync_login tokyo-storm
+contains "login accent from theme" "$(cat "$LT/sddm/theme.conf.user")" "accent=#7aa2f7"
+contains "login wallpaper from theme" "$(cat "$LT/sddm/theme.conf.user")" "/tokyo-storm/backgrounds/"
+for bad in ../tokyo-storm Tokyo -rf 'a/../b' nosuch ''; do check "login sync refuses theme '$bad'" 1 sync_login "$bad"; done
+for bad in ../../etc/shadow 'x/../a.png' .hidden.png a.sh; do check "login sync refuses wallpaper '$bad'" 1 sync_login tokyo-storm "$bad"; done
+mkdir -p "$LT/themes/evil/backgrounds"; cp "$REPO/themes/tokyo-storm/colors.toml" "$LT/themes/evil/"
+ln -s /etc/hostname "$LT/themes/evil/backgrounds/a.png"
+check "login sync refuses a symlink out of the themes" 1 sync_login evil a.png
+check "login sync refuses extra arguments" 1 sync_login tokyo-storm a.png extra
+PREVIEW_STATUS=0
+python3 "$REPO/tests/sddm_preview.py" > "$WORK/sddm-preview.log" 2>&1 || PREVIEW_STATUS=$?
+case "$PREVIEW_STATUS" in
+    0|77) ok ;;
+    *) bad "login screen QML: $(cat "$WORK/sddm-preview.log")" ;;
+esac
+
 check "doctor reports failed units" 0 grep -q 'is-failed' "$REPO/bin/iram-doctor"
 check "installer starts units inside a session" 0 grep -q 'start --no-block "${ENABLE_UNITS' "$REPO/install.sh"
 [ ! -e "$WORK/dry/.config" ] && ok || bad "dry-run wrote to HOME"

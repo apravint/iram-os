@@ -210,6 +210,29 @@ else
         exit 1
     fi
     sudo install -m 0440 -o root -g root "$SUDOERS_SRC" /etc/sudoers.d/iram-theme-browser
+
+    # IRAM login screen, where SDDM is the login manager. Selected with a drop-in that sorts
+    # last; delete /etc/sddm.conf.d/zz-iram-theme.conf to return to the previous theme.
+    if command -v sddm >/dev/null 2>&1; then
+        LOGIN_SUDOERS="$REPO_DIR/system/sudoers.d/iram-login-theme"
+        if ! sudo visudo -cf "$LOGIN_SUDOERS" >/dev/null; then
+            echo -e "${RED}Error: $LOGIN_SUDOERS failed visudo validation.${NC}"
+            exit 1
+        fi
+        # The QML modules the theme imports; minimal installs can lack them.
+        sudo apt-get install -y qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-effects
+        sudo rm -rf /usr/share/sddm/themes/iram
+        sudo mkdir -p /usr/share/sddm/themes
+        sudo cp -r --no-preserve=ownership "$REPO_DIR/system/sddm/iram" /usr/share/sddm/themes/iram
+        sudo chown -R root:root /usr/share/sddm/themes/iram
+        sudo chmod -R go-w /usr/share/sddm/themes/iram
+        sudo install -m 0440 -o root -g root "$LOGIN_SUDOERS" /etc/sudoers.d/iram-login-theme
+        sudo mkdir -p /etc/sddm.conf.d
+        printf '# Selects the IRAM OS login screen. Delete this file to restore the previous theme.\n[Theme]\nCurrent=iram\n' | \
+            sudo tee /etc/sddm.conf.d/zz-iram-theme.conf >/dev/null
+        CURRENT_THEME="$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || echo cyberpunk-neon)"
+        sudo /usr/local/bin/iram-sddm-theme-sync "$CURRENT_THEME" || warn "Login screen kept its default colors."
+    fi
 fi
 
 # ------------------------------------------------------------------------------

@@ -1,0 +1,13 @@
+[SddmGreeterTheme]
+Name=IRAM OS
+Description=IRAM OS login screen, colored by the active IRAM theme
+Author=IRAM OS
+License=MIT
+Type=sddm-theme
+Version=1.0
+Website=https://github.com/apravint/iram-os
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=iram
+Theme-API=2.0
+QtVersion=6

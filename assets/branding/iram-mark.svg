@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="IRAM OS">
+  <title>IRAM OS</title>
+  <defs>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7aa2f7"/>
+      <stop offset="1" stop-color="#bb9af7"/>
+    </linearGradient>
+  </defs>
+  <!-- Hexagon: one tile of a tiling desktop -->
+  <path d="M256 36 L446 146 L446 366 L256 476 L66 366 L66 146 Z"
+        fill="none" stroke="url(#edge)" stroke-width="30" stroke-linejoin="round"/>
+  <!-- The "i": the stem, and the node above it -->
+  <rect x="229" y="214" width="54" height="170" rx="27" fill="url(#edge)"/>
+  <circle cx="256" cy="150" r="30" fill="url(#edge)"/>
+  <!-- Orbit around the node: the agent layer around the system -->
+  <path d="M219.3 202.4 A 64 64 0 1 1 292.7 202.4" fill="none" stroke="url(#edge)"
+        stroke-width="14" stroke-linecap="round" opacity="0.9"/>
+</svg>
