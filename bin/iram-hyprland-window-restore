@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Restore a minimized window
+# With one minimized window, restores it. With several, opens a picker
+# (--last restores the most recently minimized one instead).
+# ==============================================================================
+# iram:summary=Restore a minimized window to the workspace it came from
+# iram:args=[--last | window-address]
+set -euo pipefail
+
+MINIMIZED="$(hyprctl clients -j | jq -c '[.[] | select(.workspace.name == "special:minimized")] | sort_by(.focusHistoryID)')"
+COUNT="$(jq 'length' <<<"$MINIMIZED")"
+if [ "$COUNT" -eq 0 ]; then
+    notify-send -a "IRAM OS" "Restore" "No minimized windows." 2>/dev/null || true
+    exit 0
+fi
+
+case "${1:-}" in
+    --last) ADDRESS="$(jq -r '.[0].address' <<<"$MINIMIZED")" ;;
+    0x*)
+        [[ "$1" =~ ^0x[0-9a-fA-F]{1,16}$ ]] || { echo "Invalid window address: $1" >&2; exit 2; }
+        ADDRESS="$1" ;;
+    "")
+        if [ "$COUNT" -eq 1 ]; then
+            ADDRESS="$(jq -r '.[0].address' <<<"$MINIMIZED")"
+        else
+            # iram-menu-select prints what follows the first tab of the chosen line.
+            CHOICE="$(jq -r 'to_entries[] | "\(.key + 1)\t\(.value.class) — \(.value.title)\t\(.value.address)"' <<<"$MINIMIZED" |
+                iram-menu-select "Restore window")" || exit 0
+            ADDRESS="${CHOICE##*$'\t'}"
+        fi ;;
+    *) echo "Usage: iram-hyprland-window-restore [--last | window-address]" >&2; exit 2 ;;
+esac
+
+WINDOW="$(jq -c --arg a "$ADDRESS" 'first(.[] | select(.address == $a)) // empty' <<<"$MINIMIZED")"
+[ -n "$WINDOW" ] || { echo "$ADDRESS is not minimized" >&2; exit 1; }
+
+TAG="$(jq -r 'first((.tags // [])[] | select(test("^iram-min-from-[0-9]+$"))) // empty' <<<"$WINDOW")"
+if [ -n "$TAG" ]; then
+    TARGET="${TAG#iram-min-from-}"
+    hyprctl dispatch -- tagwindow "-$TAG" "address:$ADDRESS" >/dev/null
+else
+    TARGET="$(hyprctl activeworkspace -j | jq -r '.id')"
+fi
+hyprctl dispatch movetoworkspace "$TARGET,address:$ADDRESS" >/dev/null
+hyprctl dispatch focuswindow "address:$ADDRESS" >/dev/null

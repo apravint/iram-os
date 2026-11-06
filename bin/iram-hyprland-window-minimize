@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Minimize a window
+# Parks the window on the hidden special:minimized workspace, tagged with the
+# workspace it came from so iram-hyprland-window-restore can put it back.
+# ==============================================================================
+# iram:summary=Minimize the active window (or one by address) to a hidden workspace
+# iram:args=[window-address]
+set -euo pipefail
+
+if [ -n "${1:-}" ]; then
+    [[ "$1" =~ ^0x[0-9a-fA-F]{1,16}$ ]] || { echo "Invalid window address: $1" >&2; exit 2; }
+    WINDOW="$(hyprctl clients -j | jq -c --arg a "$1" 'first(.[] | select(.address == $a)) // empty')"
+else
+    WINDOW="$(hyprctl activewindow -j)"
+fi
+ADDRESS="$(jq -r '.address // empty' <<<"$WINDOW")"
+WORKSPACE="$(jq -r '.workspace.id // empty' <<<"$WINDOW")"
+[ -n "$ADDRESS" ] || exit 1
+
+# Special workspaces have negative IDs and nothing to return to.
+if ! [[ "$WORKSPACE" =~ ^[0-9]+$ ]]; then
+    notify-send -a "IRAM OS" "Minimize" "Only windows on normal workspaces can be minimized." 2>/dev/null || true
+    exit 1
+fi
+
+# One origin tag per window: drop any left from an earlier minimize.
+while read -r tag; do
+    if [[ "$tag" =~ ^iram-min-from-[0-9]+$ ]]; then
+        hyprctl dispatch -- tagwindow "-$tag" "address:$ADDRESS" >/dev/null
+    fi
+done < <(jq -r '(.tags // [])[]' <<<"$WINDOW")
+hyprctl dispatch tagwindow "+iram-min-from-$WORKSPACE" "address:$ADDRESS" >/dev/null
+hyprctl dispatch movetoworkspacesilent "special:minimized,address:$ADDRESS" >/dev/null

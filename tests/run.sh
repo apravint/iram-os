@@ -189,6 +189,70 @@ printf '#!/bin/sh\necho "real:$*"\n' > "$WORK/fake-harness2"; chmod +x "$WORK/fa
 contains "harness2 launcher hands off" "$(HOME="$H3" IRAM_HARNESS2_BIN="$WORK/fake-harness2" iram-harness2 task 2>&1)" "real:task"
 check "harness2 launcher never execs itself" 1 env HOME="$H3" IRAM_HARNESS2_BIN="$REPO/bin/iram-harness2" timeout 5 iram-harness2 task
 
+# ---- Window extras: minimize, restore, pop-out --------------------------------------
+W="$WORK/win"; mkdir -p "$W/bin"
+cat > "$W/bin/hyprctl" <<'EOF'
+#!/bin/sh
+case "$1" in
+  dispatch) shift; echo "$*" >> "$WIN/dispatch.log"; echo ok ;;
+  activewindow) cat "$WIN/active.json" ;;
+  activeworkspace) echo '{"id":4}' ;;
+  clients) cat "$WIN/clients.json" ;;
+  monitors) echo '[{"id":0,"width":1920,"height":1080,"scale":1.5}]' ;;
+esac
+EOF
+printf '#!/bin/sh\ncat >/dev/null\nprintf "x\\t0xb2\\n"\n' > "$W/bin/iram-menu-select"
+printf '#!/bin/sh\nexit 0\n' > "$W/bin/notify-send"
+chmod +x "$W/bin"/*
+win() { rm -f "$W/dispatch.log"; WIN="$W" PATH="$W/bin:$PATH" "$@"; }
+dispatched() { cat "$W/dispatch.log" 2>/dev/null; }
+
+echo '{"address":"0xa1","workspace":{"id":2},"tags":["iram-min-from-5","work"]}' > "$W/active.json"
+win iram-hyprland-window-minimize
+contains "minimize drops a stale origin tag" "$(dispatched)" "-- tagwindow -iram-min-from-5 address:0xa1"
+contains "minimize records the origin workspace" "$(dispatched)" "tagwindow +iram-min-from-2 address:0xa1"
+contains "minimize parks the window silently" "$(dispatched)" "movetoworkspacesilent special:minimized,address:0xa1"
+lacks "minimize keeps unrelated tags" "$(dispatched)" "-work"
+echo '{"address":"0xa1","workspace":{"id":-98},"tags":[]}' > "$W/active.json"
+check "special-workspace windows are not minimized" 1 win iram-hyprland-window-minimize
+check "minimize refuses a bad address" 2 win iram-hyprland-window-minimize '0x1;id'
+
+cat > "$W/clients.json" <<'EOF'
+[{"address":"0xa1","class":"firefox","title":"Docs","workspace":{"id":-99,"name":"special:minimized"},"focusHistoryID":3,"tags":["iram-min-from-2"]},
+ {"address":"0xb2","class":"Alacritty","title":"term","workspace":{"id":-99,"name":"special:minimized"},"focusHistoryID":1,"tags":[]},
+ {"address":"0xc3","class":"code","title":"x","workspace":{"id":1,"name":"1"},"focusHistoryID":0,"tags":[]}]
+EOF
+win iram-hyprland-window-restore --last
+contains "--last restores the most recently minimized" "$(dispatched)" "focuswindow address:0xb2"
+contains "an untagged window comes back to the current workspace" "$(dispatched)" "movetoworkspace 4,address:0xb2"
+win iram-hyprland-window-restore 0xa1
+contains "restore returns to the origin workspace" "$(dispatched)" "movetoworkspace 2,address:0xa1"
+contains "restore drops the origin tag" "$(dispatched)" "-- tagwindow -iram-min-from-2 address:0xa1"
+win iram-hyprland-window-restore
+contains "with several minimized, the picker chooses" "$(dispatched)" "focuswindow address:0xb2"
+check "restore refuses a window that is not minimized" 1 win iram-hyprland-window-restore 0xc3
+echo '[]' > "$W/clients.json"; win iram-hyprland-window-restore
+check "nothing minimized dispatches nothing" 1 test -s "$W/dispatch.log"
+
+echo '{"address":"0xa1","monitor":0,"floating":false,"pinned":false,"tags":[]}' > "$W/active.json"
+win iram-hyprland-window-pop
+contains "pop floats a tiled window" "$(dispatched)" "setfloating address:0xa1"
+contains "pop fits the monitor in logical pixels" "$(dispatched)" "resizewindowpixel exact 1152 648,address:0xa1"
+contains "pop pins and tags" "$(dispatched)" "tagwindow +iram-pop address:0xa1"
+echo '{"address":"0xa1","monitor":0,"floating":true,"pinned":true,"tags":["iram-pop"]}' > "$W/active.json"
+win iram-hyprland-window-pop
+contains "unpop unpins and re-tiles" "$(dispatched)" "settiled address:0xa1"
+contains "unpop drops the tag" "$(dispatched)" "-- tagwindow -iram-pop address:0xa1"
+echo '{"address":"0xa1","monitor":0,"floating":true,"pinned":false,"tags":[]}' > "$W/active.json"
+win iram-hyprland-window-pop
+lacks "a floating window is not re-floated" "$(dispatched)" "setfloating"
+contains "pop remembers it was floating" "$(dispatched)" "+iram-pop-was-floating"
+echo '{"address":"0xa1","monitor":0,"floating":true,"pinned":true,"tags":["iram-pop","iram-pop-was-floating"]}' > "$W/active.json"
+win iram-hyprland-window-pop
+lacks "unpop leaves a floating window floating" "$(dispatched)" "settiled"
+echo '{"address":"0xa1","monitor":0,"floating":false,"pinned":false,"tags":[]}' > "$W/active.json"
+check "pop refuses a bad size" 2 win iram-hyprland-window-pop 10 'x;id'
+
 # ---- iram update: guarded, profile-preserving -------------------------------------
 U="$WORK/upd"; UF="$WORK/upd-fake"; mkdir -p "$U/iram-os" "$UF"
 printf '#!/bin/sh\necho "$*" >> "$HOME/install.log"\n' > "$U/iram-os/install.sh"

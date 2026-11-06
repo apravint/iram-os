@@ -147,6 +147,8 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `Super + K` | Full keybinding list |
 | `Super + Ctrl + Shift + Space` | Theme switcher |
 | `Super + L` / `Super + Escape` | Lock / power menu |
+| `Super + -` / `Super + Shift + -` | Minimize window / restore one |
+| `Super + U` | Pop the window out: floating, centred and pinned (again to put it back) |
 
 Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
