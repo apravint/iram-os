@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS - System & Repository Update Utility (iram update)
-# Backs up ~/.config/hypr, pulls latest from upstream, re-runs install.sh,
-# reloads user systemd services, restarts UI daemons, and reloads Hyprland.
+# Snapshots your config, pulls the latest release, re-runs install.sh with the
+# profile you installed, fires post-update hooks, and restarts only what
+# migrations marked. One run at a time; every run is logged.
 # https://github.com/apravint/iram-os
 # ==============================================================================
+# iram:summary=Update IRAM OS: snapshot, pull, reinstall, migrate, restart what changed
 set -euo pipefail
 
 BOLD='\033[1m'
@@ -15,70 +17,149 @@ CYAN='\033[0;36m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram"
+PROFILE_FILE="$STATE_DIR/install-profile"
+LOG_FILE="$STATE_DIR/update.log"
+MIN_FREE_GB="${IRAM_UPDATE_MIN_FREE_GB:-3}"
+
+PROFILE="" LOCAL_ONLY=false FORCE=false
+usage() {
+    cat <<EOF
+Usage: iram update [--profile core|ai|craft|all] [--local] [--force]
+
+  --profile P   Reinstall with profile P and remember it (default: the profile you installed)
+  --local       Skip git pull and reinstall the local checkout as it is
+  --force       Skip the free-space check
+EOF
+}
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --profile) PROFILE="${2:-}"; shift 2 ;;
+        --local) LOCAL_ONLY=true; shift ;;
+        --force) FORCE=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; exit 1 ;;
+    esac
+done
+
+die() { echo -e "${RED}Error: $*${NC}" >&2; exit 1; }
+warn() { echo -e "${YELLOW}Warning: $*${NC}" >&2; }
+
+if [ -n "$PROFILE" ]; then
+    case "$PROFILE" in core|ai|craft|all) ;; *) die "Unknown profile '$PROFILE'. Use core, ai, craft or all." ;; esac
+elif [ -f "$PROFILE_FILE" ]; then
+    PROFILE="$(tr -d '[:space:]' < "$PROFILE_FILE")"
+    case "$PROFILE" in core|ai|craft|all) ;; *) die "$PROFILE_FILE holds '$PROFILE'. Fix it, or pass --profile." ;; esac
+else
+    # Installs before profiles were recorded. core adds nothing you did not choose and removes nothing.
+    PROFILE=core
+    warn "No recorded install profile; updating as 'core'. Run 'iram update --profile ai' (or craft/all) once to change it."
+fi
+
+mkdir -p "$STATE_DIR"
+
+# One update at a time. The lock lives in a private directory, not a shared /tmp.
+LOCK_FILE="${XDG_RUNTIME_DIR:-$STATE_DIR}/iram-update.lock"
+exec 9>"$LOCK_FILE"
+flock -n 9 || die "Another 'iram update' is already running."
+
+# Keep the previous run's log for comparison, and tee this one.
+[ -f "$LOG_FILE" ] && mv -f "$LOG_FILE" "$LOG_FILE.1"
+exec > >(tee "$LOG_FILE") 2>&1
+echo "iram update started $(date -Iseconds), profile=$PROFILE"
+
 echo -e "${BLUE}======================================================${NC}"
 echo -e "${BOLD}${CYAN}            IRAM OS SYSTEM UPGRADE${NC}"
 echo -e "${BLUE}======================================================${NC}"
 
-# 1. Atomic config snapshot before upgrade
-if command -v iram-snapshot >/dev/null 2>&1; then
-    echo -e "${YELLOW}==> [1/6] Creating atomic config snapshot (pre-update)...${NC}"
-    iram-snapshot create "pre-update" || true
-elif [ -x "$HOME/.local/bin/iram-snapshot" ]; then
-    echo -e "${YELLOW}==> [1/6] Creating atomic config snapshot (pre-update)...${NC}"
-    "$HOME/.local/bin/iram-snapshot" create "pre-update" || true
+# 0. Room to work: apt, the snapshot and the reinstall all write to disk.
+if [ "$FORCE" = false ]; then
+    for mount in / "$HOME"; do
+        avail_kb="$(df --output=avail -k "$mount" 2>/dev/null | tail -n 1 | tr -d ' ')"
+        if [[ "$avail_kb" =~ ^[0-9]+$ ]] && (( avail_kb < MIN_FREE_GB * 1024 * 1024 )); then
+            die "$mount has $((avail_kb / 1024)) MiB free; updating needs ${MIN_FREE_GB} GiB. Free some space, or pass --force."
+        fi
+    done
+fi
+
+# A reboot marker from before the last boot has already been honoured.
+boot_time="$(awk '/^btime/ {print $2}' /proc/stat 2>/dev/null || echo 0)"
+if [ -f "$STATE_DIR/reboot-required" ] && (( $(stat -c %Y "$STATE_DIR/reboot-required") < boot_time )); then
+    rm -f "$STATE_DIR/reboot-required"
+fi
+
+# 1. Config snapshot. Without one there is nothing to roll back to, so failure stops here.
+echo -e "${YELLOW}==> [1/6] Creating config snapshot (pre-update)...${NC}"
+SNAPSHOT_BIN="$(command -v iram-snapshot || echo "$HOME/.local/bin/iram-snapshot")"
+if [ -x "$SNAPSHOT_BIN" ]; then
+    "$SNAPSHOT_BIN" create "pre-update" || die "Snapshot failed, so nothing was changed. See the output above."
 elif [ -d "$HOME/.config/hypr" ]; then
-    BACKUP_HYPR="$HOME/.config/hypr.bak.$(date +%Y%m%d_%H%M%S)"
-    echo -e "${YELLOW}==> [1/6] Backing up ~/.config/hypr to ${BACKUP_HYPR}...${NC}"
-    cp -r "$HOME/.config/hypr" "$BACKUP_HYPR"
-    echo -e "${GREEN}✓ Backup completed.${NC}"
+    BACKUP_HYPR="$HOME/.config/iram/backups/hypr.$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$(dirname "$BACKUP_HYPR")"
+    cp -a "$HOME/.config/hypr" "$BACKUP_HYPR" || die "Backup of ~/.config/hypr failed, so nothing was changed."
+    echo -e "${GREEN}✓ Backed up ~/.config/hypr to ${BACKUP_HYPR}${NC}"
 fi
 
 # 2. Pull latest repository changes
 REPO_DIR="$HOME/iram-os"
 [ ! -d "$REPO_DIR" ] && REPO_DIR="${IRAM_PATH:-/usr/share/iram}"
 
-if [ -d "$REPO_DIR/.git" ]; then
-    echo -e "${YELLOW}==> [2/6] Pulling latest changes from repository ($REPO_DIR)...${NC}"
-    git -C "$REPO_DIR" pull --ff-only || {
-        echo -e "${YELLOW}Warning: Git pull failed or has local changes. Continuing with local files.${NC}"
-    }
+if [ "$LOCAL_ONLY" = true ]; then
+    echo -e "${YELLOW}==> [2/6] --local: reinstalling $REPO_DIR without pulling.${NC}"
+elif [ -d "$REPO_DIR/.git" ]; then
+    echo -e "${YELLOW}==> [2/6] Pulling latest changes ($REPO_DIR)...${NC}"
+    # Continuing after a failed pull would reinstall the old files and call it an upgrade.
+    git -C "$REPO_DIR" pull --ff-only ||
+        die "git pull failed (local changes or a diverged branch). Fix $REPO_DIR, or run 'iram update --local' to reinstall it as it is."
 else
-    echo -e "${YELLOW}==> [2/6] No git tracking in $REPO_DIR, skipping pull.${NC}"
+    echo -e "${YELLOW}==> [2/6] $REPO_DIR is not a git checkout; reinstalling it as it is.${NC}"
 fi
 
-# 3. Run install.sh
-if [ -f "$REPO_DIR/install.sh" ]; then
-    echo -e "${YELLOW}==> [3/6] Running installer (${REPO_DIR}/install.sh)...${NC}"
-    bash "$REPO_DIR/install.sh" all
-else
-    echo -e "${RED}Error: ${REPO_DIR}/install.sh not found.${NC}" >&2
-    exit 1
-fi
+# 3. Reinstall with the recorded profile. install.sh also runs pending migrations.
+[ -f "$REPO_DIR/install.sh" ] || die "$REPO_DIR/install.sh not found."
+echo -e "${YELLOW}==> [3/6] Running installer (profile: $PROFILE)...${NC}"
+# 9>&- keeps the lock from leaking into anything the installer leaves running.
+bash "$REPO_DIR/install.sh" "$PROFILE" 9>&-
+printf '%s\n' "$PROFILE" > "$PROFILE_FILE"
 
-# 4. Systemd user daemon-reload
-echo -e "${YELLOW}==> [4/6] Reloading systemd user daemon...${NC}"
-systemctl --user daemon-reload || true
+# 4. Post-update hooks: yours in ~/.config/iram/hooks/post-update.d/, and the system's.
+echo -e "${YELLOW}==> [4/6] Running post-update hooks...${NC}"
+systemctl --user daemon-reload || warn "systemctl --user daemon-reload failed."
+iram-lifecycle-dispatch post-update 9>&- || warn "A post-update hook failed; see $STATE_DIR/lifecycle-hooks.log."
 
-# 5. Restart essential desktop services
-echo -e "${YELLOW}==> [5/6] Restarting waybar.service and swaybg.service...${NC}"
-systemctl --user restart waybar.service swaybg.service 2>/dev/null || {
-    # If not running as systemd units, restart directly
-    pkill -x waybar 2>/dev/null || true
-    ~/.local/bin/iram-restart-bar 2>/dev/null || true
-    pkill -x swaybg 2>/dev/null || true
-    swaybg -i "$HOME/.local/state/iram/current/background" -m fill 2>/dev/null &
-}
+# 5. Restart the bar and wallpaper, plus any unit a migration marked with restart-<unit>-required.
+echo -e "${YELLOW}==> [5/6] Restarting desktop services...${NC}"
+RESTART_UNITS=(waybar.service swaybg.service)
+for marker in "$STATE_DIR"/restart-*-required; do
+    [ -e "$marker" ] || continue
+    unit="${marker##*/restart-}"; unit="${unit%-required}"
+    if [[ "$unit" =~ ^[A-Za-z0-9][A-Za-z0-9@_.:-]{0,127}\.service$ ]]; then
+        RESTART_UNITS+=("$unit")
+    else
+        warn "Ignoring marker with an invalid unit name: ${marker##*/}"
+    fi
+    rm -f "$marker"
+done
+for unit in $(printf '%s\n' "${RESTART_UNITS[@]}" | sort -u); do
+    systemctl --user try-restart -- "$unit" || warn "Could not restart $unit."
+done
 
 # 6. Reload Hyprland compositor
 echo -e "${YELLOW}==> [6/6] Reloading Hyprland configuration...${NC}"
 if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-    hyprctl reload || true
-    echo -e "${GREEN}✓ Hyprland reloaded.${NC}"
+    hyprctl reload >/dev/null && echo -e "${GREEN}✓ Hyprland reloaded.${NC}" || warn "hyprctl reload failed."
 fi
 
-# Send notification if available
+# Ubuntu marks kernel and libc upgrades in /run; migrations use the IRAM marker.
+REBOOT_REASON=""
+[ -f /run/reboot-required ] && REBOOT_REASON="system packages"
+[ -f "$STATE_DIR/reboot-required" ] && REBOOT_REASON="${REBOOT_REASON:+$REBOOT_REASON and }an IRAM migration"
+
+MESSAGE="IRAM OS updated (profile: $PROFILE)."
+[ -n "$REBOOT_REASON" ] && MESSAGE="$MESSAGE Reboot to finish: required by $REBOOT_REASON."
 if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a "IRAM Update" "🎉 Update Complete" "IRAM OS upgraded to latest release." 2>/dev/null || true
+    notify-send -a "IRAM Update" "Update complete" "$MESSAGE" 2>/dev/null || true
 fi
 
-echo -e "\n${GREEN}🎉 IRAM OS update complete and all desktop services synchronized!${NC}"
+echo -e "\n${GREEN}🎉 $MESSAGE${NC}"
+echo "Log: $LOG_FILE"
