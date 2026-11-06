@@ -78,7 +78,15 @@ case "$route" in
         exec ~/.local/bin/iram-app-launcher
         ;;
       *"Display"*)
-        ~/.local/bin/iram-displays-gui
+        case "$(iram-menu-select "Displays" "Display settings" "Remember this layout" "Mirror screens on/off" "Rotate this screen" "Forget this layout")" in
+          "Display settings") ~/.local/bin/iram-displays-gui ;;
+          "Remember this layout") MSG=$(iram-monitor save 2>&1); notify-send -a "IRAM Displays" "Display layout" "$MSG" ;;
+          "Mirror screens"*) MSG=$(iram-monitor mirror toggle 2>&1); notify-send -a "IRAM Displays" "Mirroring" "$MSG" ;;
+          "Rotate this screen")
+            DEG=$(iram-menu-select "Rotate (clockwise)" 0 90 180 270) || exit 0
+            MSG=$(iram-monitor rotate "$DEG" 2>&1) || notify-send -a "IRAM Displays" -u critical "Rotate failed" "$MSG" ;;
+          "Forget this layout") MSG=$(iram-monitor forget 2>&1); notify-send -a "IRAM Displays" "Display layout" "$MSG" ;;
+        esac
         ;;
       *"Sound"*|*"Audio"*)
         pavucontrol
