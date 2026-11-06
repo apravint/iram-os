@@ -252,6 +252,53 @@ lacks "unpop leaves a floating window floating" "$(dispatched)" "settiled"
 echo '{"address":"0xa1","monitor":0,"floating":false,"pinned":false,"tags":[]}' > "$W/active.json"
 check "pop refuses a bad size" 2 win iram-hyprland-window-pop 10 'x;id'
 
+# ---- iram update: guarded, profile-preserving -------------------------------------
+U="$WORK/upd"; UF="$WORK/upd-fake"; mkdir -p "$U/iram-os" "$UF"
+printf '#!/bin/sh\necho "$*" >> "$HOME/install.log"\n' > "$U/iram-os/install.sh"
+printf '#!/bin/sh\n[ -f "$HOME/snap-fails" ] && exit 1\necho snap >> "$HOME/snap.log"\n' > "$UF/iram-snapshot"
+printf '#!/bin/sh\necho "$*" >> "$HOME/systemctl.log"\n' > "$UF/systemctl"
+printf '#!/bin/sh\nexit 0\n' > "$UF/notify-send"
+chmod +x "$UF"/*
+upd_reset() { rm -rf "$U/.local" "$U/run" "$U"/*.log "$U/snap-fails" "$U/iram-os/.git"; mkdir -p "$U/run"; }
+upd() { HOME="$U" XDG_STATE_HOME= XDG_RUNTIME_DIR="$U/run" HYPRLAND_INSTANCE_SIGNATURE= PATH="$UF:$PATH" iram-update "$@"; }
+installed() { cat "$U/install.log" 2>/dev/null; }
+
+upd_reset
+OUT="$(upd 2>&1)"; contains "no recorded profile updates as core" "$(installed)" "core"
+contains "no recorded profile says how to change it" "$OUT" "--profile"
+contains "the profile is recorded" "$(cat "$U/.local/state/iram/install-profile")" "core"
+contains "every run is logged" "$(cat "$U/.local/state/iram/update.log")" "profile=core"
+contains "post-update units are try-restarted" "$(cat "$U/systemctl.log")" "--user try-restart -- waybar.service"
+upd_reset; mkdir -p "$U/.local/state/iram"; echo ai > "$U/.local/state/iram/install-profile"
+upd >/dev/null 2>&1; contains "the recorded profile is reused" "$(installed)" "ai"
+upd_reset; upd --profile craft >/dev/null 2>&1
+contains "--profile wins and is remembered" "$(installed) $(cat "$U/.local/state/iram/install-profile")" "craft craft"
+upd_reset; check "unknown profile refused" 1 upd --profile everything
+upd_reset; touch "$U/snap-fails"; check "failed snapshot stops the update" 1 upd
+upd_reset; check "low disk space stops the update" 1 env IRAM_UPDATE_MIN_FREE_GB=999999 HOME="$U" XDG_RUNTIME_DIR="$U/run" PATH="$UF:$PATH" iram-update
+check "--force skips the space check" 0 env IRAM_UPDATE_MIN_FREE_GB=999999 HOME="$U" XDG_RUNTIME_DIR="$U/run" HYPRLAND_INSTANCE_SIGNATURE= PATH="$UF:$PATH" iram-update --force
+upd_reset; mkdir -p "$U/iram-os/.git"; check "failed git pull stops the update" 1 upd
+check "--local reinstalls without pulling" 0 upd --local
+upd_reset; flock "$U/run/iram-update.lock" sleep 3 & HOLDER=$!; sleep 0.3
+check "a second concurrent update is refused" 1 upd
+[ -z "$(installed)" ] && ok || bad "a refused update must not run install.sh: $(installed)"
+kill "$HOLDER" 2>/dev/null; wait "$HOLDER" 2>/dev/null
+upd_reset; mkdir -p "$U/.local/state/iram"
+touch "$U/.local/state/iram/restart-iram-hub.service-required" "$U/.local/state/iram/restart-x;id-required"
+OUT="$(upd 2>&1)"
+contains "marked units are restarted" "$(cat "$U/systemctl.log")" "try-restart -- iram-hub.service"
+lacks "invalid markers are not restarted" "$(cat "$U/systemctl.log")" "x;id"
+contains "invalid markers are reported" "$OUT" "invalid unit name"
+check "markers are consumed" 1 test -e "$U/.local/state/iram/restart-iram-hub.service-required"
+
+# ---- Migrations ------------------------------------------------------------------
+M="$WORK/mig"; mkdir -p "$M/root/migrations" "$M/home"
+printf 'true\n' > "$M/root/migrations/1_a.sh"; printf 'true\n' > "$M/root/migrations/2_b.sh"
+mig() { HOME="$M/home" XDG_STATE_HOME= IRAM_PATH="$M/root" iram-migrate "$@"; }
+contains "all shipped migrations start pending" "$(mig pending)" "2"
+mig run >/dev/null; contains "nothing pending after a run" "$(mig pending)" "0"
+check "reading migrations creates no ~/iram-os" 1 test -e "$M/home/iram-os"
+
 # ---- Battery monitor --------------------------------------------------------------
 B="$WORK/sys"; mkdir -p "$B/class/power_supply/BAT0" "$WORK/fake"
 printf '#!/bin/sh\necho "$@" >> "%s/calls"\n' "$WORK" > "$WORK/fake/notify-send"; chmod +x "$WORK/fake/notify-send"

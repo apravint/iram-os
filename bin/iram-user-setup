@@ -219,3 +219,9 @@ install_desktop_entries
 [ "$WITH_BIN" = true ] && install_scripts
 install_shell_integration
 chmod +x "$CONFIG_HOME"/iram/hooks/*/*.sh 2>/dev/null || true
+
+# A new account from a package or the ISO never runs install.sh, so it would start with
+# every shipped migration pending. They are idempotent, so apply them now.
+if [ "$FIRST_LOGIN" = true ]; then
+    IRAM_ROOT="$SOURCE" bash "$SOURCE/bin/iram-migrate" run || echo "iram-user-setup: a migration failed; see 'iram migrate status'" >&2
+fi

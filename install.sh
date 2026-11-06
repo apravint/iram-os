@@ -278,6 +278,10 @@ else
     export IRAM_PATH=/usr/share/iram
     export PATH="$HOME/.local/bin:$PATH"
 
+    # iram update reinstalls with this profile, so an update never adds what you left out.
+    mkdir -p "$HOME/.local/state/iram"
+    printf '%s\n' "$INSTALL_TARGET" > "$HOME/.local/state/iram/install-profile"
+
     echo "Running IRAM OS migrations..."
     iram-migrate run || warn "A migration failed. Inspect with: iram migrate status"
 

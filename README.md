@@ -127,7 +127,7 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `iram doctor` | Check session variables, portals, services, audio, and agents |
 | `iram snapshot create\|list\|restore` | Config snapshots and rollback |
 | `iram theme [name\|list\|random\|auto]` | Switch themes live |
-| `iram update` | Snapshot, pull, reinstall, reload |
+| `iram update [--profile P] [--local]` | Snapshot, pull, reinstall with your install profile, migrate, restart what changed. One run at a time, logged to `~/.local/state/iram/update.log` |
 | `iram ai-setup` | Install Ollama and models that fit this machine |
 | `iram mcp-config --inject` | Register the MCP server with your agents |
 

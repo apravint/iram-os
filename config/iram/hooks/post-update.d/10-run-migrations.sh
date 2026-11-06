@@ -6,5 +6,6 @@
 set -euo pipefail
 
 if command -v iram-migrate >/dev/null 2>&1; then
-    iram-migrate run || true
+    # install.sh has already run them; this catches any added by a later hook.
+    iram-migrate run
 fi
