@@ -27,6 +27,7 @@
         "pulseaudio",
         "network",
         "tray",
+        "power-profiles-daemon",
         "custom/power"
     ],
 
@@ -185,6 +186,18 @@
 
     "tray": {
         "spacing": 10
+    },
+
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile}\nLeft-click: cycle | Right-click: choose",
+        "on-click-right": "iram-power-profile menu",
+        "format-icons": {
+            "default": "󰾅",
+            "performance": "󰓅",
+            "balanced": "󰾅",
+            "power-saver": "󰾆"
+        }
     },
 
     "custom/power": {
