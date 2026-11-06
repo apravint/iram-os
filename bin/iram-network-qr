@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Wi-Fi QR code
+# Shows a QR code a phone can scan to join the Wi-Fi network you are on. With
+# no arguments it opens a small floating terminal; --print draws it here.
+# The password goes from NetworkManager to qrencode through a pipe, never argv.
+# ==============================================================================
+# iram:summary=Show a QR code for joining the current Wi-Fi network
+# iram:args=[--print] [interface]
+set -euo pipefail
+
+PRINT=false INTERFACE=""
+for arg in "$@"; do
+    case "$arg" in
+        --print) PRINT=true ;;
+        -h|--help) echo "Usage: iram-network-qr [--print] [interface]"; exit 0 ;;
+        *) INTERFACE="$arg" ;;
+    esac
+done
+
+if [ "$PRINT" = false ]; then
+    exec alacritty --class iram-wifi-qr --title "Wi-Fi QR code" -e "$0" --print ${INTERFACE:+"$INTERFACE"}
+fi
+
+pause() { if [ -t 0 ]; then echo; read -r -p "Press Enter to close. " _ || true; fi; }
+fail() { echo "$*" >&2; pause; exit 1; }
+command -v qrencode >/dev/null || fail "qrencode is not installed."
+
+# The connection carrying the default route, if it is Wi-Fi; else the first connected Wi-Fi device.
+if [ -z "$INTERFACE" ]; then
+    # No default route is normal here (offline, or a portal); fall through to nmcli.
+    route_dev="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')" || route_dev=""
+    if [ -n "$route_dev" ] && [ -d "/sys/class/net/$route_dev/wireless" ]; then
+        INTERFACE="$route_dev"
+    else
+        INTERFACE="$(LC_ALL=C nmcli -t -f DEVICE,TYPE,STATE device status | awk -F: '$2 == "wifi" && $3 ~ /^connected/ {print $1; exit}')"
+    fi
+fi
+[ -n "$INTERFACE" ] || fail "No active Wi-Fi connection."
+uuid="$(nmcli -g GENERAL.CON-UUID device show "$INTERFACE" | head -n 1)"
+[ -n "$uuid" ] && [ "$uuid" != "--" ] || fail "No active Wi-Fi connection on $INTERFACE."
+
+mapfile -t f < <(nmcli --show-secrets --escape no -g \
+    802-11-wireless.ssid,802-11-wireless-security.key-mgmt,802-11-wireless-security.psk,802-11-wireless.hidden,802-11-wireless-security.wep-key0 \
+    connection show uuid "$uuid")
+ssid="${f[0]:-}" keymgmt="${f[1]:-}" password="${f[2]:-}" hidden="${f[3]:-no}" wep="${f[4]:-}"
+[ -n "$ssid" ] || fail "Could not read the Wi-Fi name."
+case "$keymgmt" in *eap*|*ieee8021x*) fail "Enterprise Wi-Fi has no shared password to put in a QR code." ;; esac
+
+# The WIFI: format escapes \ ; , : and " with a backslash.
+esc() { sed 's/[\;,:"]/\\&/g' <<<"$1"; }
+if [ -n "$keymgmt" ] && [ "$keymgmt" != none ]; then
+    [ -n "$password" ] || fail "Could not read the Wi-Fi password. Is it stored for all users, or only in a keyring?"
+    security=WPA
+elif [ -n "$wep" ]; then
+    password="$wep" security=WEP
+else
+    security=nopass
+fi
+
+payload="WIFI:T:$security;S:$(esc "$ssid");"
+[ "$security" = nopass ] || payload+="P:$(esc "$password");"
+[ "$hidden" = yes ] && payload+="H:true;"
+payload+=";"
+
+printf '%s' "$payload" | qrencode -t ANSIUTF8 -m 2
+echo "  Scan to join: $ssid"
+pause

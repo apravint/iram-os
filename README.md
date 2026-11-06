@@ -140,6 +140,8 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `iram mcp-config --inject` | Register the MCP server with your agents |
 | `iram monitor save\|apply\|list\|forget` | Remember the layout for the monitors connected now; it is reapplied whenever that set is plugged in |
 | `iram monitor rotate [0\|90\|180\|270]` / `mirror [on\|off]` | Rotate the focused screen (remembered) / mirror it onto the others |
+| `iram-network-dns [cloudflare\|quad9\|google\|auto]` | DNS provider for the active network (also in the menu under Network) |
+| `iram-network-qr` | QR code a phone can scan to join your Wi-Fi |
 
 | Shortcut | Action |
 | :--- | :--- |
@@ -152,7 +154,7 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `Super + -` / `Super + Shift + -` | Minimize window / restore one |
 | `Super + U` | Pop the window out: floating, centred and pinned (again to put it back) |
 
-Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md) to report a vulnerability.
+Captive portals (hotel or airport Wi-Fi) open their sign-in page automatically, via `iram-captive-portal.service`. Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## License
 
