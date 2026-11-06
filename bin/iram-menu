@@ -111,7 +111,19 @@ case "$route" in
         ~/.local/bin/iram-cursor-switch
         ;;
       *"Network"*)
-        nm-connection-editor
+        case "$(iram-menu-select "Network" "Network settings" "Share Wi-Fi (QR code)" "DNS provider")" in
+          "Network settings") nm-connection-editor ;;
+          "Share Wi-Fi"*) iram-network-qr ;;
+          "DNS provider")
+            CURRENT=$(iram-network-dns status 2>&1 | head -n 1)
+            PICK=$(iram-menu-select "DNS (now: ${CURRENT##*: })" cloudflare quad9 google auto) || exit 0
+            if RESULT=$(iram-network-dns "$PICK" 2>&1); then
+              notify-send -a "IRAM Network" "DNS provider" "$RESULT"
+            else
+              notify-send -a "IRAM Network" -u critical "DNS change failed" "$RESULT"
+            fi
+            ;;
+        esac
         ;;
       *"Bluetooth"*)
         blueman-manager
