@@ -78,3 +78,8 @@ sudo ./build/build-iso.sh
 
 5. **Backup & Rollback Integrity**:
    - Changes to user configuration must respect the timestamped backup mechanism (`~/.config/iram/backups/`).
+
+6. **Migrations**:
+   - Create one with `iram migrate create <description>`. It must be idempotent: it runs on every account's first login as well as on upgrade.
+   - Don't restart services or reboot from inside a migration. Touch a marker, and `iram update` acts on it after every migration has run:
+     `~/.local/state/iram/restart-<unit>.service-required` restarts that user unit if it is running; `~/.local/state/iram/reboot-required` tells the user to reboot.

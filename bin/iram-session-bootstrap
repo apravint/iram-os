@@ -40,3 +40,13 @@ if [ ! -e "$HOME/.local/state/iram/current/theme.name" ]; then
     timeout 120 iram theme set "Cyberpunk Neon" > "$HOME/.local/state/iram/first-theme.log" 2>&1 ||
         echo "iram-session-bootstrap: default theme failed; see first-theme.log" >&2
 fi
+
+# A `git pull` or a newer package without `iram update` skips the per-user migrations. Say so once
+# notifications are up, rather than let the desktop drift from the shipped config.
+(
+    sleep 15
+    pending="$(iram-migrate pending 2>/dev/null || echo 0)"
+    if [[ "$pending" =~ ^[1-9][0-9]*$ ]]; then
+        notify-send -a "IRAM Update" "$pending IRAM migration(s) pending" "Run 'iram migrate run' to apply them." 2>/dev/null
+    fi
+) &
