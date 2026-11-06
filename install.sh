@@ -299,6 +299,7 @@ else
         waybar.service swaybg.service swaync.service hypridle.service
         iram-cliphist.service iram-cliphist-image.service iram-polkit-agent.service
         iram-watchdog.service iram-battery.timer iram-healthd.timer iram-security.timer
+        iram-monitor-watch.service
     )
     AI_UNITS=(iram-agentd.socket iram-hub.service iram-nexus.service)
     ENABLE_UNITS=("${CORE_UNITS[@]}")

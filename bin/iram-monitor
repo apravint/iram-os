@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""
+IRAM OS - Monitor profiles, hotplug, rotation and mirroring (iram monitor)
+
+A profile is the layout for one set of connected monitors: "desk monitor alone"
+and "desk monitor plus TV" each get their own. `save` records the live layout
+for the monitors connected now; `apply` restores it; `watch` (run by
+iram-monitor-watch.service) applies it whenever a monitor is plugged in or out.
+Monitors are matched by description (make, model, serial), not by port.
+
+Usage:
+  iram monitor save | apply | list | forget
+  iram monitor rotate [0|90|180|270|next]
+  iram monitor mirror [on|off|toggle]
+  iram monitor watch
+"""
+# iram:summary=Remember monitor layouts per setup, reapply on hotplug, rotate and mirror
+
+import hashlib
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+
+PROFILE_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "iram", "monitor-profiles")
+# Hyprland transform values for clockwise rotation.
+ROTATIONS = {"0": 0, "90": 1, "180": 2, "270": 3}
+DEBOUNCE_SECONDS = float(os.environ.get("IRAM_MONITOR_DEBOUNCE", "1.5"))
+# Applying a layout fires monitor events of its own; ignore those.
+SETTLE_SECONDS = float(os.environ.get("IRAM_MONITOR_SETTLE", "3.0"))
+
+
+class MonitorError(Exception):
+    pass
+
+
+def hyprctl(*args):
+    try:
+        res = subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise MonitorError(f"hyprctl failed: {e}")
+    if res.returncode != 0:
+        raise MonitorError(f"hyprctl {' '.join(args)} failed: {res.stderr.strip() or res.stdout.strip()}")
+    return res.stdout
+
+
+def monitors():
+    try:
+        return json.loads(hyprctl("monitors", "all", "-j"))
+    except json.JSONDecodeError as e:
+        raise MonitorError(f"hyprctl returned invalid JSON: {e}")
+
+
+def selector(mon):
+    """desc: survives moving a cable to another port; a comma in it would split the rule, so use the port then."""
+    desc = mon.get("description", "")
+    return f"desc:{desc}" if desc and "," not in desc and ";" not in desc else mon["name"]
+
+
+def rule(mon, transform=None, mirror=None):
+    if mon.get("disabled"):
+        return f"{selector(mon)}, disable"
+    mode = f"{mon['width']}x{mon['height']}@{mon['refreshRate']:.2f}"
+    text = f"{selector(mon)}, {mode}, {mon['x']}x{mon['y']}, {mon['scale']:g}"
+    t = mon.get("transform", 0) if transform is None else transform
+    if t:
+        text += f", transform, {t}"
+    if mirror:
+        text += f", mirror, {mirror}"
+    return text
+
+
+def profile_path(mons):
+    key = "\n".join(sorted(m.get("description") or m["name"] for m in mons))
+    return os.path.join(PROFILE_DIR, hashlib.sha256(key.encode()).hexdigest()[:16] + ".json")
+
+
+def apply_rules(rules):
+    for r in rules:
+        if not isinstance(r, str) or any(c in r for c in ";\n\r"):
+            raise MonitorError(f"Refusing a malformed monitor rule: {r!r}")
+    if rules:
+        out = hyprctl("--batch", " ; ".join(f"keyword monitor {r}" for r in rules))
+        bad = [line for line in out.splitlines() if line.strip() and line.strip().lower() != "ok"]
+        if bad:
+            raise MonitorError("Hyprland rejected a rule: " + "; ".join(bad))
+
+
+def focused(mons):
+    enabled = [m for m in mons if not m.get("disabled")]
+    return next((m for m in enabled if m.get("focused")), enabled[0] if enabled else None)
+
+
+def cmd_save(_args):
+    mons = monitors()
+    if any(m.get("mirrorOf", "none") != "none" for m in mons):
+        raise MonitorError("Turn mirroring off before saving (iram monitor mirror off).")
+    os.makedirs(PROFILE_DIR, exist_ok=True)
+    path = profile_path(mons)
+    profile = {"monitors": sorted(m.get("description") or m["name"] for m in mons),
+               "rules": [rule(m) for m in mons], "saved": int(time.time())}
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(profile, f, indent=2)
+    os.replace(tmp, path)
+    print(f"Saved the layout for: {', '.join(profile['monitors'])}")
+
+
+def cmd_apply(_args, quiet=False):
+    mons = monitors()
+    path = profile_path(mons)
+    try:
+        with open(path, encoding="utf-8") as f:
+            rules = json.load(f)["rules"]
+    except FileNotFoundError:
+        if not quiet:
+            print("No saved layout for these monitors; Hyprland's config applies.")
+        return False
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise MonitorError(f"{path} is unreadable: {e}")
+    apply_rules(rules)
+    if not quiet:
+        print("Applied the saved layout.")
+    return True
+
+
+def cmd_list(_args):
+    current = profile_path(monitors())
+    files = sorted(f for f in os.listdir(PROFILE_DIR) if f.endswith(".json")) if os.path.isdir(PROFILE_DIR) else []
+    if not files:
+        print("No saved layouts. Arrange your monitors, then run: iram monitor save")
+    for name in files:
+        path = os.path.join(PROFILE_DIR, name)
+        try:
+            with open(path, encoding="utf-8") as f:
+                listed = " + ".join(json.load(f)["monitors"])
+        except (OSError, ValueError, KeyError, TypeError):
+            listed = "(unreadable)"
+        print(f"{'*' if path == current else ' '} {listed}")
+
+
+def cmd_forget(_args):
+    path = profile_path(monitors())
+    try:
+        os.remove(path)
+        print("Forgot the saved layout for these monitors.")
+    except FileNotFoundError:
+        print("There was no saved layout for these monitors.")
+
+
+def cmd_rotate(args):
+    mons = monitors()
+    mon = focused(mons)
+    if not mon:
+        raise MonitorError("No enabled monitor.")
+    want = args[0] if args else "next"
+    if want == "next":
+        transform = (mon.get("transform", 0) % 4 + 1) % 4
+    elif want in ROTATIONS:
+        transform = ROTATIONS[want]
+    else:
+        raise MonitorError("rotate takes 0, 90, 180, 270 or next.")
+    apply_rules([rule(mon, transform=transform)])
+    # Remember it, so the next hotplug does not undo the rotation.
+    cmd_save([])
+
+
+def cmd_mirror(args):
+    mons = monitors()
+    want = args[0] if args else "toggle"
+    mirrored = [m for m in mons if m.get("mirrorOf", "none") != "none"]
+    if want == "toggle":
+        want = "off" if mirrored else "on"
+    if want == "on":
+        source = focused(mons)
+        others = [m for m in mons if not m.get("disabled") and m is not source]
+        if not source or not others:
+            raise MonitorError("Mirroring needs two enabled monitors.")
+        apply_rules([f"{selector(m)}, preferred, auto, 1, mirror, {source['name']}" for m in others])
+        print(f"Mirroring {source['name']} onto {', '.join(m['name'] for m in others)}.")
+    elif want == "off":
+        apply_rules([f"{selector(m)}, preferred, auto, 1" for m in mirrored])
+        # Put the saved arrangement back when there is one.
+        cmd_apply([], quiet=True)
+        print("Mirroring off.")
+    else:
+        raise MonitorError("mirror takes on, off or toggle.")
+
+
+def notify(summary, body):
+    subprocess.run(["notify-send", "-a", "IRAM Displays", summary, body], capture_output=True, check=False)
+
+
+def cmd_watch(_args):
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    if not runtime or not signature:
+        raise MonitorError("Not inside a Hyprland session.")
+    path = os.path.join(runtime, "hypr", signature, ".socket2.sock")
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+
+    last_apply = 0.0
+
+    def apply_now():
+        nonlocal last_apply
+        try:
+            if cmd_apply([], quiet=True):
+                notify("Display layout restored", "Applied the saved layout for these monitors.")
+        except MonitorError as e:
+            print(e, file=sys.stderr)
+        last_apply = time.monotonic()
+
+    apply_now()
+    buf, pending = b"", False
+    while True:
+        sock.settimeout(DEBOUNCE_SECONDS if pending else None)
+        try:
+            chunk = sock.recv(4096)
+        except socket.timeout:
+            # Quiet for a moment after the last plug event: the set has settled.
+            pending = False
+            apply_now()
+            continue
+        if not chunk:
+            return  # Hyprland exited.
+        buf += chunk
+        *lines, buf = buf.split(b"\n")
+        for line in lines:
+            event = line.split(b">>", 1)[0]
+            if event.startswith((b"monitoradded", b"monitorremoved")) and time.monotonic() - last_apply > SETTLE_SECONDS:
+                pending = True
+
+
+COMMANDS = {"save": cmd_save, "apply": cmd_apply, "list": cmd_list, "forget": cmd_forget,
+            "rotate": cmd_rotate, "mirror": cmd_mirror, "watch": cmd_watch}
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__.split("Usage:", 1)[1].rstrip())
+        return 0
+    if args[0] not in COMMANDS:
+        print(f"Unknown command: {args[0]}. Run: iram monitor help", file=sys.stderr)
+        return 2
+    try:
+        COMMANDS[args[0]](args[1:])
+    except MonitorError as e:
+        print(e, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

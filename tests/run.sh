@@ -300,6 +300,67 @@ contains "all shipped migrations start pending" "$(mig pending)" "2"
 mig run >/dev/null; contains "nothing pending after a run" "$(mig pending)" "0"
 check "reading migrations creates no ~/iram-os" 1 test -e "$M/home/iram-os"
 
+# ---- Monitor profiles ----------------------------------------------------------------
+D="$WORK/mon"; mkdir -p "$D/bin"
+cat > "$D/bin/hyprctl" <<'EOF'
+#!/bin/sh
+case "$1" in
+  monitors) cat "$MON/monitors.json" ;;
+  --batch) echo "$2" >> "$MON/batch.log"; echo "$2" | tr ';' '\n' | while read -r _; do cat "$MON/reply" 2>/dev/null || echo ok; done ;;
+esac
+EOF
+printf '#!/bin/sh\nexit 0\n' > "$D/bin/notify-send"
+chmod +x "$D/bin"/*
+mon() { rm -f "$D/batch.log"; MON="$D" XDG_CONFIG_HOME="$D/cfg" PATH="$D/bin:$PATH" iram-monitor "$@"; }
+batch() { cat "$D/batch.log" 2>/dev/null; }
+two='[{"name":"DP-1","description":"Samsung S27 0x01","width":2560,"height":1440,"refreshRate":143.99,"x":0,"y":0,"scale":1.25,"transform":0,"focused":true,"disabled":false,"mirrorOf":"none"},
+      {"name":"HDMI-A-1","description":"Sony TV, Bravia","width":1920,"height":1080,"refreshRate":60.0,"x":2048,"y":0,"scale":1,"transform":1,"focused":false,"disabled":false,"mirrorOf":"none"},
+      {"name":"DP-2","description":"Old Panel","width":0,"height":0,"refreshRate":0,"x":0,"y":0,"scale":1,"transform":0,"focused":false,"disabled":true,"mirrorOf":"none"}]'
+echo "$two" > "$D/monitors.json"
+contains "save names the monitors" "$(mon save)" "Samsung S27 0x01"
+PROFILE="$(cat "$D"/cfg/iram/monitor-profiles/*.json)"
+contains "rules match by description" "$PROFILE" "desc:Samsung S27 0x01, 2560x1440@143.99, 0x0, 1.25"
+contains "rotation is kept" "$PROFILE" "HDMI-A-1, 1920x1080@60.00, 2048x0, 1, transform, 1"
+contains "a comma in the description falls back to the port" "$PROFILE" "\"HDMI-A-1, 1920x1080"
+contains "disabled monitors stay disabled" "$PROFILE" "desc:Old Panel, disable"
+mon apply >/dev/null
+contains "apply sends every rule in one batch" "$(batch)" "keyword monitor desc:Samsung S27 0x01, 2560x1440@143.99, 0x0, 1.25 ; keyword monitor HDMI-A-1"
+echo "$two" | jq '[.[0]]' > "$D/monitors.json"
+contains "another set of monitors has no layout" "$(mon apply)" "No saved layout"
+check "nothing is applied for an unknown set" 1 test -s "$D/batch.log"
+echo "$two" > "$D/monitors.json"; mon rotate 90 >/dev/null
+contains "rotate the focused monitor" "$(batch)" "keyword monitor desc:Samsung S27 0x01, 2560x1440@143.99, 0x0, 1.25, transform, 1"
+mon mirror on >/dev/null
+contains "mirror the focused monitor onto the others" "$(batch)" "keyword monitor HDMI-A-1, preferred, auto, 1, mirror, DP-1"
+lacks "mirroring leaves disabled monitors alone" "$(batch)" "Old Panel"
+echo "$two" | jq '.[1].mirrorOf = "DP-1"' > "$D/monitors.json"
+check "saving refuses while mirroring" 1 mon save
+mon mirror off >/dev/null
+contains "mirror off unmirrors" "$(batch)" "keyword monitor HDMI-A-1, preferred, auto, 1"
+echo "$two" > "$D/monitors.json"
+echo "bad rule" > "$D/reply"; check "a rule Hyprland rejects is an error" 1 mon apply; rm -f "$D/reply"
+jq '.rules = ["desc:X, 1920x1080@60, 0x0, 1 ; dispatch exec foo"]' "$D"/cfg/iram/monitor-profiles/*.json > "$D/evil.json"
+cp "$D/evil.json" "$D"/cfg/iram/monitor-profiles/*.json
+check "a rule that would chain commands is refused" 1 mon apply
+check "and nothing is sent" 1 test -s "$D/batch.log"
+check "unknown monitor command" 2 mon spin
+
+# The hotplug watcher: one plug event after the settle window triggers one apply.
+mon save >/dev/null
+SOCKDIR="$D/rt/hypr/sig"; mkdir -p "$SOCKDIR"
+python3 -I - "$SOCKDIR/.socket2.sock" <<'EOF' &
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1)
+c, _ = s.accept()
+time.sleep(0.6); c.sendall(b"workspace>>2\nmonitoraddedv2>>2,HDMI-A-1,Sony\n")
+time.sleep(0.8); c.close()
+EOF
+SERVER=$!; sleep 0.3
+MON="$D" XDG_CONFIG_HOME="$D/cfg" PATH="$D/bin:$PATH" XDG_RUNTIME_DIR="$D/rt" HYPRLAND_INSTANCE_SIGNATURE=sig \
+    IRAM_MONITOR_SETTLE=0.3 IRAM_MONITOR_DEBOUNCE=0.3 timeout 5 iram-monitor watch
+wait "$SERVER" 2>/dev/null
+contains "watch applies at start and after a plug event" "$(grep -c "keyword monitor" "$D/batch.log")" "2"
+
 # ---- Battery monitor --------------------------------------------------------------
 B="$WORK/sys"; mkdir -p "$B/class/power_supply/BAT0" "$WORK/fake"
 printf '#!/bin/sh\necho "$@" >> "%s/calls"\n' "$WORK" > "$WORK/fake/notify-send"; chmod +x "$WORK/fake/notify-send"

@@ -1,0 +1,15 @@
+[Unit]
+Description=IRAM OS monitor hotplug watcher (reapplies saved layouts)
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/env iram-monitor watch
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=graphical-session.target

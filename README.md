@@ -138,6 +138,8 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `iram update [--profile P] [--local]` | Snapshot, pull, reinstall with your install profile, migrate, restart what changed. One run at a time, logged to `~/.local/state/iram/update.log` |
 | `iram ai-setup` | Install Ollama and models that fit this machine |
 | `iram mcp-config --inject` | Register the MCP server with your agents |
+| `iram monitor save\|apply\|list\|forget` | Remember the layout for the monitors connected now; it is reapplied whenever that set is plugged in |
+| `iram monitor rotate [0\|90\|180\|270]` / `mirror [on\|off]` | Rotate the focused screen (remembered) / mirror it onto the others |
 
 | Shortcut | Action |
 | :--- | :--- |
