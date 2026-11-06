@@ -130,6 +130,8 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `iram update [--profile P] [--local]` | Snapshot, pull, reinstall with your install profile, migrate, restart what changed. One run at a time, logged to `~/.local/state/iram/update.log` |
 | `iram ai-setup` | Install Ollama and models that fit this machine |
 | `iram mcp-config --inject` | Register the MCP server with your agents |
+| `iram-network-dns [cloudflare\|quad9\|google\|auto]` | DNS provider for the active network (also in the menu under Network) |
+| `iram-network-qr` | QR code a phone can scan to join your Wi-Fi |
 
 | Shortcut | Action |
 | :--- | :--- |
@@ -140,7 +142,7 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `Super + Ctrl + Shift + Space` | Theme switcher |
 | `Super + L` / `Super + Escape` | Lock / power menu |
 
-Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md).
+Captive portals (hotel or airport Wi-Fi) open their sign-in page automatically, via `iram-captive-portal.service`. Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md).
 
 ## License
 

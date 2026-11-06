@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - DNS provider
+# Sets the DNS servers of the active Wi-Fi and Ethernet connections through
+# NetworkManager, which asks through polkit if your account needs to. Other
+# saved networks keep their own setting. `auto` returns to the network's own DNS.
+# ==============================================================================
+# iram:summary=Show or set the DNS provider for the active network
+# iram:args=[status|cloudflare|quad9|google|auto]
+set -euo pipefail
+
+case "${1:-status}" in
+    cloudflare) V4="1.1.1.1 1.0.0.1" V6="2606:4700:4700::1111 2606:4700:4700::1001" ;;
+    quad9) V4="9.9.9.9 149.112.112.112" V6="2620:fe::fe 2620:fe::9" ;;
+    google) V4="8.8.8.8 8.8.4.4" V6="2001:4860:4860::8888 2001:4860:4860::8844" ;;
+    auto) V4="" V6="" ;;
+    status) ;;
+    *) echo "Usage: iram-network-dns [status|cloudflare|quad9|google|auto]" >&2; exit 2 ;;
+esac
+ACTION="${1:-status}"
+
+provider_of() {
+    case "$1" in
+        "") echo "auto (from the network)" ;;
+        1.1.1.1*) echo cloudflare ;;
+        9.9.9.9*) echo quad9 ;;
+        8.8.8.8*) echo google ;;
+        *) echo "custom ($1)" ;;
+    esac
+}
+
+mapfile -t ACTIVE < <(LC_ALL=C nmcli -t -f UUID,TYPE,DEVICE connection show --active |
+    awk -F: '$2 == "802-11-wireless" || $2 == "802-3-ethernet"')
+[ "${#ACTIVE[@]}" -gt 0 ] || { echo "No active Wi-Fi or Ethernet connection." >&2; exit 1; }
+
+for line in "${ACTIVE[@]}"; do
+    IFS=: read -r uuid _ device <<<"$line"
+    name="$(nmcli -g connection.id connection show uuid "$uuid")"
+    if [ "$ACTION" = status ]; then
+        dns="$(nmcli -g ipv4.dns connection show uuid "$uuid" | tr ',' ' ')"
+        echo "$name ($device): $(provider_of "$dns")"
+        continue
+    fi
+    if [ -n "$V4" ]; then
+        args=(ipv4.dns "$V4" ipv4.ignore-auto-dns yes)
+    else
+        args=(ipv4.dns "" ipv4.ignore-auto-dns no)
+    fi
+    # NetworkManager refuses DNS servers on a connection with IPv6 turned off.
+    case "$(nmcli -g ipv6.method connection show uuid "$uuid")" in
+        disabled|ignore) ;;
+        *) if [ -n "$V6" ]; then args+=(ipv6.dns "$V6" ipv6.ignore-auto-dns yes); else args+=(ipv6.dns "" ipv6.ignore-auto-dns no); fi ;;
+    esac
+    nmcli connection modify uuid "$uuid" "${args[@]}"
+    # reapply changes DNS without dropping the connection.
+    nmcli device reapply "$device" >/dev/null
+    echo "$name ($device): DNS set to $ACTION"
+done

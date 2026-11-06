@@ -188,6 +188,61 @@ printf '#!/bin/sh\necho "real:$*"\n' > "$WORK/fake-harness2"; chmod +x "$WORK/fa
 contains "harness2 launcher hands off" "$(HOME="$H3" IRAM_HARNESS2_BIN="$WORK/fake-harness2" iram-harness2 task 2>&1)" "real:task"
 check "harness2 launcher never execs itself" 1 env HOME="$H3" IRAM_HARNESS2_BIN="$REPO/bin/iram-harness2" timeout 5 iram-harness2 task
 
+# ---- Networking: DNS provider, Wi-Fi QR, captive portal ----------------------------
+N="$WORK/net"; mkdir -p "$N/bin"
+cat > "$N/bin/nmcli" <<'EOF'
+#!/bin/sh
+echo "$*" >> "$NET/nmcli.log"
+case "$*" in
+  "-t -f UUID,TYPE,DEVICE connection show --active") printf 'u-wifi:802-11-wireless:wlan0\nu-vpn:wireguard:wg0\nu-eth:802-3-ethernet:eth0\n' ;;
+  "-g connection.id connection show uuid u-wifi") echo "Home" ;;
+  "-g connection.id connection show uuid u-eth") echo "Wired" ;;
+  "-g ipv4.dns connection show uuid u-wifi") echo "1.1.1.1,1.0.0.1" ;;
+  "-g ipv4.dns connection show uuid u-eth") echo "" ;;
+  "-g ipv6.method connection show uuid u-wifi") echo "auto" ;;
+  "-g ipv6.method connection show uuid u-eth") echo "disabled" ;;
+  "-t -f DEVICE,TYPE,STATE device status") printf 'wlan0:wifi:connected\n' ;;
+  "-g GENERAL.CON-UUID device show wlan0") echo "u-wifi" ;;
+  "--show-secrets --escape no -g"*) cat "$NET/wifi-fields" ;;
+  "-t -f CONNECTIVITY general") echo full ;;
+  monitor) cat "$NET/monitor" ;;
+esac
+EOF
+printf '#!/bin/sh\necho "$*" >> "$NET/qrencode.args"\ncat > "$NET/qr-payload"\n' > "$N/bin/qrencode"
+printf '#!/bin/sh\nexit 1\n' > "$N/bin/ip"
+printf '#!/bin/sh\necho "s \\"http://portal.example/x\\""\n' > "$N/bin/busctl"
+printf '#!/bin/sh\necho "$*" >> "$NET/browser.log"\n' > "$N/bin/iram-launch-browser"
+printf '#!/bin/sh\nexit 0\n' > "$N/bin/notify-send"
+chmod +x "$N/bin"/*
+net() { rm -f "$N"/*.log "$N/qr-payload" "$N/qrencode.args"; NET="$N" PATH="$N/bin:$PATH" "$@" </dev/null; }
+
+OUT="$(net iram-network-dns status)"
+contains "dns status names the provider" "$OUT" "Home (wlan0): cloudflare"
+contains "dns status shows network DNS" "$OUT" "Wired (eth0): auto"
+lacks "dns ignores VPN connections" "$OUT" "wg0"
+net iram-network-dns quad9 >/dev/null
+contains "dns sets IPv4 and IPv6 servers" "$(cat "$N/nmcli.log")" "connection modify uuid u-wifi ipv4.dns 9.9.9.9 149.112.112.112 ipv4.ignore-auto-dns yes ipv6.dns 2620:fe::fe 2620:fe::9 ipv6.ignore-auto-dns yes"
+contains "dns skips IPv6 where it is disabled" "$(cat "$N/nmcli.log")" "connection modify uuid u-eth ipv4.dns 9.9.9.9 149.112.112.112 ipv4.ignore-auto-dns yes"$'\n'
+contains "dns reapplies without reconnecting" "$(cat "$N/nmcli.log")" "device reapply wlan0"
+net iram-network-dns auto >/dev/null
+contains "auto returns to the network's DNS" "$(cat "$N/nmcli.log")" "ipv4.dns  ipv4.ignore-auto-dns no"
+check "unknown dns provider refused" 2 net iram-network-dns 'x;id'
+
+printf 'My;Net\nwpa-psk\np@ss:w,"d\\\nno\n\n' > "$N/wifi-fields"
+net iram-network-qr --print >/dev/null
+contains "qr payload escapes ; , : \" and backslash" "$(cat "$N/qr-payload")" 'WIFI:T:WPA;S:My\;Net;P:p@ss\:w\,\"d\\;;'
+lacks "qr password stays off argv" "$(cat "$N/qrencode.args")" "p@ss"
+printf 'Cafe\n\n\nyes\n\n' > "$N/wifi-fields"
+net iram-network-qr --print >/dev/null
+contains "open hidden network" "$(cat "$N/qr-payload")" "WIFI:T:nopass;S:Cafe;H:true;;"
+printf 'Corp\nwpa-eap\n\nno\n\n' > "$N/wifi-fields"
+check "enterprise wi-fi is refused" 1 net iram-network-qr --print
+
+printf "Connectivity is now 'portal'\nConnectivity is now 'portal'\nConnectivity is now 'full'\nwlan0: connected\nConnectivity is now 'portal'\n" > "$N/monitor"
+net iram-captive-portal-watch; sleep 0.5
+contains "portal opens the check url" "$(cat "$N/browser.log")" "http://portal.example/x"
+contains "portal opens once per appearance" "$(wc -l < "$N/browser.log")" "2"
+
 # ---- iram update: guarded, profile-preserving -------------------------------------
 U="$WORK/upd"; UF="$WORK/upd-fake"; mkdir -p "$U/iram-os" "$UF"
 printf '#!/bin/sh\necho "$*" >> "$HOME/install.log"\n' > "$U/iram-os/install.sh"
