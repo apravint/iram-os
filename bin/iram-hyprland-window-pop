@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Pop out a window
+# Floats, sizes, centres and pins the active window so it follows you across
+# workspaces. Run again to put it back the way it was.
+# ==============================================================================
+# iram:summary=Toggle the active window between its place and a pinned, centred pop-out
+# iram:args=[width height]
+set -euo pipefail
+
+WINDOW="$(hyprctl activewindow -j)"
+ADDRESS="$(jq -r '.address // empty' <<<"$WINDOW")"
+[ -n "$ADDRESS" ] || exit 1
+TARGET="address:$ADDRESS"
+has_tag() { jq -e --arg t "$1" '(.tags // []) | index($t)' <<<"$WINDOW" >/dev/null; }
+
+if has_tag iram-pop; then
+    [ "$(jq -r '.pinned' <<<"$WINDOW")" = true ] && hyprctl dispatch pin "$TARGET" >/dev/null
+    if has_tag iram-pop-was-floating; then
+        hyprctl dispatch -- tagwindow -iram-pop-was-floating "$TARGET" >/dev/null
+    else
+        hyprctl dispatch settiled "$TARGET" >/dev/null
+    fi
+    hyprctl dispatch -- tagwindow -iram-pop "$TARGET" >/dev/null
+    exit 0
+fi
+
+# Default to 1300x900, shrunk to fit the window's monitor in logical pixels.
+read -r MON_W MON_H < <(hyprctl monitors -j | jq -r --argjson id "$(jq '.monitor' <<<"$WINDOW")" \
+    'first(.[] | select(.id == $id)) | "\((.width / .scale * 0.9) | floor) \((.height / .scale * 0.9) | floor)"')
+WIDTH="${1:-1300}" HEIGHT="${2:-900}"
+[[ "$WIDTH" =~ ^[0-9]{2,5}$ && "$HEIGHT" =~ ^[0-9]{2,5}$ ]] || { echo "Usage: iram-hyprland-window-pop [width height]" >&2; exit 2; }
+[[ "${MON_W:-}" =~ ^[0-9]+$ ]] && (( WIDTH > MON_W )) && WIDTH="$MON_W"
+[[ "${MON_H:-}" =~ ^[0-9]+$ ]] && (( HEIGHT > MON_H )) && HEIGHT="$MON_H"
+
+if [ "$(jq -r '.floating' <<<"$WINDOW")" = true ]; then
+    hyprctl dispatch tagwindow +iram-pop-was-floating "$TARGET" >/dev/null
+else
+    hyprctl dispatch setfloating "$TARGET" >/dev/null
+fi
+hyprctl dispatch resizewindowpixel "exact $WIDTH $HEIGHT,$TARGET" >/dev/null
+hyprctl dispatch centerwindow >/dev/null
+[ "$(jq -r '.pinned' <<<"$WINDOW")" = true ] || hyprctl dispatch pin "$TARGET" >/dev/null
+hyprctl dispatch alterzorder "top,$TARGET" >/dev/null
+hyprctl dispatch tagwindow +iram-pop "$TARGET" >/dev/null
