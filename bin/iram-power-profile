@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Power profile
+# Shows or sets the power-profiles-daemon profile. `next` cycles through the
+# profiles this machine supports (performance needs a CPU driver that has it),
+# and `menu` picks one. The daemon remembers the choice across reboots.
+# ==============================================================================
+# iram:summary=Show, set or cycle the power profile (performance, balanced, power-saver)
+# iram:args=[get|list|next|menu|performance|balanced|power-saver]
+set -euo pipefail
+
+command -v powerprofilesctl >/dev/null || { echo "powerprofilesctl not found; install power-profiles-daemon." >&2; exit 1; }
+
+# Lines like "* performance:" (active) and "  balanced:", in the daemon's order.
+mapfile -t AVAILABLE < <(powerprofilesctl list 2>/dev/null | sed -n 's/^[* ] \([a-z-]*\):$/\1/p')
+[ "${#AVAILABLE[@]}" -gt 0 ] || { echo "power-profiles-daemon is not running." >&2; exit 1; }
+CURRENT="$(powerprofilesctl get)"
+
+label() {
+    case "$1" in
+        performance) echo "Performance" ;;
+        balanced) echo "Balanced" ;;
+        power-saver) echo "Power saver" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+set_profile() {
+    local want="$1" p
+    for p in "${AVAILABLE[@]}"; do
+        if [ "$p" = "$want" ]; then
+            powerprofilesctl set "$want"
+            notify-send -a "IRAM Power" -h string:x-canonical-private-synchronous:iram-power-profile \
+                "Power profile" "$(label "$want")" 2>/dev/null || true
+            echo "$want"
+            return 0
+        fi
+    done
+    echo "'$want' is not available here. Available: ${AVAILABLE[*]}" >&2
+    return 1
+}
+
+case "${1:-get}" in
+    get) echo "$CURRENT" ;;
+    list) for p in "${AVAILABLE[@]}"; do [ "$p" = "$CURRENT" ] && echo "* $p" || echo "  $p"; done ;;
+    next)
+        # Cycle from lowest to highest power: power-saver, balanced, performance.
+        ORDER=()
+        for p in power-saver balanced performance; do
+            [[ " ${AVAILABLE[*]} " == *" $p "* ]] && ORDER+=("$p")
+        done
+        for i in "${!ORDER[@]}"; do
+            if [ "${ORDER[$i]}" = "$CURRENT" ]; then
+                set_profile "${ORDER[$(( (i + 1) % ${#ORDER[@]} ))]}"
+                exit
+            fi
+        done
+        set_profile "${ORDER[0]}" ;;
+    menu)
+        OPTIONS=()
+        for p in "${AVAILABLE[@]}"; do
+            mark=" "; [ "$p" = "$CURRENT" ] && mark="●"
+            OPTIONS+=("$mark	$(label "$p")	$p")
+        done
+        CHOICE="$(iram-menu-select "Power profile" "${OPTIONS[@]}")" || exit 0
+        set_profile "${CHOICE##*$'\t'}" ;;
+    performance|balanced|power-saver) set_profile "$1" ;;
+    *) echo "Usage: iram-power-profile [get|list|next|menu|performance|balanced|power-saver]" >&2; exit 2 ;;
+esac

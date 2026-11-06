@@ -188,6 +188,34 @@ printf '#!/bin/sh\necho "real:$*"\n' > "$WORK/fake-harness2"; chmod +x "$WORK/fa
 contains "harness2 launcher hands off" "$(HOME="$H3" IRAM_HARNESS2_BIN="$WORK/fake-harness2" iram-harness2 task 2>&1)" "real:task"
 check "harness2 launcher never execs itself" 1 env HOME="$H3" IRAM_HARNESS2_BIN="$REPO/bin/iram-harness2" timeout 5 iram-harness2 task
 
+# ---- Power profiles -------------------------------------------------------------------
+P="$WORK/ppd"; mkdir -p "$P/bin"
+cat > "$P/bin/powerprofilesctl" <<'EOF'
+#!/bin/sh
+case "$1" in
+  list) for p in $(cat "$PPD/available"); do
+          [ "$p" = "$(cat "$PPD/current")" ] && echo "* $p:" || echo "  $p:"
+          echo "    CpuDriver:	intel_pstate"; echo; done ;;
+  get) cat "$PPD/current" ;;
+  set) echo "$2" > "$PPD/current" ;;
+esac
+EOF
+printf '#!/bin/sh\nexit 0\n' > "$P/bin/notify-send"
+printf '#!/bin/sh\nprintf "Balanced\\tbalanced\\n"\n' > "$P/bin/iram-menu-select"
+chmod +x "$P/bin"/*
+ppd() { PPD="$P" PATH="$P/bin:$PATH" iram-power-profile "$@"; }
+echo "performance balanced power-saver" > "$P/available"; echo performance > "$P/current"
+contains "power profile reads the current one" "$(ppd get)" "performance"
+contains "power list marks the active profile" "$(ppd list)" "* performance"
+ppd next >/dev/null; contains "next wraps from performance to power-saver" "$(cat "$P/current")" "power-saver"
+ppd next >/dev/null; contains "next goes up from power-saver" "$(cat "$P/current")" "balanced"
+ppd menu >/dev/null; contains "menu sets the chosen profile" "$(cat "$P/current")" "balanced"
+echo "balanced power-saver" > "$P/available"; echo balanced > "$P/current"
+check "an unsupported profile is refused" 1 ppd performance
+ppd next >/dev/null; contains "next skips what the CPU lacks" "$(cat "$P/current")" "power-saver"
+ppd next >/dev/null; contains "next wraps without performance" "$(cat "$P/current")" "balanced"
+check "unknown power profile argument" 2 ppd turbo
+
 # ---- iram update: guarded, profile-preserving -------------------------------------
 U="$WORK/upd"; UF="$WORK/upd-fake"; mkdir -p "$U/iram-os" "$UF"
 printf '#!/bin/sh\necho "$*" >> "$HOME/install.log"\n' > "$U/iram-os/install.sh"
