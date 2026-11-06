@@ -23,6 +23,14 @@ git clone https://github.com/apravint/iram-os.git && cd iram-os
 
 Then pick **IRAM OS** at your login screen. Before changing anything, the installer backs up your existing configs to `~/.config/iram/backups/`. Profiles are `core`, `ai`, and `all`. There is also a [bootable ISO](#install-from-the-iso).
 
+**Requirements:** Ubuntu 26.04 LTS (or the ISO below), Python 3.12+, and a GPU/VM supported by Hyprland. Only the Ubuntu base has been tested; other distributions are not supported. Run the tests with `bash tests/run.sh` (no root, compositor, or network needed).
+
+## Screenshots
+
+| Theme switcher | 3D agent swarm | 3D CAD inspector |
+| :---: | :---: | :---: |
+| <img src="assets/screenshots/theme_switcher.png" alt="Theme switcher" width="100%" /> | <img src="assets/screenshots/3d_agent_swarm.png" alt="3D agent swarm view" width="100%" /> | <img src="assets/screenshots/3d_cad_inspector.png" alt="3D CAD inspector" width="100%" /> |
+
 ## What makes it different
 
 **An agent can act on your desktop without getting a shell.** Most "AI OS" projects hand a model a terminal. IRAM's MCP server exposes typed tools in three permission tiers, with arguments validated before anything runs:
@@ -114,7 +122,7 @@ It creates a GPT layout that boots on UEFI and BIOS, then creates your user. It 
 
 | Tested on every CI run | Not yet covered by automation |
 | :--- | :--- |
-| 140+ tests: MCP protocol and tiers, policy, snapshot restore, upgrade behavior, GPU profiles, rendering of every theme | Physical hardware matrix (Optimus, suspend, hotplug) |
+| 200+ checks (`tests/run.sh` reports 218): MCP protocol and tiers, policy, snapshot restore, upgrade behavior, GPU profiles, rendering of every theme | Physical hardware matrix (Optimus, suspend, hotplug) |
 | `shellcheck`, `systemd-analyze verify`, `.deb` builds | End-to-end `iram-install-disk` run in a VM |
 | ISO: root filesystem contents and a QEMU boot to userspace (release builds) | Qt and GTK appearance checks across real apps |
 
@@ -140,8 +148,8 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | `Super + Ctrl + Shift + Space` | Theme switcher |
 | `Super + L` / `Super + Escape` | Lock / power menu |
 
-Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md).
+Opt-in services, off by default: `iram-organizer.timer` (moves files in `~/Downloads`), `iram-dual-wifi-keepalive.service`, and `iram-mcp-server.service`. Developer notes are in [AGENTS.md](AGENTS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## License
 
-[MIT](LICENSE). IRAM OS is an independent project, not affiliated with or endorsed by Canonical. Ubuntu is a trademark of Canonical Ltd. Hyprland, Waybar, and PipeWire belong to their respective projects.
+[MIT](LICENSE). Trademark notes are in [TRADEMARKS.md](TRADEMARKS.md). IRAM OS is an independent project, not affiliated with or endorsed by Canonical. Ubuntu is a trademark of Canonical Ltd. Hyprland, Waybar, and PipeWire belong to their respective projects.
