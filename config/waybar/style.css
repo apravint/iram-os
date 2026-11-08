@@ -185,6 +185,7 @@ window#waybar {
 #pulseaudio,
 #network,
 #battery,
+#power-profiles-daemon,
 #tray {
     padding: 0 10px;
     margin: 3px 2px;
@@ -246,6 +247,7 @@ window#waybar {
 #pulseaudio:hover,
 #network:hover,
 #battery:hover,
+#power-profiles-daemon:hover,
 #custom-theme:hover,
 #custom-mcp-status:hover,
 #custom-ai-agent:hover,

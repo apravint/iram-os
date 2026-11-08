@@ -8,12 +8,13 @@ if ! command -v wofi >/dev/null 2>&1; then
 fi
 
 OPTIONS="🔒 Lock
+⚡ Power profile ($(iram-power-profile get 2>/dev/null || echo unavailable))
 💤 Suspend
 🚪 Logout
 🔄 Reboot
 🛑 Shutdown"
 
-CHOICE=$(echo -e "$OPTIONS" | wofi --dmenu --prompt "System:" --width 250 --height 270 || true)
+CHOICE=$(echo -e "$OPTIONS" | wofi --dmenu --prompt "System:" --width 300 --height 310 || true)
 
 case "$CHOICE" in
     *"Lock"*)
@@ -23,6 +24,9 @@ case "$CHOICE" in
         else
             swaylock -f -c 1a1b26
         fi
+        ;;
+    *"Power profile"*)
+        iram-power-profile menu
         ;;
     *"Suspend"*)
         systemctl suspend
