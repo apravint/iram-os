@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Captive portal watcher (iram-captive-portal.service)
+# When NetworkManager reports a captive portal (hotel, airport or cafe Wi-Fi),
+# opens its sign-in page in your browser, once per time it appears.
+# ==============================================================================
+# iram:summary=Open the sign-in page when a network has a captive portal
+set -euo pipefail
+
+FALLBACK_URL="http://connectivity-check.ubuntu.com/"
+
+# Any plain-http URL is redirected to the portal's page; NetworkManager's own check URL is one.
+portal_url() {
+    local uri
+    uri="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \
+        org.freedesktop.NetworkManager ConnectivityCheckUri 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p')"
+    [[ "$uri" =~ ^http://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$ ]] && echo "$uri" || echo "$FALLBACK_URL"
+}
+
+open_portal() {
+    local url
+    url="$(portal_url)"
+    notify-send -a "IRAM Network" "Wi-Fi sign-in needed" "Opening the network's sign-in page." 2>/dev/null || true
+    setsid -f iram-launch-browser "$url" >/dev/null 2>&1 || echo "Could not open a browser for $url" >&2
+}
+
+state=""
+[ "$(LC_ALL=C nmcli -t -f CONNECTIVITY general 2>/dev/null)" = portal ] && { state=portal; open_portal; }
+
+# nmcli prints one line per change, e.g. "Connectivity is now 'portal'".
+LC_ALL=C nmcli monitor | while read -r line; do
+    case "$line" in
+        "Connectivity is now 'portal'"*) [ "$state" = portal ] || open_portal; state=portal ;;
+        "Connectivity is now '"*) state=other ;;
+    esac
+done
