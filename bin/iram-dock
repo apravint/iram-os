@@ -23,6 +23,13 @@ fi
 if [ ! -f "$STYLE_FILE" ] && [ -f "$HOME/iram-os/config/dock/style.css" ]; then
     cp "$HOME/iram-os/config/dock/style.css" "$STYLE_FILE"
 fi
+if [ ! -e "$DOCK_CONFIG_DIR/colors.css" ]; then
+    if [ -f "$HOME/.config/waybar/colors.css" ]; then
+        ln -sfr "$HOME/.config/waybar/colors.css" "$DOCK_CONFIG_DIR/colors.css" 2>/dev/null || cp "$HOME/.config/waybar/colors.css" "$DOCK_CONFIG_DIR/colors.css"
+    elif [ -f "$HOME/iram-os/config/waybar/colors.css" ]; then
+        cp "$HOME/iram-os/config/waybar/colors.css" "$DOCK_CONFIG_DIR/colors.css"
+    fi
+fi
 
 is_running() {
     pgrep -f "waybar.*dock/config.jsonc" >/dev/null 2>&1 && return 0

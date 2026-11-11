@@ -1,13 +1,16 @@
 /* ==============================================================================
-   IRAM OS - Sovereign Liquid Glass Island Dock (style.css)
-   Ultra-sleek floating centered island capsule with dynamic theme glass styling.
+   IRAM OS - Sovereign Brutalist Sharp-Edge Dock (style.css)
+   Pure geometric sharp-corner industrial floating dock aligned with IRAM OS theme.
    ============================================================================== */
+
+@import "colors.css";
 
 * {
     border: none;
     border-radius: 0;
-    font-family: "JetBrains Mono", "Font Awesome 6 Free", -apple-system, system-ui, sans-serif;
-    font-size: 15px;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+    font-size: 13px;
+    font-weight: 500;
     min-height: 0;
 }
 
@@ -18,58 +21,59 @@ window#waybar {
     box-shadow: none;
 }
 
-/* The Centered Floating Island Capsule */
+/* The Centered Sharp Island */
 .modules-center {
-    background: rgba(16, 20, 32, 0.76);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 28px;
-    padding: 6px 14px;
-    box-shadow: 
-        0 20px 48px rgba(0, 0, 0, 0.60),
-        0 0 1px 1px rgba(255, 255, 255, 0.12) inset;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    background: @bar_bg;
+    border: 1px solid @border;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
-/* App Grid Launchpad Button */
+/* App Grid Launchpad Block - Bold accent start block */
 #custom-app-grid {
-    font-size: 20px;
-    color: #7aa2f7;
-    padding: 8px 12px;
-    margin: 0 4px;
-    border-radius: 20px;
-    background: rgba(122, 162, 247, 0.14);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    font-size: 16px;
+    font-weight: 700;
+    color: @on_accent;
+    padding: 0 14px;
+    margin: 0;
+    border-radius: 0;
+    background: @accent;
+    transition: all 0.2s cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
 
 #custom-app-grid:hover {
-    background: rgba(122, 162, 247, 0.35);
-    color: #ffffff;
-    box-shadow: 0 0 16px rgba(122, 162, 247, 0.50);
+    background: @fg;
+    color: @on_accent;
 }
 
-/* Translucent Separator Lines */
+/* Minimalist Sharp Separator Lines */
 #custom-separator,
 #custom-separator-right {
-    color: rgba(255, 255, 255, 0.18);
+    color: @muted;
     padding: 0 6px;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 300;
+    opacity: 0.6;
 }
 
-/* Pinned App Launchers */
+/* Pinned App Launchers - Sharp Blocks */
 #custom-pin-term,
 #custom-pin-browser,
 #custom-pin-files,
 #custom-pin-code,
 #custom-pin-craft,
 #custom-pin-agent {
-    font-size: 18px;
-    color: #e2e8f0;
-    padding: 8px 11px;
-    margin: 0 2px;
-    border-radius: 18px;
+    font-size: 16px;
+    color: @fg;
+    padding: 8px 12px;
+    margin: 0 1px;
+    border-radius: 0;
     background: transparent;
-    transition: all 0.20s cubic-bezier(0.16, 1, 0.3, 1);
+    border-bottom: 2px solid transparent;
+    transition: all 0.18s ease;
 }
 
 #custom-pin-term:hover,
@@ -78,69 +82,68 @@ window#waybar {
 #custom-pin-code:hover,
 #custom-pin-craft:hover,
 #custom-pin-agent:hover {
-    background: rgba(255, 255, 255, 0.14);
-    color: #ffffff;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    background: @surface;
+    color: @accent;
+    border-bottom: 2px solid @accent;
 }
 
-/* Running Tasks (wlr/taskbar) */
+/* Running Tasks (wlr/taskbar) - Sharp Industrial Blocks */
 #wlr-taskbar {
     padding: 0 2px;
 }
 
 #wlr-taskbar button {
-    padding: 6px 9px;
-    margin: 0 3px;
-    border-radius: 18px;
+    padding: 4px 8px;
+    margin: 0 1px;
+    border-radius: 0;
     background: transparent;
-    transition: all 0.20s cubic-bezier(0.16, 1, 0.3, 1);
-    border-bottom: 3px solid transparent;
+    border-bottom: 2px solid transparent;
+    transition: all 0.18s ease;
 }
 
 #wlr-taskbar button:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: @surface;
 }
 
 #wlr-taskbar button.active {
-    background: rgba(122, 162, 247, 0.18);
-    border-bottom: 3px solid #7aa2f7;
-    box-shadow: 0 4px 14px rgba(122, 162, 247, 0.30);
+    background: @surface_strong;
+    border-bottom: 2px solid @accent;
 }
 
 /* Minimized Windows Tray */
 #custom-minimized {
-    padding: 6px 12px;
-    margin: 0 3px;
-    border-radius: 18px;
-    font-size: 13px;
+    padding: 0 10px;
+    margin: 0 2px;
+    border-radius: 0;
+    font-size: 12px;
     font-weight: 600;
-    background: rgba(250, 189, 47, 0.15);
-    color: #fabd2f;
+    background: @surface;
+    color: @warning_text;
     transition: all 0.2s ease;
 }
 
 #custom-minimized:hover {
-    background: rgba(250, 189, 47, 0.30);
-    color: #ffffff;
+    background: @surface_strong;
 }
 
 #custom-minimized.empty {
-    opacity: 0.35;
+    opacity: 0.4;
     background: transparent;
-    color: #64748b;
+    color: @muted_text;
 }
 
 /* Dock Settings Menu */
 #custom-dock-menu {
-    font-size: 16px;
-    padding: 8px 10px;
-    margin: 0 2px;
-    border-radius: 18px;
-    color: #94a3b8;
+    font-size: 14px;
+    padding: 0 12px;
+    margin: 0;
+    border-radius: 0;
+    color: @muted_text;
+    background: transparent;
     transition: all 0.2s ease;
 }
 
 #custom-dock-menu:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.12);
+    background: @surface;
+    color: @fg;
 }

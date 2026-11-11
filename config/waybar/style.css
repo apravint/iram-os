@@ -119,8 +119,8 @@ window#waybar {
 }
 
 #custom-layout.scrolling {
-    background: rgba(187, 154, 247, 0.25);
-    color: #bb9af7;
+    background: @accent_rgba;
+    color: @accent_text;
 }
 
 #custom-layout.tiling {
@@ -334,3 +334,5 @@ window#waybar {
         color: @danger_text;
     }
 }
+
+@import "appearance.css";
