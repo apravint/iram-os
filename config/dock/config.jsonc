@@ -2,29 +2,29 @@
     "name": "iram-dock",
     "layer": "top",
     "position": "bottom",
-    "height": 58,
-    "margin-bottom": 14,
+    "height": 62,
+    "margin-bottom": 12,
     "margin-left": 0,
     "margin-right": 0,
-    "spacing": 0,
+    "spacing": 4,
 
-    "modules-left": [],
+    "modules-left": [
+        "custom/app-grid"
+    ],
     "modules-center": [
-        "custom/app-grid",
-        "custom/separator",
         "custom/pin-term",
         "custom/pin-browser",
         "custom/pin-files",
-        "custom/pin-code",
         "custom/pin-craft",
+        "custom/pin-code",
         "custom/pin-agent",
         "custom/separator",
-        "wlr/taskbar",
-        "custom/separator-right",
+        "wlr/taskbar"
+    ],
+    "modules-right": [
         "custom/minimized",
         "custom/dock-menu"
     ],
-    "modules-right": [],
 
     "custom/app-grid": {
         "format": "󰀻",
@@ -50,22 +50,22 @@
         "on-click": "~/.local/bin/iram-launch-filemanager"
     },
 
-    "custom/pin-code": {
-        "format": "󰨞",
-        "tooltip": "Editor / Neovim",
-        "on-click": "alacritty -e nvim"
-    },
-
     "custom/pin-craft": {
         "format": "󰽉",
         "tooltip": "Storytold Craft Creative Suite",
         "on-click": "~/.local/bin/artcraft-launcher"
     },
 
+    "custom/pin-code": {
+        "format": "󰨞",
+        "tooltip": "Editor / Neovim",
+        "on-click": "alacritty -e nvim"
+    },
+
     "custom/pin-agent": {
         "format": "󰚩",
         "tooltip": "IRAM AI Copilot & Nexus (Super+A)",
-        "on-click": "~/.local/bin/iram-nexus"
+        "on-click": "~/.local/bin/iram-hub"
     },
 
     "custom/separator": {
@@ -73,14 +73,9 @@
         "tooltip": false
     },
 
-    "custom/separator-right": {
-        "format": "│",
-        "tooltip": false
-    },
-
     "wlr/taskbar": {
         "format": "{icon}",
-        "icon-size": 32,
+        "icon-size": 36,
         "icon-theme": "Adwaita",
         "tooltip-format": "{title}",
         "on-click": "activate",
