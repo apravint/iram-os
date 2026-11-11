@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Current Workspace Layout Reporter
+# Reports whether a workspace is currently: dwindle (tiling), scrolling, or floating
+# Inspired by Omarchy 4.5
+# ==============================================================================
+# iram:summary=Print the layout mode of a workspace: dwindle, scrolling, or floating
+# iram:args=[workspace-id]
+set -euo pipefail
+
+MODES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram/workspace-layouts"
+DEFAULT_FILE="$MODES_DIR/default.mode"
+
+if [ -n "${1:-}" ]; then
+    WORKSPACE_ID="$1"
+    TILED_LAYOUT="$(hyprctl workspaces -j 2>/dev/null | jq -r --arg id "$WORKSPACE_ID" 'first(.[] | select((.id | tostring) == $id) | .tiledLayout) // empty' || true)"
+else
+    ACTIVE="$(hyprctl activeworkspace -j 2>/dev/null || true)"
+    WORKSPACE_ID="$(jq -r '.id // "1"' <<<"$ACTIVE")"
+    TILED_LAYOUT="$(jq -r '.tiledLayout // ""' <<<"$ACTIVE")"
+fi
+
+MODE=""
+if [[ "$WORKSPACE_ID" =~ ^[0-9]+$ ]] && [ "$WORKSPACE_ID" -ge 1 ]; then
+    MODE_FILE="$MODES_DIR/$WORKSPACE_ID.mode"
+    if [ -f "$MODE_FILE" ]; then
+        MODE="$(cat "$MODE_FILE" 2>/dev/null | tr -d '[:space:]')"
+    fi
+    if [ -z "$MODE" ] && [ -f "$DEFAULT_FILE" ]; then
+        MODE="$(cat "$DEFAULT_FILE" 2>/dev/null | tr -d '[:space:]')"
+    fi
+fi
+
+MODE="${MODE:-$TILED_LAYOUT}"
+echo "${MODE:-dwindle}"

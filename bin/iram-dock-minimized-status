@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Dock Minimized Windows Status Module
+# Reports the count of minimized windows parked on special:minimized
+# ==============================================================================
+set -euo pipefail
+
+CLIENTS="$(hyprctl clients -j 2>/dev/null || echo "[]")"
+MIN_COUNT="$(jq '[.[] | select(.workspace.name == "special:minimized")] | length' <<<"$CLIENTS")"
+
+if [ "$MIN_COUNT" -gt 0 ]; then
+    LIST="$(jq -r '[.[] | select(.workspace.name == "special:minimized") | "• \(.class): \(.title)"] | join("\n")' <<<"$CLIENTS")"
+    tooltip=$(printf "⚡ Minimized Windows (%s)\n%s\n\n🖱️ Left-click: Restore latest\n🖱️ Right-click: Choose window to restore" "$MIN_COUNT" "$LIST")
+    jq -c -n \
+        --arg text "󰍶 $MIN_COUNT" \
+        --arg tooltip "$tooltip" \
+        --arg class "active" \
+        '{text: $text, tooltip: $tooltip, class: $class}'
+else
+    tooltip="No minimized windows\nPress Super + M on a floating workspace to minimize"
+    jq -c -n \
+        --arg text "󰍶 0" \
+        --arg tooltip "$tooltip" \
+        --arg class "empty" \
+        '{text: $text, tooltip: $tooltip, class: $class}'
+fi

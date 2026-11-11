@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Dock Context & Settings Menu
+# Lets users configure the dock position, autohide, and layout
+# ==============================================================================
+set -euo pipefail
+
+CHOICE="$(cat << 'EOF' | wofi --dmenu --prompt "Dock Settings:" --width 450 --height 320
+1. 󱂬 Cycle Workspace Layout (Super + L)
+2. 󰍶 Restore Minimized Window
+3. 󰀻 Open Launchpad / App Grid
+4. 󰍜 Toggle Dock Auto-Hide
+5. 󰍜 Dock Position: Bottom
+6. 󰍜 Dock Position: Left
+7. 󰍜 Dock Position: Right
+8. 󰍜 Dock Position: Top
+9. 󰈆 Restart Dock
+EOF
+)" || exit 0
+
+case "$CHOICE" in
+    1*) ~/.local/bin/iram-hyprland-workspace-layout-toggle ;;
+    2*) ~/.local/bin/iram-hyprland-window-restore ;;
+    3*) ~/.local/bin/iram-app-grid ;;
+    4*) ~/.local/bin/iram-dock autohide toggle ;;
+    5*) ~/.local/bin/iram-dock position bottom ;;
+    6*) ~/.local/bin/iram-dock position left ;;
+    7*) ~/.local/bin/iram-dock position right ;;
+    8*) ~/.local/bin/iram-dock position top ;;
+    9*) ~/.local/bin/iram-dock restart ;;
+esac

@@ -19,7 +19,24 @@
   "hide-on-action": true,
   "script-fail-notify": true,
   "scripts": {},
-  "notification-visibility": {},
+  "notification-visibility": {
+    "iram-security-guard": {
+      "state": "muted",
+      "app-name": ".*Security Guard.*"
+    },
+    "iram-health-os": {
+      "state": "muted",
+      "app-name": ".*Self-Healing.*"
+    },
+    "iram-security-summary": {
+      "state": "muted",
+      "summary": ".*Security Guard Risk Alert.*"
+    },
+    "iram-health-summary": {
+      "state": "muted",
+      "summary": ".*Self-Healing OS Action Summary.*"
+    }
+  },
   "widgets": [
     "title",
     "dnd",

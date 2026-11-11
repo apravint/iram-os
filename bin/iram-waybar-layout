@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Waybar Active Workspace Layout Module (iram-waybar-layout)
+# Visually indicates on the top bar whether the focused workspace is currently
+# Tiling, Scrolling, or Floating (Omarchy 4.5 standard).
+# ==============================================================================
+set -euo pipefail
+
+MODE="$(iram-hyprland-workspace-layout-current 2>/dev/null || echo "dwindle")"
+ACTIVE_WS="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id // "1"' || echo "1")"
+
+case "$MODE" in
+    floating)
+        TEXT="󰔶 Float"
+        TOOLTIP="󱂬 Workspace $ACTIVE_WS: Floating Desktop Mode\n• macOS-style Dock active\n• Click-to-focus enabled\n• Super + M: Minimize window\n\n🖱️ Click: Cycle to Tiling (Super + L)"
+        CLASS="floating"
+        ;;
+    scrolling)
+        TEXT="󰝥 Scroll"
+        TOOLTIP="󰝥 Workspace $ACTIVE_WS: Infinite Scrolling Mode\n• Horizontal column flow\n\n🖱️ Click: Cycle to Floating (Super + L)"
+        CLASS="scrolling"
+        ;;
+    dwindle|*)
+        TEXT="󱓻 Tile"
+        TOOLTIP="󱓻 Workspace $ACTIVE_WS: Sovereign Geometric Tiling\n• 0px strict auto-tiling\n\n🖱️ Click: Cycle to Scrolling (Super + L)"
+        CLASS="tiling"
+        ;;
+esac
+
+printf '{"text": "%s", "tooltip": "%s", "class": "%s"}\n' "$TEXT" "$TOOLTIP" "$CLASS"

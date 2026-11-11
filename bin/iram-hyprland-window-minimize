@@ -32,3 +32,8 @@ while read -r tag; do
 done < <(jq -r '(.tags // [])[]' <<<"$WINDOW")
 hyprctl dispatch tagwindow "+iram-min-from-$WORKSPACE" "address:$ADDRESS" >/dev/null
 hyprctl dispatch movetoworkspacesilent "special:minimized,address:$ADDRESS" >/dev/null
+
+# Keep focus on the active workspace and update dock
+hyprctl dispatch focusworkspace "$WORKSPACE" >/dev/null 2>&1 || true
+pkill -RTMIN+8 waybar 2>/dev/null || true
+

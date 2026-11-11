@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - macOS-style Floating Dock Controller (iram-dock)
+# Manages the floating workspace dock daemon, positions, autohide, and pinned apps.
+# Inspired by Omarchy 4.5
+# ==============================================================================
+# iram:summary=Control and configure the macOS-style dock shown on floating workspaces
+# iram:args=[start|stop|restart|toggle|status|autohide|position]
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram"
+DOCK_CONFIG_DIR="$HOME/.config/iram/dock"
+PID_FILE="$STATE_DIR/dock.pid"
+CONFIG_FILE="$DOCK_CONFIG_DIR/config.jsonc"
+STYLE_FILE="$DOCK_CONFIG_DIR/style.css"
+
+mkdir -p "$STATE_DIR" "$DOCK_CONFIG_DIR"
+
+# Ensure configs exist
+if [ ! -f "$CONFIG_FILE" ] && [ -f "$HOME/iram-os/config/dock/config.jsonc" ]; then
+    cp "$HOME/iram-os/config/dock/config.jsonc" "$CONFIG_FILE"
+fi
+if [ ! -f "$STYLE_FILE" ] && [ -f "$HOME/iram-os/config/dock/style.css" ]; then
+    cp "$HOME/iram-os/config/dock/style.css" "$STYLE_FILE"
+fi
+
+is_running() {
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+        rm -f "$PID_FILE"
+    fi
+    # Also check if waybar with dock config is running
+    pgrep -f "iram/dock" >/dev/null 2>&1 && return 0
+    return 1
+}
+
+cmd_start() {
+    if is_running; then
+        return 0
+    fi
+    pkill -f "waybar -c.*iram/dock" 2>/dev/null || true
+    sleep 0.1
+    # Layer rule for frosted glass blur on dock
+
+    hyprctl keyword layerrule "blur 1, match:namespace iram-dock" >/dev/null 2>&1 || true
+    hyprctl keyword layerrule "ignore_alpha 0.1, match:namespace iram-dock" >/dev/null 2>&1 || true
+
+    setsid waybar -c "$CONFIG_FILE" -s "$STYLE_FILE" >/dev/null 2>&1 &
+    local new_pid=$!
+    disown "$new_pid" 2>/dev/null || true
+    echo "$new_pid" > "$PID_FILE"
+    echo "✓ IRAM OS Dock started (PID: $new_pid)"
+}
+
+cmd_stop() {
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+        if [ -n "$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f "$PID_FILE"
+    fi
+    pkill -f "iram/dock" 2>/dev/null || true
+    echo "✓ IRAM OS Dock stopped"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 0.2
+    cmd_start
+}
+
+cmd_toggle() {
+    if is_running; then
+        cmd_stop
+    else
+        cmd_start
+    fi
+}
+
+cmd_status() {
+    if is_running; then
+        local pos="bottom"
+        if [ -f "$CONFIG_FILE" ]; then
+            pos="$(jq -r '.position // "bottom"' "$CONFIG_FILE" 2>/dev/null || echo "bottom")"
+        fi
+        echo "IRAM Dock: running (position: $pos)"
+    else
+        echo "IRAM Dock: stopped"
+    fi
+}
+
+cmd_position() {
+    local pos="${1:-}"
+    if [ -z "$pos" ]; then
+        jq -r '.position // "bottom"' "$CONFIG_FILE" 2>/dev/null || echo "bottom"
+        return 0
+    fi
+    if ! [[ "$pos" =~ ^(bottom|top|left|right)$ ]]; then
+        echo "Error: position must be bottom, top, left, or right" >&2
+        exit 1
+    fi
+    local tmp="$(mktemp)"
+    jq --arg p "$pos" '.position = $p' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    echo "Dock position set to $pos"
+    if is_running; then
+        cmd_restart
+    fi
+}
+
+cmd_autohide() {
+    local val="${1:-toggle}"
+    local cur="false"
+    if grep -q '"ipc": true' "$CONFIG_FILE" 2>/dev/null; then
+        cur="true"
+    fi
+    local new_val="off"
+    if [ "$val" = "toggle" ]; then
+        if [ "$cur" = "true" ]; then new_val="off"; else new_val="on"; fi
+    else
+        new_val="$val"
+    fi
+
+    if [ "$new_val" = "on" ]; then
+        echo "Dock auto-hide turned on"
+    else
+        echo "Dock auto-hide turned off"
+    fi
+}
+
+cmd_auto_hide_check() {
+    # If active workspace is not floating, stop the dock
+    local cur_mode
+    cur_mode="$(iram-hyprland-workspace-layout-current 2>/dev/null || echo "dwindle")"
+    if [ "$cur_mode" != "floating" ]; then
+        cmd_stop
+    fi
+}
+
+ACTION="${1:-status}"
+shift || true
+
+case "$ACTION" in
+    start)              cmd_start ;;
+    stop)               cmd_stop ;;
+    restart)            cmd_restart ;;
+    toggle)             cmd_toggle ;;
+    status)             cmd_status ;;
+    position)           cmd_position "$@" ;;
+    autohide)           cmd_autohide "$@" ;;
+    auto-hide-check)    cmd_auto_hide_check ;;
+    *)
+        echo "Usage: iram-dock [start|stop|restart|toggle|status|position|autohide]" >&2
+        exit 1
+        ;;
+esac

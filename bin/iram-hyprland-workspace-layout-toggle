@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Workspace Layout Toggle (Super + L / Super + Alt + L)
+# Cycles the active workspace between dwindle (tiling), scrolling, and floating.
+# On floating workspaces:
+#   - Windows auto-float, resize, center, and receive click-to-focus mouse handling
+#   - A macOS-like dock appears with pinned & running apps
+#   - Super + M minimizes windows directly to the dock
+# Inspired by Omarchy 4.5
+# ==============================================================================
+# iram:summary=Cycle the current active workspace through dwindle, scrolling, and floating layouts
+# iram:args=[back|next]
+set -euo pipefail
+
+DIRECTION="${1:-next}"
+if [ "$DIRECTION" != "next" ] && [ "$DIRECTION" != "back" ]; then
+    echo "Usage: iram-hyprland-workspace-layout-toggle [next|back]" >&2
+    exit 1
+fi
+
+ACTIVE_JSON="$(hyprctl activeworkspace -j 2>/dev/null || true)"
+ACTIVE_WORKSPACE="$(jq -r '.id // empty' <<<"$ACTIVE_JSON")"
+if ! [[ "$ACTIVE_WORKSPACE" =~ ^[0-9]+$ ]]; then
+    exit 1
+fi
+
+MODES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram/workspace-layouts"
+MODE_FILE="$MODES_DIR/$ACTIVE_WORKSPACE.mode"
+mkdir -p "$MODES_DIR"
+
+CURRENT_MODE="$(iram-hyprland-workspace-layout-current "$ACTIVE_WORKSPACE")"
+
+if [ "$DIRECTION" = "back" ]; then
+    case "$CURRENT_MODE" in
+        dwindle|tiling) NEW_MODE="floating" ;;
+        floating)       NEW_MODE="scrolling" ;;
+        scrolling)      NEW_MODE="dwindle" ;;
+        *)              NEW_MODE="dwindle" ;;
+    esac
+else
+    case "$CURRENT_MODE" in
+        dwindle|tiling) NEW_MODE="scrolling" ;;
+        scrolling)      NEW_MODE="floating" ;;
+        floating)       NEW_MODE="dwindle" ;;
+        *)              NEW_MODE="dwindle" ;;
+    esac
+fi
+
+echo "$NEW_MODE" > "$MODE_FILE"
+
+# Function to rebuild ~/.config/hypr/workspaces-layout.conf for persistence
+sync_workspace_rules() {
+    local conf_file="$HOME/.config/hypr/workspaces-layout.conf"
+    mkdir -p "$(dirname "$conf_file")"
+    cat << 'HEADER' > "$conf_file"
+# ==============================================================================
+# IRAM OS - Dynamic Workspace Layout Rules (Auto-generated)
+# Managed by iram-hyprland-workspace-layout-toggle
+# ==============================================================================
+HEADER
+    for f in "$MODES_DIR"/[0-9]*.mode; do
+        [ -f "$f" ] || continue
+        local wid="$(basename "$f" .mode)"
+        local mode="$(cat "$f" 2>/dev/null | tr -d '[:space:]')"
+        if [ "$mode" = "floating" ]; then
+            cat << RULE >> "$conf_file"
+# Workspace $wid: Floating Desktop Mode
+windowrule = float 1, match:workspace $wid
+windowrule = size 70% 70%, match:workspace $wid
+windowrule = center 1, match:workspace $wid
+RULE
+        fi
+    done
+}
+
+sync_workspace_rules
+
+# Apply layout logic depending on mode
+case "$NEW_MODE" in
+    floating)
+        # 1. Enable dynamic window rules for this workspace in running session
+        hyprctl keyword windowrule "float 1, match:workspace $ACTIVE_WORKSPACE" >/dev/null 2>&1 || true
+        hyprctl keyword windowrule "size 70% 70%, match:workspace $ACTIVE_WORKSPACE" >/dev/null 2>&1 || true
+        hyprctl keyword windowrule "center 1, match:workspace $ACTIVE_WORKSPACE" >/dev/null 2>&1 || true
+
+        # 2. Convert existing tiled windows on this workspace to floating
+        CLIENTS="$(hyprctl clients -j 2>/dev/null || echo "[]")"
+        CASCADE=0
+        while read -r addr; do
+            [ -n "$addr" ] || continue
+            # Check if already floating
+            is_float="$(jq -r --arg a "$addr" 'first(.[] | select(.address == $a) | .floating) // false' <<<"$CLIENTS")"
+            if [ "$is_float" != "true" ]; then
+                hyprctl dispatch tagwindow "+iram-mode-floated" "address:$addr" >/dev/null 2>&1 || true
+                hyprctl dispatch setfloating "address:$addr" >/dev/null 2>&1 || true
+                hyprctl dispatch resizewindowpixel exact 1120 760,"address:$addr" >/dev/null 2>&1 || true
+                hyprctl dispatch centerwindow "address:$addr" >/dev/null 2>&1 || true
+                OFFSET=$(( CASCADE * 26 ))
+                hyprctl dispatch moveactive "$OFFSET $OFFSET" >/dev/null 2>&1 || true
+                CASCADE=$(( (CASCADE + 1) % 5 ))
+            fi
+            hyprctl dispatch tagwindow "+iram-floating-workspace" "address:$addr" >/dev/null 2>&1 || true
+        done < <(jq -r --arg wid "$ACTIVE_WORKSPACE" '.[] | select((.workspace.id | tostring) == $wid) | .address' <<<"$CLIENTS")
+
+        # 3. Switch to click-to-focus for true desktop feel
+        hyprctl keyword input:follow_mouse 0 >/dev/null 2>&1 || true
+
+        # 4. Launch or ensure Dock is visible
+        if command -v iram-dock >/dev/null 2>&1; then
+            iram-dock start >/dev/null 2>&1 || true
+        fi
+
+        # 5. Notify user
+        notify-send -a "IRAM OS" -i preferences-desktop -r 4410 \
+            "󱂬 Workspace $ACTIVE_WORKSPACE: Floating Desktop Mode" \
+            "macOS-style Dock active • Click-to-focus enabled • Super+M to minimize"
+        ;;
+
+    scrolling)
+        # Layout msg or master orientation
+        hyprctl dispatch layoutmsg "orientationleft" >/dev/null 2>&1 || true
+
+        # Notify user
+        notify-send -a "IRAM OS" -i preferences-desktop-theme -r 4410 \
+            "󰝥 Workspace $ACTIVE_WORKSPACE: Infinite Scrolling Mode" \
+            "Sequential column strip navigation"
+        ;;
+
+    dwindle|*)
+        # 1. Untile windows that were floated by mode
+        CLIENTS="$(hyprctl clients -j 2>/dev/null || echo "[]")"
+        while read -r addr; do
+            [ -n "$addr" ] || continue
+            hyprctl dispatch settiled "address:$addr" >/dev/null 2>&1 || true
+            hyprctl dispatch -- tagwindow "-iram-mode-floated" "address:$addr" >/dev/null 2>&1 || true
+            hyprctl dispatch -- tagwindow "-iram-floating-workspace" "address:$addr" >/dev/null 2>&1 || true
+        done < <(jq -r --arg wid "$ACTIVE_WORKSPACE" '.[] | select((.workspace.id | tostring) == $wid) | select(.tags[]? == "iram-mode-floated") | .address' <<<"$CLIENTS")
+
+        # 2. Restore follow_mouse = 1
+        hyprctl keyword input:follow_mouse 1 >/dev/null 2>&1 || true
+
+        # 3. Check if any other workspace is floating; if none, hide dock
+        HAS_OTHER_FLOATING=0
+        for f in "$MODES_DIR"/[0-9]*.mode; do
+            [ -f "$f" ] || continue
+            local m="$(cat "$f" 2>/dev/null | tr -d '[:space:]')"
+            if [ "$m" = "floating" ]; then
+                HAS_OTHER_FLOATING=1
+                break
+            fi
+        done
+        if [ "$HAS_OTHER_FLOATING" -eq 0 ] && command -v iram-dock >/dev/null 2>&1; then
+            iram-dock auto-hide-check >/dev/null 2>&1 || true
+        fi
+
+        # 4. Notify user
+        notify-send -a "IRAM OS" -i preferences-desktop-display -r 4410 \
+            "󱓻 Workspace $ACTIVE_WORKSPACE: Sovereign Geometric Tiling" \
+            "Strict auto-split layout • Zero wasted gaps"
+        ;;
+esac
+
+# Signal Waybar to refresh custom modules
+pkill -RTMIN+8 waybar 2>/dev/null || true
+echo "✓ Workspace $ACTIVE_WORKSPACE set to $NEW_MODE"

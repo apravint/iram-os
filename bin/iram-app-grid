@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Launchpad App Grid (iram-app-grid)
+# Displays an authentic macOS-style fullscreen/card grid of all installed apps
+# with instant fuzzy search and category navigation.
+# Inspired by Omarchy 4.5
+# ==============================================================================
+# iram:summary=Open the fullscreen Launchpad / App Grid launcher
+set -euo pipefail
+
+# Ensure wofi doesn't conflict with existing instance
+if pgrep -x wofi >/dev/null 2>&1; then
+    pkill -x wofi 2>/dev/null || true
+    exit 0
+fi
+
+# Launch visual 6-column grid
+exec wofi \
+    --show drun \
+    --columns 6 \
+    --width 1100 \
+    --height 720 \
+    --prompt "󰀻 Launchpad — Search Apps..." \
+    --insensitive \
+    --allow-images \
+    --hide-scroll

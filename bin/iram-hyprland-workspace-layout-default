@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS - Default Workspace Layout
+# Manages the default layout for workspaces without their own override
+# ==============================================================================
+# iram:summary=Show or set the default layout of workspaces: dwindle, scrolling, or floating
+# iram:args=[dwindle|scrolling|floating]
+set -euo pipefail
+
+MODES_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram/workspace-layouts"
+DEFAULT_FILE="$MODES_DIR/default.mode"
+mkdir -p "$MODES_DIR"
+
+if [ $# -eq 0 ]; then
+    if [ -f "$DEFAULT_FILE" ]; then
+        cat "$DEFAULT_FILE" | tr -d '[:space:]'
+        echo
+    else
+        echo "dwindle"
+    fi
+    exit 0
+fi
+
+TARGET="$1"
+case "$TARGET" in
+    dwindle|tiling) TARGET="dwindle" ;;
+    scrolling) TARGET="scrolling" ;;
+    floating|traditional) TARGET="floating" ;;
+    *)
+        echo "Usage: iram-hyprland-workspace-layout-default [dwindle|scrolling|floating]" >&2
+        exit 1
+        ;;
+esac
+
+echo "$TARGET" > "$DEFAULT_FILE"
+notify-send -a "IRAM OS" "Workspace Layout" "Default workspace layout set to $TARGET"
+echo "Default workspace layout set to $TARGET"
