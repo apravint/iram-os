@@ -100,6 +100,35 @@ window#waybar {
     animation: blink 0.5s linear infinite alternate;
 }
 
+/* Workspace Layout Indicator (Tiling vs Scrolling vs Floating) */
+#custom-layout {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0 8px;
+    margin: 4px 4px;
+    border-radius: 0;
+    background: @surface;
+    color: @muted_text;
+    transition: all 0.2s ease;
+}
+
+#custom-layout.floating {
+    background: @accent;
+    color: @on_accent;
+    font-weight: 700;
+}
+
+#custom-layout.scrolling {
+    background: rgba(187, 154, 247, 0.25);
+    color: #bb9af7;
+}
+
+#custom-layout.tiling {
+    background: @surface;
+    color: @muted_text;
+}
+
+
 /* Active Window Title */
 #window {
     padding: 0 12px;

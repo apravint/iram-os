@@ -11,8 +11,10 @@
     "modules-left": [
         "custom/menu",
         "hyprland/workspaces",
+        "custom/layout",
         "hyprland/window"
     ],
+
     "modules-center": [
         "custom/indicators",
         "clock",
@@ -45,6 +47,17 @@
         "sort-by-number": true,
         "active-only": false
     },
+
+    "custom/layout": {
+        "format": "{}",
+        "return-type": "json",
+        "interval": 2,
+        "exec": "~/.local/bin/iram-waybar-layout",
+        "on-click": "~/.local/bin/iram-hyprland-workspace-layout-toggle",
+        "on-click-right": "~/.local/bin/iram-hyprland-workspace-layout-toggle back",
+        "tooltip": true
+    },
+
 
     "hyprland/window": {
         "max-length": 45,

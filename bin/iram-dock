@@ -25,6 +25,7 @@ if [ ! -f "$STYLE_FILE" ] && [ -f "$HOME/iram-os/config/dock/style.css" ]; then
 fi
 
 is_running() {
+    pgrep -f "waybar.*dock/config.jsonc" >/dev/null 2>&1 && return 0
     if [ -f "$PID_FILE" ]; then
         local pid
         pid="$(cat "$PID_FILE" 2>/dev/null || true)"
@@ -33,39 +34,37 @@ is_running() {
         fi
         rm -f "$PID_FILE"
     fi
-    # Also check if waybar with dock config is running
-    pgrep -f "iram/dock" >/dev/null 2>&1 && return 0
     return 1
 }
 
 cmd_start() {
     if is_running; then
+        echo "IRAM Dock is already running"
         return 0
     fi
-    pkill -f "waybar -c.*iram/dock" 2>/dev/null || true
+    pkill -f "waybar.*dock/config.jsonc" 2>/dev/null || true
     sleep 0.1
     # Layer rule for frosted glass blur on dock
 
     hyprctl keyword layerrule "blur 1, match:namespace iram-dock" >/dev/null 2>&1 || true
     hyprctl keyword layerrule "ignore_alpha 0.1, match:namespace iram-dock" >/dev/null 2>&1 || true
 
-    setsid waybar -c "$CONFIG_FILE" -s "$STYLE_FILE" >/dev/null 2>&1 &
-    local new_pid=$!
-    disown "$new_pid" 2>/dev/null || true
-    echo "$new_pid" > "$PID_FILE"
-    echo "✓ IRAM OS Dock started (PID: $new_pid)"
+    ( setsid waybar -c "$CONFIG_FILE" -s "$STYLE_FILE" </dev/null >/dev/null 2>&1 & )
+    sleep 0.2
+    local new_pid
+    new_pid="$(pgrep -f "waybar.*dock/config.jsonc" | head -n1 || true)"
+    if [ -n "$new_pid" ]; then
+        echo "$new_pid" > "$PID_FILE"
+        echo "✓ IRAM OS Dock started (PID: $new_pid)"
+    else
+        echo "✗ Failed to start IRAM OS Dock" >&2
+        return 1
+    fi
 }
 
 cmd_stop() {
-    if [ -f "$PID_FILE" ]; then
-        local pid
-        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-        if [ -n "$pid" ]; then
-            kill "$pid" 2>/dev/null || true
-        fi
-        rm -f "$PID_FILE"
-    fi
-    pkill -f "iram/dock" 2>/dev/null || true
+    pkill -f "waybar.*dock/config.jsonc" 2>/dev/null || true
+    rm -f "$PID_FILE"
     echo "✓ IRAM OS Dock stopped"
 }
 

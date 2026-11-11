@@ -1,113 +1,126 @@
 /* ==============================================================================
-   IRAM OS - macOS-style Floating Dock (style.css)
+   IRAM OS - Sovereign Liquid Glass Island Dock (style.css)
+   Ultra-sleek floating centered island capsule with dynamic theme glass styling.
    ============================================================================== */
 
 * {
     border: none;
     border-radius: 0;
-    font-family: "JetBrains Mono", "Font Awesome 6 Free", monospace;
-    font-size: 16px;
+    font-family: "JetBrains Mono", "Font Awesome 6 Free", -apple-system, system-ui, sans-serif;
+    font-size: 15px;
     min-height: 0;
 }
 
+/* Base Waybar window is completely transparent so only the centered island renders */
 window#waybar {
-    background: rgba(18, 22, 32, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 26px;
-    color: #e2e8f0;
-    padding: 2px 14px;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* The Centered Floating Island Capsule */
+.modules-center {
+    background: rgba(16, 20, 32, 0.76);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 28px;
+    padding: 6px 14px;
+    box-shadow: 
+        0 20px 48px rgba(0, 0, 0, 0.60),
+        0 0 1px 1px rgba(255, 255, 255, 0.12) inset;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* App Grid Launchpad Button */
 #custom-app-grid {
-    font-size: 24px;
+    font-size: 20px;
     color: #7aa2f7;
-    padding: 6px 12px;
-    margin: 2px 4px;
-    border-radius: 18px;
-    background: rgba(122, 162, 247, 0.15);
+    padding: 8px 12px;
+    margin: 0 4px;
+    border-radius: 20px;
+    background: rgba(122, 162, 247, 0.14);
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 #custom-app-grid:hover {
     background: rgba(122, 162, 247, 0.35);
     color: #ffffff;
-    box-shadow: 0 0 16px rgba(122, 162, 247, 0.5);
+    box-shadow: 0 0 16px rgba(122, 162, 247, 0.50);
 }
 
-/* Pinned Apps */
+/* Translucent Separator Lines */
+#custom-separator,
+#custom-separator-right {
+    color: rgba(255, 255, 255, 0.18);
+    padding: 0 6px;
+    font-size: 16px;
+    font-weight: 300;
+}
+
+/* Pinned App Launchers */
 #custom-pin-term,
 #custom-pin-browser,
 #custom-pin-files,
-#custom-pin-craft,
 #custom-pin-code,
+#custom-pin-craft,
 #custom-pin-agent {
-    font-size: 20px;
-    color: #cbd5e1;
-    padding: 6px 10px;
-    margin: 2px 3px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.04);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    font-size: 18px;
+    color: #e2e8f0;
+    padding: 8px 11px;
+    margin: 0 2px;
+    border-radius: 18px;
+    background: transparent;
+    transition: all 0.20s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 #custom-pin-term:hover,
 #custom-pin-browser:hover,
 #custom-pin-files:hover,
-#custom-pin-craft:hover,
 #custom-pin-code:hover,
+#custom-pin-craft:hover,
 #custom-pin-agent:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.14);
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
-/* Separator */
-#custom-separator {
-    color: rgba(255, 255, 255, 0.20);
-    padding: 0 6px;
-    font-size: 16px;
-}
-
-/* WLR Taskbar (Running Apps) */
+/* Running Tasks (wlr/taskbar) */
 #wlr-taskbar {
-    padding: 2px 4px;
+    padding: 0 2px;
 }
 
 #wlr-taskbar button {
-    padding: 4px 8px;
-    margin: 2px 3px;
-    border-radius: 16px;
+    padding: 6px 9px;
+    margin: 0 3px;
+    border-radius: 18px;
     background: transparent;
-    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.20s cubic-bezier(0.16, 1, 0.3, 1);
     border-bottom: 3px solid transparent;
 }
 
 #wlr-taskbar button:hover {
-    background: rgba(255, 255, 255, 0.16);
-    border-bottom: 3px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.12);
 }
 
 #wlr-taskbar button.active {
-    background: rgba(122, 162, 247, 0.22);
+    background: rgba(122, 162, 247, 0.18);
     border-bottom: 3px solid #7aa2f7;
-    box-shadow: 0 4px 14px rgba(122, 162, 247, 0.3);
+    box-shadow: 0 4px 14px rgba(122, 162, 247, 0.30);
 }
 
 /* Minimized Windows Tray */
 #custom-minimized {
-    padding: 4px 10px;
-    margin: 2px 4px;
-    border-radius: 16px;
-    font-size: 14px;
+    padding: 6px 12px;
+    margin: 0 3px;
+    border-radius: 18px;
+    font-size: 13px;
+    font-weight: 600;
     background: rgba(250, 189, 47, 0.15);
     color: #fabd2f;
     transition: all 0.2s ease;
 }
 
 #custom-minimized:hover {
-    background: rgba(250, 189, 47, 0.32);
+    background: rgba(250, 189, 47, 0.30);
     color: #ffffff;
 }
 
@@ -119,10 +132,10 @@ window#waybar {
 
 /* Dock Settings Menu */
 #custom-dock-menu {
-    font-size: 18px;
-    padding: 6px 10px;
-    margin: 2px 2px;
-    border-radius: 16px;
+    font-size: 16px;
+    padding: 8px 10px;
+    margin: 0 2px;
+    border-radius: 18px;
     color: #94a3b8;
     transition: all 0.2s ease;
 }

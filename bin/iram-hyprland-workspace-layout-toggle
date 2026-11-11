@@ -66,8 +66,6 @@ HEADER
             cat << RULE >> "$conf_file"
 # Workspace $wid: Floating Desktop Mode
 windowrule = float 1, match:workspace $wid
-windowrule = size 70% 70%, match:workspace $wid
-windowrule = center 1, match:workspace $wid
 RULE
         fi
     done
@@ -75,13 +73,25 @@ RULE
 
 sync_workspace_rules
 
+# Check if any other workspace is currently floating
+check_other_floating() {
+    for f in "$MODES_DIR"/[0-9]*.mode; do
+        [ -f "$f" ] || continue
+        local m
+        m="$(cat "$f" 2>/dev/null | tr -d '[:space:]')"
+        if [ "$m" = "floating" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Apply layout logic depending on mode
 case "$NEW_MODE" in
+
     floating)
-        # 1. Enable dynamic window rules for this workspace in running session
+        # 1. Enable dynamic window rules for this workspace in running session (float only, without forcing static size)
         hyprctl keyword windowrule "float 1, match:workspace $ACTIVE_WORKSPACE" >/dev/null 2>&1 || true
-        hyprctl keyword windowrule "size 70% 70%, match:workspace $ACTIVE_WORKSPACE" >/dev/null 2>&1 || true
-        hyprctl keyword windowrule "center 1, match:workspace $ACTIVE_WORKSPACE" >/dev/null 2>&1 || true
 
         # 2. Convert existing tiled windows on this workspace to floating
         CLIENTS="$(hyprctl clients -j 2>/dev/null || echo "[]")"
@@ -102,8 +112,8 @@ case "$NEW_MODE" in
             hyprctl dispatch tagwindow "+iram-floating-workspace" "address:$addr" >/dev/null 2>&1 || true
         done < <(jq -r --arg wid "$ACTIVE_WORKSPACE" '.[] | select((.workspace.id | tostring) == $wid) | .address' <<<"$CLIENTS")
 
-        # 3. Switch to click-to-focus for true desktop feel
-        hyprctl keyword input:follow_mouse 0 >/dev/null 2>&1 || true
+        # 3. Preserve focus-follows-mouse (hover focus)
+        hyprctl keyword input:follow_mouse 1 >/dev/null 2>&1 || true
 
         # 4. Launch or ensure Dock is visible
         if command -v iram-dock >/dev/null 2>&1; then
@@ -113,7 +123,7 @@ case "$NEW_MODE" in
         # 5. Notify user
         notify-send -a "IRAM OS" -i preferences-desktop -r 4410 \
             "󱂬 Workspace $ACTIVE_WORKSPACE: Floating Desktop Mode" \
-            "macOS-style Dock active • Click-to-focus enabled • Super+M to minimize"
+            "macOS-style Dock active • Super+M to minimize" 2>/dev/null || true
         ;;
 
     scrolling)
@@ -123,8 +133,9 @@ case "$NEW_MODE" in
         # Notify user
         notify-send -a "IRAM OS" -i preferences-desktop-theme -r 4410 \
             "󰝥 Workspace $ACTIVE_WORKSPACE: Infinite Scrolling Mode" \
-            "Sequential column strip navigation"
+            "Sequential column strip navigation" 2>/dev/null || true
         ;;
+
 
     dwindle|*)
         # 1. Untile windows that were floated by mode
@@ -140,24 +151,16 @@ case "$NEW_MODE" in
         hyprctl keyword input:follow_mouse 1 >/dev/null 2>&1 || true
 
         # 3. Check if any other workspace is floating; if none, hide dock
-        HAS_OTHER_FLOATING=0
-        for f in "$MODES_DIR"/[0-9]*.mode; do
-            [ -f "$f" ] || continue
-            local m="$(cat "$f" 2>/dev/null | tr -d '[:space:]')"
-            if [ "$m" = "floating" ]; then
-                HAS_OTHER_FLOATING=1
-                break
-            fi
-        done
-        if [ "$HAS_OTHER_FLOATING" -eq 0 ] && command -v iram-dock >/dev/null 2>&1; then
+        if ! check_other_floating && command -v iram-dock >/dev/null 2>&1; then
             iram-dock auto-hide-check >/dev/null 2>&1 || true
         fi
 
         # 4. Notify user
         notify-send -a "IRAM OS" -i preferences-desktop-display -r 4410 \
             "󱓻 Workspace $ACTIVE_WORKSPACE: Sovereign Geometric Tiling" \
-            "Strict auto-split layout • Zero wasted gaps"
+            "Strict auto-split layout • Zero wasted gaps" 2>/dev/null || true
         ;;
+
 esac
 
 # Signal Waybar to refresh custom modules
