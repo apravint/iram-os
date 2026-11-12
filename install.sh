@@ -266,6 +266,19 @@ if [ "$DRY_RUN" = true ]; then
     bash "$REPO_DIR/bin/iram-user-setup" --source "$REPO_DIR" --with-bin --dry-run
 else
     bash "$REPO_DIR/bin/iram-user-setup" --source "$REPO_DIR" --with-bin
+    # Ensure user-overrides.conf exists without overwriting existing modifications
+    if [ ! -f "$HOME/.config/hypr/user-overrides.conf" ]; then
+        if [ -f "$REPO_DIR/config/hypr/user-overrides.conf.example" ]; then
+            cp "$REPO_DIR/config/hypr/user-overrides.conf.example" "$HOME/.config/hypr/user-overrides.conf"
+        else
+            touch "$HOME/.config/hypr/user-overrides.conf"
+        fi
+    fi
+    # Ensure backward-compatible symlinks between iram and iram-os
+    mkdir -p "$HOME/.config/iram" "$HOME/.local/share/iram" "$HOME/.local/state/iram"
+    [ -e "$HOME/.config/iram-os" ] || ln -sfn "$HOME/.config/iram" "$HOME/.config/iram-os"
+    [ -e "$HOME/.local/share/iram-os" ] || ln -sfn "$HOME/.local/share/iram" "$HOME/.local/share/iram-os"
+    [ -e "$HOME/.local/state/iram-os" ] || ln -sfn "$HOME/.local/state/iram" "$HOME/.local/state/iram-os"
 fi
 
 # ------------------------------------------------------------------------------

@@ -361,7 +361,7 @@ class DesktopPreviewWidget(Gtk.DrawingArea):
                              p_radius, p_border, is_active=True,
                              acc_rgb=(acc_r, acc_g, acc_b),
                              card_rgb=(card_r, card_g, card_b),
-                             title="terminal ~ /home/apravint")
+                             title=f"terminal ~ {HOME}")
 
         # Right Window (Unfocused Editor)
         self.draw_sim_window(cr, p_gaps_out + win_w + p_gaps_in, p_gaps_out, win_w, win_h,

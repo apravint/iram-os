@@ -962,8 +962,8 @@ def build_colors_toml(data):
 def main():
     dest_dirs = [
         os.path.expanduser("~/.config/omarchy/themes"),
-        "/home/apravint/iram-os/themes",
-        "/home/apravint/iram-os/config/iram/themes"
+        os.path.expanduser("~/iram-os/themes"),
+        os.path.expanduser("~/iram-os/config/iram/themes")
     ]
     for d in dest_dirs:
         os.makedirs(d, exist_ok=True)

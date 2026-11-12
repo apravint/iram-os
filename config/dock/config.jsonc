@@ -85,7 +85,16 @@
     "app_ids-mapping": {
       "Google-chrome": "google-chrome",
       "google-chrome-stable": "google-chrome",
-      "org.kde.konsole": "konsole"
+      "org.kde.konsole": "konsole",
+      "Code": "code",
+      "code-url-handler": "code",
+      "code-oss": "code",
+      "VSCodium": "vscodium",
+      "Brave-browser": "brave-browser",
+      "firefox-default": "firefox",
+      "Spotify": "spotify",
+      "Slack": "slack",
+      "Discord": "discord"
     },
     "ignore-list": [
       "iram-agent-console",
