@@ -18,7 +18,7 @@ else
 fi
 
 if [ "$ACTION" = "move" ]; then
-    hyprctl dispatch movetoworkspace "$ACTUAL_WS" >/dev/null 2>&1
+    hyprctl dispatch movetoworkspace "$ACTUAL_WS" >/dev/null 2>&1 || true
 else
-    hyprctl dispatch workspace "$ACTUAL_WS" >/dev/null 2>&1
+    hyprctl dispatch workspace "$ACTUAL_WS" >/dev/null 2>&1 || true
 fi
