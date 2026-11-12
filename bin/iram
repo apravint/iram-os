@@ -188,6 +188,10 @@ case "$cmd" in
         esac
         ;;
 
+    debug-last-crash|last-crash)
+        exec "$LOCAL_BIN/iram-crash-debug" "$@"
+        ;;
+
     layout)
         exec "${LOCAL_BIN:-$HOME/.local/bin}/iram-layout-switch" "$@"
         ;;
@@ -211,6 +215,13 @@ case "$cmd" in
             graph|swarm|3d)
                 shift
                 exec "$LOCAL_BIN/iram-agent-graph" "$@"
+                ;;
+            select|switch)
+                shift
+                exec "$LOCAL_BIN/iram-agent-select" "$@"
+                ;;
+            current)
+                cat "$CONFIG_DIR/default-agent" 2>/dev/null || echo "agy"
                 ;;
             crash)
                 shift
@@ -388,7 +399,9 @@ case "$cmd" in
         apply_iram_theme() {
             local target="$1"
             [ -n "$target" ] || return 1
-            local slug=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+            # Security hardening: sanitize slug to alphanumeric and hyphens/underscores only
+            local slug
+            slug=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9_-')
 
             # Remember current background before switching away
             local prev_theme=$(cat "$HOME/.local/state/iram/current/theme.name" 2>/dev/null || true)

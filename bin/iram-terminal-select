@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# iram:summary=Select and switch system default terminal (Alacritty, Foot, Ghostty, Kitty)
+# iram:tags=terminal,switcher,config
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/iram"
+CONFIG_FILE="$CONFIG_DIR/default-terminal"
+mkdir -p "$CONFIG_DIR"
+
+TERMS=(
+    "alacritty:Alacritty (GPU accelerated, default)"
+    "foot:Foot (Ultra-fast Wayland native)"
+    "ghostty:Ghostty (Modern GPU native)"
+    "kitty:Kitty (Rich graphics & ligature)"
+)
+
+VALID_TERMS=()
+for t in "${TERMS[@]}"; do
+    VALID_TERMS+=("${t%%:*}")
+done
+
+subcmd="${1:-}"
+
+case "$subcmd" in
+    list)
+        for t in "${VALID_TERMS[@]}"; do
+            echo "$t"
+        done
+        exit 0
+        ;;
+    status|current)
+        cat "$CONFIG_FILE" 2>/dev/null || echo "alacritty"
+        exit 0
+        ;;
+esac
+
+selected=""
+if [ -n "$subcmd" ]; then
+    for valid in "${VALID_TERMS[@]}"; do
+        if [ "$subcmd" = "$valid" ]; then
+            selected="$subcmd"
+            break
+        fi
+    done
+    if [ -z "$selected" ]; then
+        echo "Error: Unknown terminal '$subcmd'. Available terminals: ${VALID_TERMS[*]}" >&2
+        exit 1
+    fi
+else
+    current=$(cat "$CONFIG_FILE" 2>/dev/null || echo "alacritty")
+    if command -v wofi >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        choice=$(printf '%s\n' "${TERMS[@]}" | wofi --dmenu --prompt "Default Terminal (Current: $current):" --width 450 --height 250 || true)
+        if [ -n "$choice" ]; then
+            selected=$(echo "$choice" | cut -d: -f1)
+        fi
+    else
+        echo "=== Select Default Terminal ==="
+        echo "Current: $current"
+        for i in "${!TERMS[@]}"; do
+            echo "$((i+1)). ${TERMS[$i]}"
+        done
+        read -rp "Enter choice [1-${#TERMS[@]}]: " idx
+        if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le "${#TERMS[@]}" ]; then
+            selected=$(echo "${TERMS[$((idx-1))]}" | cut -d: -f1)
+        fi
+    fi
+fi
+
+if [ -n "$selected" ]; then
+    echo "$selected" > "$CONFIG_FILE"
+    notify-send -a "IRAM OS" "Terminal Updated" "Default terminal set to: $selected" 2>/dev/null || true
+    echo "✓ Default terminal set to: $selected"
+else
+    cat "$CONFIG_FILE" 2>/dev/null || echo "alacritty"
+fi

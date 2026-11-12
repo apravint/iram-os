@@ -342,6 +342,8 @@ printf '#!/bin/sh\necho "$*" >> "$HOME/install.log"\n' > "$U/iram-os/install.sh"
 printf '#!/bin/sh\n[ -f "$HOME/snap-fails" ] && exit 1\necho snap >> "$HOME/snap.log"\n' > "$UF/iram-snapshot"
 printf '#!/bin/sh\necho "$*" >> "$HOME/systemctl.log"\n' > "$UF/systemctl"
 printf '#!/bin/sh\nexit 0\n' > "$UF/notify-send"
+printf '#!/bin/sh\nexit 0\n' > "$UF/sudo"
+printf '#!/bin/sh\nexit 0\n' > "$UF/apt-get"
 chmod +x "$UF"/*
 upd_reset() { rm -rf "$U/.local" "$U/run" "$U"/*.log "$U/snap-fails" "$U/iram-os/.git"; mkdir -p "$U/run"; }
 upd() { HOME="$U" XDG_STATE_HOME= XDG_RUNTIME_DIR="$U/run" HYPRLAND_INSTANCE_SIGNATURE= PATH="$UF:$PATH" iram-update "$@"; }

@@ -68,6 +68,15 @@ flock -n 9 || die "Another 'iram update' is already running."
 exec > >(tee "$LOG_FILE") 2>&1
 echo "iram update started $(date -Iseconds), profile=$PROFILE"
 
+# Sudo credential caching with background keepalive (Omarchy 4.5 standard)
+if [ "$EUID" -ne 0 ]; then
+    sudo -v || die "Sudo access required for system update."
+    # Background loop to keep sudo timestamp alive until update exits
+    ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 45; done ) >/dev/null 2>&1 &
+    SUDO_KEEP_PID=$!
+    trap 'kill "$SUDO_KEEP_PID" 2>/dev/null || true; pkill -P "$SUDO_KEEP_PID" 2>/dev/null || true; rm -f "$LOCK_FILE"' EXIT
+fi
+
 echo -e "${BLUE}======================================================${NC}"
 echo -e "${BOLD}${CYAN}            IRAM OS SYSTEM UPGRADE${NC}"
 echo -e "${BLUE}======================================================${NC}"
@@ -119,8 +128,16 @@ fi
 [ -f "$REPO_DIR/install.sh" ] || die "$REPO_DIR/install.sh not found."
 echo -e "${YELLOW}==> [3/6] Running installer (profile: $PROFILE)...${NC}"
 # 9>&- keeps the lock from leaking into anything the installer leaves running.
-bash "$REPO_DIR/install.sh" "$PROFILE" 9>&-
+# Inhibit idle/sleep/shutdown during system upgrade
+if command -v systemd-inhibit >/dev/null 2>&1; then
+    systemd-inhibit --what=idle:sleep:shutdown --who="iram-update" --why="Upgrading IRAM OS packages" bash "$REPO_DIR/install.sh" "$PROFILE" 9>&-
+else
+    bash "$REPO_DIR/install.sh" "$PROFILE" 9>&-
+fi
 printf '%s\n' "$PROFILE" > "$PROFILE_FILE"
+
+echo -e "${YELLOW}==> Cleaning orphaned packages (apt autoremove)...${NC}"
+sudo apt-get autoremove -y >/dev/null 2>&1 || true
 
 # 4. Post-update hooks: yours in ~/.config/iram/hooks/post-update.d/, and the system's.
 echo -e "${YELLOW}==> [4/6] Running post-update hooks...${NC}"

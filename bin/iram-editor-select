@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# iram:summary=Select and switch system default editor (Neovim, VS Code, Cursor, Windsurf, Zed)
+# iram:tags=editor,switcher,config
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/iram"
+CONFIG_FILE="$CONFIG_DIR/default-editor"
+mkdir -p "$CONFIG_DIR"
+
+EDITORS=(
+    "nvim:Neovim (Modal terminal editor, default)"
+    "code:Visual Studio Code"
+    "cursor:Cursor AI Editor"
+    "windsurf:Windsurf AI Editor"
+    "zed:Zed High-Performance Editor"
+)
+
+VALID_EDITORS=()
+for e in "${EDITORS[@]}"; do
+    VALID_EDITORS+=("${e%%:*}")
+done
+
+subcmd="${1:-}"
+
+case "$subcmd" in
+    list)
+        for e in "${VALID_EDITORS[@]}"; do
+            echo "$e"
+        done
+        exit 0
+        ;;
+    status|current)
+        cat "$CONFIG_FILE" 2>/dev/null || echo "nvim"
+        exit 0
+        ;;
+esac
+
+selected=""
+if [ -n "$subcmd" ]; then
+    for valid in "${VALID_EDITORS[@]}"; do
+        if [ "$subcmd" = "$valid" ]; then
+            selected="$subcmd"
+            break
+        fi
+    done
+    if [ -z "$selected" ]; then
+        echo "Error: Unknown editor '$subcmd'. Available editors: ${VALID_EDITORS[*]}" >&2
+        exit 1
+    fi
+else
+    current=$(cat "$CONFIG_FILE" 2>/dev/null || echo "nvim")
+    if command -v wofi >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        choice=$(printf '%s\n' "${EDITORS[@]}" | wofi --dmenu --prompt "Default Editor (Current: $current):" --width 450 --height 280 || true)
+        if [ -n "$choice" ]; then
+            selected=$(echo "$choice" | cut -d: -f1)
+        fi
+    else
+        echo "=== Select Default Editor ==="
+        echo "Current: $current"
+        for i in "${!EDITORS[@]}"; do
+            echo "$((i+1)). ${EDITORS[$i]}"
+        done
+        read -rp "Enter choice [1-${#EDITORS[@]}]: " idx
+        if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le "${#EDITORS[@]}" ]; then
+            selected=$(echo "${EDITORS[$((idx-1))]}" | cut -d: -f1)
+        fi
+    fi
+fi
+
+if [ -n "$selected" ]; then
+    echo "$selected" > "$CONFIG_FILE"
+    notify-send -a "IRAM OS" "Editor Updated" "Default editor set to: $selected" 2>/dev/null || true
+    echo "✓ Default editor set to: $selected"
+else
+    cat "$CONFIG_FILE" 2>/dev/null || echo "nvim"
+fi

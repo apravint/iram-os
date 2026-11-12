@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# iram:summary=Fast TUI Disk Usage Tree Analyzer (Disktree equivalent)
+# iram:tags=disk,storage,tui,tree
+set -euo pipefail
+
+TARGET_DIR="${1:-$HOME}"
+
+launch_disktree() {
+    if command -v ncdu >/dev/null 2>&1; then
+        exec ncdu "$TARGET_DIR"
+    elif command -v gdu >/dev/null 2>&1; then
+        exec gdu "$TARGET_DIR"
+    elif command -v dust >/dev/null 2>&1; then
+        dust "$TARGET_DIR" | less -R
+        exit 0
+    else
+        # Built-in fast Python Disk Usage Tree
+        python3 - "$TARGET_DIR" << 'EOF'
+import sys
+import os
+import shutil
+
+target = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~")
+print(f"\033[1;36m=== IRAM OS Disktree: {target} ===\033[0m\n")
+
+items = []
+try:
+    with os.scandir(target) as it:
+        for entry in it:
+            try:
+                if entry.is_file(follow_symlinks=False):
+                    size = entry.stat().st_size
+                    items.append((entry.name, size, False))
+                elif entry.is_dir(follow_symlinks=False):
+                    total = 0
+                    for root, dirs, files in os.walk(entry.path):
+                        for f in files:
+                            try:
+                                total += os.path.getsize(os.path.join(root, f))
+                            except Exception:
+                                pass
+                    items.append((entry.name + "/", total, True))
+            except Exception:
+                pass
+except Exception as e:
+    print(f"Error scanning {target}: {e}")
+
+items.sort(key=lambda x: x[1], reverse=True)
+
+def fmt_size(num):
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if abs(num) < 1024.0:
+            return f"{num:6.1f} {unit}"
+        num /= 1024.0
+    return f"{num:.1f} PB"
+
+max_size = items[0][1] if items else 1
+term_w = shutil.get_terminal_size().columns
+bar_max = max(15, min(35, term_w - 45))
+
+for name, size, is_dir in items[:25]:
+    pct = size / max_size if max_size > 0 else 0
+    bar_len = int(pct * bar_max)
+    bar = "█" * bar_len + "░" * (bar_max - bar_len)
+    color = "\033[1;34m" if is_dir else "\033[0;37m"
+    print(f"{color}{name:<24}\033[0m {fmt_size(size):>9} \033[1;32m[{bar}]\033[0m")
+
+print("\n\033[1;33mTip: Run 'sudo apt install ncdu' for full interactive arrow-key browsing.\033[0m")
+input("\nPress Enter to exit...")
+EOF
+    fi
+}
+
+if [ "${IRAM_DISKTREE_INTERNAL:-0}" != "1" ] && command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    IRAM_DISKTREE_INTERNAL=1 iram-terminal --class iram-ai-float --title "IRAM Disktree" -e "$0" "$TARGET_DIR"
+    exit 0
+else
+    launch_disktree
+fi

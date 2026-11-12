@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# iram:summary=Toggle between Sovereign 0px Tiling and Traditional Floating Desktop mode (Super + Shift + D)
+# iram:tags=desktop,hyprland,layout,mode
+set -euo pipefail
+
+LAYOUT_CONF="$HOME/.config/hypr/layout.conf"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram-os"
+STATE_FILE="$STATE_DIR/current_layout"
+LEGACY_STATE="$HOME/.local/state/iram/current_layout"
+mkdir -p "$(dirname "$LAYOUT_CONF")" "$STATE_DIR" "$(dirname "$LEGACY_STATE")"
+
+current="tiling"
+if [ -f "$STATE_FILE" ]; then
+    current=$(cat "$STATE_FILE")
+elif [ -f "$LEGACY_STATE" ]; then
+    current=$(cat "$LEGACY_STATE")
+fi
+
+target="${1:-}"
+if [ -z "$target" ]; then
+    if [ "$current" = "tiling" ]; then
+        target="traditional"
+    else
+        target="tiling"
+    fi
+fi
+
+case "$target" in
+    traditional|floating|classic)
+        cat << 'EOF' > "$LAYOUT_CONF"
+# --- Traditional Floating Desktop Layout ---
+general {
+    gaps_in = 4
+    gaps_out = 8
+    border_size = 2
+}
+
+decoration {
+    rounding = 8
+    dim_inactive = false
+}
+
+# Spawn windows floating by default with standard dimensions
+windowrulev2 = float, class:^(.*)$
+windowrulev2 = size 70% 70%, class:^(.*)$
+windowrulev2 = center, class:^(.*)$
+EOF
+        echo "traditional" > "$STATE_FILE"
+        echo "traditional" > "$LEGACY_STATE"
+        hyprctl reload >/dev/null 2>&1 || true
+        pkill -RTMIN+8 waybar 2>/dev/null || true
+        # Also launch dock if not running
+        if command -v iram-dock >/dev/null 2>&1; then
+            iram-dock start >/dev/null 2>&1 || true
+        fi
+        notify-send -a "IRAM OS" "Desktop Mode" "Switched to Traditional Floating Desktop Mode (8px rounding, centered floating)"
+        echo "✓ Switched to Traditional Floating Desktop Mode"
+        ;;
+
+    tiling|sovereign|sharp)
+        cat << 'EOF' > "$LAYOUT_CONF"
+# --- Sovereign Geometric Tiling Layout ---
+general {
+    gaps_in = 2
+    gaps_out = 4
+    border_size = 2
+}
+
+decoration {
+    rounding = 0
+    dim_inactive = true
+}
+
+# Standard tiling behavior
+EOF
+        echo "tiling" > "$STATE_FILE"
+        echo "tiling" > "$LEGACY_STATE"
+        hyprctl reload >/dev/null 2>&1 || true
+        pkill -RTMIN+8 waybar 2>/dev/null || true
+        notify-send -a "IRAM OS" "Desktop Mode" "Switched to Sovereign Tiling Mode (0px brutalist sharp tiling)"
+        echo "✓ Switched to Sovereign Geometric Tiling Mode"
+        ;;
+
+    status)
+        echo "$current"
+        ;;
+
+    *)
+        echo "Usage: iram-desktop-mode [toggle|tiling|traditional|status]" >&2
+        exit 1
+        ;;
+esac

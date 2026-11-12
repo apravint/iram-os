@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# iram:summary=One-click developer stack & creative toolchain installer
+# iram:tags=dev,install,mise,creator
+set -euo pipefail
+
+DEV_OPTIONS=(
+    "rust:🦀 Rust & Cargo (Latest Stable)"
+    "node:🟢 Node.js & npm / pnpm / bun"
+    "python:🐍 Python3, UV, Poetry & Virtualenv"
+    "java:☕ OpenJDK 21 LTS"
+    "mise:⚡ mise-en-place (Universal polyglot dev tool manager)"
+    "creator:🎬 Storytold Creative Suite (video-gen, shorts-creator, BookGeneratorAI)"
+    "all:🚀 Complete Developer & Creator Foundation"
+)
+
+choice="${1:-}"
+
+case "$choice" in
+    list)
+        for item in "${DEV_OPTIONS[@]}"; do
+            echo "${item%%:*}"
+        done
+        exit 0
+        ;;
+    help|--help|-h)
+        echo "Usage: iram-dev-install [rust|node|python|java|mise|creator|all|list]"
+        exit 0
+        ;;
+esac
+
+if [ -z "$choice" ]; then
+    if command -v wofi >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        sel=$(printf '%s\n' "${DEV_OPTIONS[@]}" | wofi --dmenu --prompt "Install Developer Stack:" --width 500 --lines 8)
+        choice=$(echo "$sel" | cut -d: -f1)
+    else
+        echo "=== IRAM OS Developer Stack Installer ==="
+        for item in "${DEV_OPTIONS[@]}"; do
+            echo " - $item"
+        done
+        read -rp "Select stack to install: " choice
+    fi
+fi
+
+[ -z "$choice" ] && exit 0
+
+install_rust() {
+    echo "Installing Rust toolchain..."
+    if ! command -v rustup >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        # shellcheck disable=SC1091
+        source "$HOME/.cargo/env" 2>/dev/null || true
+    else
+        rustup update
+    fi
+    echo "✓ Rust installed successfully"
+}
+
+install_node() {
+    echo "Installing Node.js & package managers..."
+    sudo apt-get update && sudo apt-get install -y nodejs npm
+    sudo npm install -g pnpm bun || true
+    echo "✓ Node.js & pnpm installed successfully"
+}
+
+install_python() {
+    echo "Installing Python & uv fast package manager..."
+    sudo apt-get update && sudo apt-get install -y python3-pip python3-venv
+    curl -LsSf https://astral.sh/uv/install.sh | sh 2>/dev/null || true
+    echo "✓ Python & UV installed successfully"
+}
+
+install_java() {
+    echo "Installing OpenJDK 21 LTS..."
+    sudo apt-get update && sudo apt-get install -y openjdk-21-jdk
+    echo "✓ Java OpenJDK 21 installed successfully"
+}
+
+install_mise() {
+    echo "Installing mise polyglot manager..."
+    curl https://mise.run | sh
+    echo "✓ mise installed successfully"
+}
+
+install_creator() {
+    echo "Setting up Storytold Creative Suite..."
+    mkdir -p "$HOME/Projects"
+    for repo in "video-gen" "shorts-creator" "BookGeneratorAI"; do
+        if [ ! -d "$HOME/Projects/$repo" ]; then
+            git clone "https://github.com/apravint/$repo.git" "$HOME/Projects/$repo" || true
+        fi
+    done
+    echo "✓ Creative suite cloned to ~/Projects"
+}
+
+case "$choice" in
+    rust) install_rust ;;
+    node) install_node ;;
+    python) install_python ;;
+    java) install_java ;;
+    mise) install_mise ;;
+    creator) install_creator ;;
+    all)
+        install_rust
+        install_node
+        install_python
+        install_java
+        install_mise
+        install_creator
+        ;;
+    *)
+        echo "Unknown option: $choice" >&2
+        exit 1
+        ;;
+esac
+
+notify-send -a "IRAM Dev Stack" "Installation Finished" "Successfully installed $choice" 2>/dev/null || true

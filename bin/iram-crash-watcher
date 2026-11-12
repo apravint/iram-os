@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# iram:summary=Background crash watcher and diagnostic hook
+# iram:tags=diagnostics,agent,crash,watcher
+set -euo pipefail
+
+CRASH_DIR="${HOME}/.cache/iram/crashes"
+mkdir -p "$CRASH_DIR"
+LAST_LOG="$CRASH_DIR/last_crash.log"
+
+LAST_TRIGGER=0
+COOLDOWN=20
+
+handle_crash() {
+    local source="$1"
+    local summary="$2"
+    local now
+    now=$(date +%s)
+    if [ $((now - LAST_TRIGGER)) -lt $COOLDOWN ]; then
+        return
+    fi
+    LAST_TRIGGER=$now
+
+    echo "=== IRAM OS Crash Report [$(date -Iseconds)] ===" > "$LAST_LOG"
+    echo "Source: $source" >> "$LAST_LOG"
+    echo "Summary: $summary" >> "$LAST_LOG"
+    echo "--- Recent Journal Errors ---" >> "$LAST_LOG"
+    journalctl --user -p err..emerg -n 25 --no-pager >> "$LAST_LOG" 2>&1 || true
+
+    if command -v coredumpctl >/dev/null 2>&1; then
+        echo "--- Coredump Info ---" >> "$LAST_LOG"
+        coredumpctl info --no-pager -n 1 >> "$LAST_LOG" 2>&1 || true
+    fi
+
+    # Dispatch actionable desktop notification
+    if command -v notify-send >/dev/null 2>&1; then
+        ACTION=$(notify-send -u critical -a "IRAM Self-Healing OS" -i "dialog-error" \
+            --action="debug=Send to AI Agent" \
+            "Application Crash Detected" \
+            "Source: $source\nClick to inspect with AI Agent" 2>/dev/null || true)
+        
+        if [ "$ACTION" = "debug" ]; then
+            iram-crash-debug &
+        fi
+    fi
+}
+
+# Stream user journal errors
+exec journalctl --user -p err..emerg -f -o cat 2>/dev/null | while read -r line; do
+    # Filter out noisy non-fatal messages
+    case "$line" in
+        *Failed*|*crashed*|*segmentation*|*core*dump*|*Aborted*|*FATAL*)
+            handle_crash "System Service" "$line"
+            ;;
+    esac
+done

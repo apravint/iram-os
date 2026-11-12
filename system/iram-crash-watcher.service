@@ -1,0 +1,12 @@
+[Unit]
+Description=IRAM OS Crash to Agent Watcher
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/iram-crash-watcher
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=graphical-session.target

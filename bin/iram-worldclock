@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# iram:summary=Multi-timezone global world clock (Elsewhen equivalent)
+# iram:tags=clock,timezone,worldclock
+set -euo pipefail
+
+ZONES=(
+    "🇮🇳 India (IST):Asia/Kolkata"
+    "🌐 Universal (UTC):UTC"
+    "🇺🇸 New York (EST/EDT):America/New_York"
+    "🇺🇸 San Francisco (PST/PDT):America/Los_Angeles"
+    "🇬🇧 London (GMT/BST):Europe/London"
+    "🇯🇵 Tokyo (JST):Asia/Tokyo"
+    "🇦🇺 Sydney (AEST):Australia/Sydney"
+)
+
+FORMAT_LINES=()
+for item in "${ZONES[@]}"; do
+    label="${item%%:*}"
+    tz="${item##*:}"
+    time_str=$(TZ="$tz" date +"%a %b %d  󰥔 %I:%M %p  (%Z)")
+    FORMAT_LINES+=("$(printf "%-32s  %s" "$label" "$time_str")")
+done
+
+OUTPUT=$(printf '%s\n' "${FORMAT_LINES[@]}")
+
+if [ "${1:-}" = "--cli" ] || [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    echo -e "\033[1;36m=== IRAM OS World Clock ===\033[0m"
+    printf '%s\n' "${FORMAT_LINES[@]}"
+else
+    # Display in interactive wofi or notification
+    if command -v wofi >/dev/null 2>&1; then
+        printf '%s\n' "${FORMAT_LINES[@]}" | wofi --dmenu --prompt "🌍 Global World Clock:" --width 580 --lines 8
+    else
+        notify-send -a "World Clock" "Global Timezones" "$OUTPUT"
+    fi
+fi

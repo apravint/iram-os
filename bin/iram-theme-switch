@@ -34,6 +34,7 @@ fi
 if [[ -n "${1:-}" && "${1:-}" != "--dmenu" && "${1:-}" != "--wofi" && "${1:-}" != "--text" && "${1:-}" != "--gui" ]]; then
     target="$1"
     [[ "$target" == "set" ]] && target="${2:-}"
+    target="$(echo "$target" | tr -d ';&|`$()<>')"
     if [[ "$target" == "auto" || "$target" == "chameleon" || "$target" == *"Auto Wallpaper"* ]]; then
         exec iram theme auto
     elif [[ -n "$target" ]]; then

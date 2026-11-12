@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# iram:summary=Pipe last crash report into default AI agent inside scratchpad
+# iram:tags=diagnostics,agent,crash
+set -euo pipefail
+
+CRASH_LOG="${HOME}/.cache/iram/crashes/last_crash.log"
+DEFAULT_AGENT=$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/iram/default-agent" 2>/dev/null || echo "agy")
+
+if [ ! -f "$CRASH_LOG" ]; then
+    echo "No recent crash log found at $CRASH_LOG" >&2
+    notify-send -a "IRAM AI" "Diagnostics" "No recent crash logs available" 2>/dev/null || true
+    exit 0
+fi
+
+REPORT_SNIPPET=$(tail -n 40 "$CRASH_LOG")
+
+# Command to execute inside terminal
+PROMPT="Diagnose this system crash log and provide: 1) Root Cause, 2) Fix Command:\n\n$REPORT_SNIPPET"
+
+case "$DEFAULT_AGENT" in
+    agy|antigravity)
+        CMD="iram agent prompt '$PROMPT' || exec bash"
+        ;;
+    claude)
+        CMD="claude '$PROMPT' || exec bash"
+        ;;
+    gemini)
+        CMD="gemini '$PROMPT' || exec bash"
+        ;;
+    ollama)
+        CMD="ollama run llama3.2:3b '$PROMPT' || exec bash"
+        ;;
+    *)
+        CMD="iram agent prompt '$PROMPT' || exec bash"
+        ;;
+esac
+
+# Launch inside floating terminal window
+if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    alacritty --class iram-agent-float --title "IRAM AI Crash Diagnosis" -e bash -c "$CMD" &
+else
+    bash -c "$CMD"
+fi

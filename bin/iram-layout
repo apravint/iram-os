@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# iram:summary=Save and restore Hyprland window layouts (Super+Alt+Home / Super+Home)
+# iram:tags=layout,windows,hyprland,persistence
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram-os"
+SAVE_FILE="$STATE_DIR/saved-layout.json"
+LEGACY_SAVE="$HOME/.local/state/iram/saved-layout.json"
+mkdir -p "$STATE_DIR" "$(dirname "$LEGACY_SAVE")"
+
+ACTION="${1:-save}"
+
+case "$ACTION" in
+    save)
+        CLIENTS_JSON="$(hyprctl clients -j 2>/dev/null || echo '[]')"
+        # Extract meaningful layout data for open application windows
+        FILTERED="$(jq '[.[] | select(.mapped == true and .class != "" and (.workspace.id > 0)) | {
+            address: .address,
+            class: .class,
+            title: .title,
+            workspace_id: .workspace.id,
+            floating: .floating,
+            at: .at,
+            size: .size
+        }]' <<<"$CLIENTS_JSON")"
+
+        echo "$FILTERED" > "$SAVE_FILE"
+        cp "$SAVE_FILE" "$LEGACY_SAVE" 2>/dev/null || true
+        COUNT="$(jq '. | length' <<<"$FILTERED")"
+        notify-send -a "IRAM OS" "Layout Saved" "Captured layout for $COUNT window(s)"
+        echo "✓ Saved layout for $COUNT active window(s) to $SAVE_FILE"
+        ;;
+
+    restore)
+        TARGET_FILE="$SAVE_FILE"
+        if [ ! -f "$TARGET_FILE" ] && [ -f "$LEGACY_SAVE" ]; then
+            TARGET_FILE="$LEGACY_SAVE"
+        fi
+
+        if [ ! -f "$TARGET_FILE" ]; then
+            echo "Error: No saved layout found at $SAVE_FILE" >&2
+            notify-send -a "IRAM OS" -u critical "Layout Error" "No saved window layout found"
+            exit 1
+        fi
+
+        SAVED_DATA="$(cat "$TARGET_FILE")"
+        CURRENT_CLIENTS="$(hyprctl clients -j 2>/dev/null || echo '[]')"
+
+        RESTORED=0
+        # Iterate over saved windows
+        while read -r item; do
+            [ -n "$item" ] || continue
+            c_class="$(jq -r '.class' <<<"$item")"
+            s_ws="$(jq -r '.workspace_id' <<<"$item")"
+            s_float="$(jq -r '.floating' <<<"$item")"
+            s_x="$(jq -r '.at[0]' <<<"$item")"
+            s_y="$(jq -r '.at[1]' <<<"$item")"
+            s_w="$(jq -r '.size[0]' <<<"$item")"
+            s_h="$(jq -r '.size[1]' <<<"$item")"
+
+            # Find matching active window by class or address
+            matched_addr="$(jq -r --arg cls "$c_class" '.[] | select(.class == $cls) | .address' <<<"$CURRENT_CLIENTS" | head -n 1)"
+            if [ -n "$matched_addr" ] && [ "$matched_addr" != "null" ]; then
+                # Move to saved workspace
+                hyprctl dispatch movetoworkspacesilent "$s_ws,address:$matched_addr" >/dev/null 2>&1 || true
+                if [ "$s_float" = "true" ]; then
+                    hyprctl dispatch setfloating "address:$matched_addr" >/dev/null 2>&1 || true
+                    hyprctl dispatch movewindowpixel "exact $s_x $s_y,address:$matched_addr" >/dev/null 2>&1 || true
+                    hyprctl dispatch resizewindowpixel "exact $s_w $s_h,address:$matched_addr" >/dev/null 2>&1 || true
+                else
+                    hyprctl dispatch settiled "address:$matched_addr" >/dev/null 2>&1 || true
+                fi
+                RESTORED=$((RESTORED + 1))
+            fi
+        done < <(jq -c '.[]' <<<"$SAVED_DATA")
+
+        notify-send -a "IRAM OS" "Layout Restored" "Restored positions for $RESTORED window(s)"
+        echo "✓ Restored positions for $RESTORED active window(s)"
+        ;;
+
+    *)
+        echo "Usage: iram-layout [save|restore]" >&2
+        exit 1
+        ;;
+esac

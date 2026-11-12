@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# iram:summary=Intelligent per-monitor workspace switcher (Super + 1..0)
+# iram:tags=workspace,monitor,hyprland
+set -euo pipefail
+
+TARGET_NUM="${1:-1}"
+ACTION="${2:-switch}" # switch or move
+
+MONITORS_JSON="$(hyprctl monitors -j 2>/dev/null || echo '[]')"
+MONITOR_COUNT="$(jq '. | length' <<<"$MONITORS_JSON" 2>/dev/null || echo 1)"
+
+if [ "$MONITOR_COUNT" -gt 1 ]; then
+    # Get ID of currently focused monitor (0, 1, ...)
+    FOCUSED_ID="$(jq -r '.[] | select(.focused == true) | .id // 0' <<<"$MONITORS_JSON" 2>/dev/null || echo 0)"
+    ACTUAL_WS=$(( (FOCUSED_ID * 10) + TARGET_NUM ))
+else
+    ACTUAL_WS="$TARGET_NUM"
+fi
+
+if [ "$ACTION" = "move" ]; then
+    hyprctl dispatch movetoworkspace "$ACTUAL_WS" >/dev/null 2>&1
+else
+    hyprctl dispatch workspace "$ACTUAL_WS" >/dev/null 2>&1
+fi

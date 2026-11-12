@@ -76,6 +76,10 @@ if [ "$DRY_RUN" = false ]; then
         echo -e "${RED}Error: sudo access is required to install system packages.${NC}"
         exit 1
     fi
+    # Sudo credential keepalive loop (Omarchy 4.5 standard)
+    ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 45; done ) >/dev/null 2>&1 &
+    SUDO_KEEP_PID=$!
+    trap 'kill "$SUDO_KEEP_PID" 2>/dev/null || true; pkill -P "$SUDO_KEEP_PID" 2>/dev/null || true' EXIT
 fi
 
 warn() { echo -e "${YELLOW}Notice: $*${NC}" >&2; }

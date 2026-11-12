@@ -51,7 +51,8 @@
     "custom/layout": {
         "format": "{}",
         "return-type": "json",
-        "interval": 2,
+        "interval": 30,
+        "signal": 8,
         "exec": "~/.local/bin/iram-waybar-layout",
         "on-click": "~/.local/bin/iram-hyprland-workspace-layout-toggle",
         "on-click-right": "~/.local/bin/iram-hyprland-workspace-layout-toggle back",
@@ -76,6 +77,7 @@
     "clock": {
         "format": "󰃭 {:%a %b %d  󰥔 %H:%M}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "on-click": "~/.local/bin/iram-worldclock",
         "on-click-middle": "~/.local/bin/iram-menu-timezone"
     },
 

@@ -12,7 +12,10 @@ CWD="$("$SCRIPT_DIR/iram-terminal-cwd" 2>/dev/null || echo "$HOME")"
 
 # Detect preferred terminal emulator
 TERMINAL_BIN="alacritty"
-if command -v alacritty >/dev/null 2>&1; then
+if [ -f "$HOME/.config/iram/default-terminal" ]; then
+    PREF="$(cat "$HOME/.config/iram/default-terminal")"
+    command -v "$PREF" >/dev/null 2>&1 && TERMINAL_BIN="$PREF"
+elif command -v alacritty >/dev/null 2>&1; then
     TERMINAL_BIN="alacritty"
 elif command -v kitty >/dev/null 2>&1; then
     TERMINAL_BIN="kitty"

@@ -88,3 +88,13 @@ for qt in qt5ct qt6ct; do
         fi
     done
 done
+
+# 5. Starship Prompt: sync prompt accent & error colors with active theme
+STARSHIP_CONF="$HOME/.config/starship.toml"
+if [ -f "$STARSHIP_CONF" ]; then
+    ACCENT_HEX="$(color accent || echo '#7aa2f7')"
+    RED_HEX="$(color red || echo '#f7768e')"
+    sed -i "s|success_symbol = \".*\"|success_symbol = \"[⚡](bold $ACCENT_HEX) \"|" "$STARSHIP_CONF" 2>/dev/null || true
+    sed -i "s|error_symbol = \".*\"|error_symbol = \"[⚡](bold $RED_HEX) \"|" "$STARSHIP_CONF" 2>/dev/null || true
+fi
+

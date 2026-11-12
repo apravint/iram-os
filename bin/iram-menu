@@ -1,147 +1,131 @@
-#!/bin/bash
-# Iram Root Menu Bridge for IRAM OS
+#!/usr/bin/env bash
+# ==============================================================================
+# IRAM OS Unified Super Menu (Super + Space / Super + I)
+# Hierarchical control center inspired by Omarchy 4.5
+# ==============================================================================
+set -euo pipefail
 
 # Clean Toggle: if wofi is currently open, close it and exit cleanly
 if pgrep -x wofi >/dev/null 2>&1; then
-  pkill -x wofi 2>/dev/null || true
-  exit 0
-fi
-
-if pgrep -x iram-shell >/dev/null 2>&1; then
-  exec /usr/share/iram/bin/iram-menu "$@"
-fi
-
-verb="${1-toggle}"
-route="${2-root}"
-
-case "$route" in
-  apps|applications)
-    exec ~/.local/bin/iram-app-launcher
-    ;;
-  theme*|style.theme)
-    exec ~/.local/bin/iram-theme-switch
-    ;;
-  background*|style.background)
-    exec iram theme bg next
-    ;;
-  system|power)
-    exec ~/.local/bin/iram-power-menu
-    ;;
-  clipboard)
-    exec ~/.local/bin/iram-clipboard-menu
-    ;;
-  capture*)
-    exec ~/.local/bin/iram-capture-menu
-    ;;
-  keybindings)
-    exec /usr/share/iram/bin/iram-menu-keybindings
-    ;;
-  reminder*)
-    exec ~/.local/bin/iram-reminder-menu
-    ;;
-  cursor)
-    exec ~/.local/bin/iram-cursor-switch
-    ;;
-  timezone*|setup.timezone)
-    exec ~/.local/bin/iram-menu-timezone
-    ;;
-  close)
     pkill -x wofi 2>/dev/null || true
     exit 0
-    ;;
-  *)
-    # Root menu
-    CHOICE=$(printf "🚀 Applications Launcher (All Apps)\n🌐 WorldMonitor Planetary Radar\n🛡️ Adversarial Security Audit\n📈 Financial Valuation (DCF)\n⚡ Visual Architecture Map\n🔬 Reverse Engineer Binary (REA)\n🧠 Long-Term Memory (Hindsight)\n🖥️ Display and Monitor Settings\n🔊 Sound and Audio Control (Pavucontrol)\n⚙️ System Settings\n🎨 Theme Switcher (54 Sovereign Themes)\n🔤 Font Switcher\n🖱️ Cursor Theme Switcher\n🖼️ Next Background Wallpaper\n⌨️ Keybindings Cheat Sheet\n⏱️ Set Reminder\n📸 Screenshot and Screen Recording\n📋 Clipboard History\n📶 Network and Wi-Fi Settings\n󰂯 Bluetooth Devices\n󰃝 Toggle Nightlight (Eye Care)\n⏻ Power Menu (Lock, Sleep, Shutdown)" | wofi --dmenu --prompt "Iram Menu:" --lines 18 --style ~/.config/wofi/style.css -i)
-    
-    [[ -z "$CHOICE" ]] && exit 0
-    
-    case "$CHOICE" in
-      *"WorldMonitor"*)
-        alacritty --class iram-ai-float --title "IRAM WorldMonitor Radar" -e ~/.local/bin/iram-worldmonitor
-        ;;
-      *"Security Audit"*)
-        alacritty --class iram-ai-float --title "IRAM Adversarial Security Audit" -e ~/.local/bin/iram-audit
-        ;;
-      *"Financial"*)
-        alacritty --class iram-ai-float --title "IRAM Financial Intelligence" -e ~/.local/bin/iram-finance dcf NVDA
-        ;;
-      *"Architecture"*)
-        ~/.local/bin/iram-arch --open
-        ;;
-      *"Reverse Engineer"*)
-        alacritty --class iram-ai-float --title "IRAM Reverse Engineering" -e bash -c "read -e -p 'Target file: ' target; iram-reverse \"\$target\"; read -p 'Press enter to exit...'"
-        ;;
-      *"Long-Term Memory"*)
-        alacritty --class iram-ai-float --title "IRAM Hindsight Memory" -e bash -c "iram-hindsight reflect; echo ''; read -e -p 'Search memory (or enter to quit): ' q; [ -n \"\$q\" ] && iram-hindsight recall \"\$q\"; read -p 'Press enter...'"
-        ;;
-      *"Applications"*)
-        exec ~/.local/bin/iram-app-launcher
-        ;;
-      *"Display"*)
-        case "$(iram-menu-select "Displays" "Display settings" "Remember this layout" "Mirror screens on/off" "Rotate this screen" "Forget this layout")" in
-          "Display settings") ~/.local/bin/iram-displays-gui ;;
-          "Remember this layout") MSG=$(iram-monitor save 2>&1); notify-send -a "IRAM Displays" "Display layout" "$MSG" ;;
-          "Mirror screens"*) MSG=$(iram-monitor mirror toggle 2>&1); notify-send -a "IRAM Displays" "Mirroring" "$MSG" ;;
-          "Rotate this screen")
-            DEG=$(iram-menu-select "Rotate (clockwise)" 0 90 180 270) || exit 0
-            MSG=$(iram-monitor rotate "$DEG" 2>&1) || notify-send -a "IRAM Displays" -u critical "Rotate failed" "$MSG" ;;
-          "Forget this layout") MSG=$(iram-monitor forget 2>&1); notify-send -a "IRAM Displays" "Display layout" "$MSG" ;;
-        esac
-        ;;
-      *"Sound"*|*"Audio"*)
-        pavucontrol
-        ;;
-      *"System Settings"*)
-        gnome-control-center 2>/dev/null || systemsettings
-        ;;
-      *"Theme Switcher"*)
-        ~/.local/bin/iram-theme-switch
-        ;;
-      *"Font Switcher"*)
-        ~/.local/bin/iram-font-switch
-        ;;
-      *"Next Background"*)
-        iram theme bg next
-        ;;
-      *"Keybindings"*)
-        ~/.local/bin/iram-menu-keybindings
-        ;;
-      *"Reminder"*)
-        ~/.local/bin/iram-reminder-menu
-        ;;
-      *"Screenshot"*)
-        ~/.local/bin/iram-capture-menu
-        ;;
-      *"Clipboard"*)
-        ~/.local/bin/iram-clipboard-menu
-        ;;
-      *"Cursor"*)
-        ~/.local/bin/iram-cursor-switch
-        ;;
-      *"Network"*)
-        case "$(iram-menu-select "Network" "Network settings" "Share Wi-Fi (QR code)" "DNS provider")" in
-          "Network settings") nm-connection-editor ;;
-          "Share Wi-Fi"*) iram-network-qr ;;
-          "DNS provider")
-            CURRENT=$(iram-network-dns status 2>&1 | head -n 1)
-            PICK=$(iram-menu-select "DNS (now: ${CURRENT##*: })" cloudflare quad9 google auto) || exit 0
-            if RESULT=$(iram-network-dns "$PICK" 2>&1); then
-              notify-send -a "IRAM Network" "DNS provider" "$RESULT"
-            else
-              notify-send -a "IRAM Network" -u critical "DNS change failed" "$RESULT"
-            fi
-            ;;
-        esac
-        ;;
-      *"Bluetooth"*)
-        blueman-manager
-        ;;
-      *"Nightlight"*)
-        ~/.local/bin/iram-toggle-nightlight
-        ;;
-      *"Power"*)
-        ~/.local/bin/iram-power-menu
-        ;;
+fi
+
+menu_prompt() {
+    local prompt="$1"
+    shift
+    local options=("$@")
+    printf '%s\n' "${options[@]}" | wofi --dmenu --prompt "$prompt" --width 540 --lines 12 --style "$HOME/.config/wofi/style.css" -i 2>/dev/null || true
+}
+
+submenu_agent() {
+    choice=$(menu_prompt "🤖 Agent & AI Subsystem" \
+        "1. ⚙️ Switch Default Agent (agy, claude, gemini, codex, kimi, ollama)" \
+        "2. 📋 Ask AI with Clipboard Content" \
+        "3. 📸 Screen OCR Text Vision" \
+        "4. 🎙️ Toggle Voice Dictation" \
+        "5. 🛰️ Toggle IRAM Nexus Floating Desktop AI" \
+        "6. 🩺 Make Sense of Last Crash" \
+        "⬅ Back")
+
+    case "$choice" in
+        1*) ~/.local/bin/iram-agent-select ;;
+        2*) ~/.local/bin/iram-ai-clipboard ;;
+        3*) ~/.local/bin/iram-capture-text ;;
+        4*) ~/.local/bin/iram-dictation toggle ;;
+        5*) ~/.local/bin/iram-nexus ;;
+        6*) ~/.local/bin/iram-crash-debug ;;
+        *) return ;;
     esac
-    ;;
+}
+
+submenu_style() {
+    choice=$(menu_prompt "🎨 Style & Rice Studio" \
+        "1. 🎛️ Unified Appearance & Rice Tuner (Super+Alt+R)" \
+        "2. 🎭 Sovereign 55-Theme Switcher GUI" \
+        "3. 📐 Toggle Traditional vs Tiling Desktop (Super+Shift+D)" \
+        "4. 🖼️ Next Wallpaper Background" \
+        "5. 🖱️ Cursor Theme Switcher" \
+        "6. 🔤 Font & Typography Switcher" \
+        "⬅ Back")
+
+    case "$choice" in
+        1*) ~/.local/bin/iram-appearance ;;
+        2*) ~/.local/bin/iram-theme-switch ;;
+        3*) ~/.local/bin/iram-desktop-mode ;;
+        4*) iram theme bg next ;;
+        5*) ~/.local/bin/iram-cursor-switch ;;
+        6*) ~/.local/bin/iram-font-switch ;;
+        *) return ;;
+    esac
+}
+
+submenu_term_editor() {
+    choice=$(menu_prompt "💻 Terminal & Editor Switcher" \
+        "1. 🖥️ Switch Default Terminal (Alacritty, Foot, Ghostty, Kitty)" \
+        "2. 📝 Switch Default Editor (Neovim, VS Code, Cursor, Windsurf, Zed)" \
+        "⬅ Back")
+
+    case "$choice" in
+        1*) ~/.local/bin/iram-terminal-select ;;
+        2*) ~/.local/bin/iram-editor-select ;;
+        *) return ;;
+    esac
+}
+
+submenu_dev_tools() {
+    ~/.local/bin/iram-dev-install
+}
+
+submenu_system() {
+    choice=$(menu_prompt "⚙️ System & Maintenance" \
+        "1. 🚀 Run System Update (iram update)" \
+        "2. 🩺 Run System Doctor & Diagnostics (iram doctor)" \
+        "3. 🛡️ Config Snapshot & Rollback" \
+        "4. 🖥️ Display & Monitor Settings" \
+        "5. 🔊 Sound & Audio Mixer (Pavucontrol)" \
+        "6. 📶 Network & Wi-Fi Settings" \
+        "7. ⏻ Power Menu (Lock, Sleep, Shutdown)" \
+        "⬅ Back")
+
+    case "$choice" in
+        1*) alacritty --class iram-agy-float -e ~/.local/bin/iram update ;;
+        2*) alacritty --class iram-agy-float -e ~/.local/bin/iram doctor ;;
+        3*) ~/.local/bin/iram-snapshot ;;
+        4*) ~/.local/bin/iram-displays-gui ;;
+        5*) pavucontrol ;;
+        6*) nm-connection-editor ;;
+        7*) ~/.local/bin/iram-power-menu ;;
+        *) return ;;
+    esac
+}
+
+# Main Super Menu Loop
+MAIN_CHOICE=$(menu_prompt "IRAM OS Super Menu:" \
+    "🚀 Apps & Launcher" \
+    "🤖 Agent & AI Intelligence" \
+    "🎨 Style, Themes & Rice Tuner" \
+    "💻 Terminal & Editor Switcher" \
+    "🛠️ Install Dev Stack & Tools" \
+    "🗄️ Disktree (Storage Usage)" \
+    "🌍 Global World Clock" \
+    "📋 Clipboard History" \
+    "📸 Screen Capture & OCR" \
+    "⚙️ System, Doctor & Updates" \
+    "⏻ Power Menu")
+
+[ -z "$MAIN_CHOICE" ] && exit 0
+
+case "$MAIN_CHOICE" in
+    "🚀"*) ~/.local/bin/iram-app-launcher ;;
+    "🤖"*) submenu_agent ;;
+    "🎨"*) submenu_style ;;
+    "💻"*) submenu_term_editor ;;
+    "🛠️"*) submenu_dev_tools ;;
+    "🗄️"*) ~/.local/bin/iram-disktree ;;
+    "🌍"*) ~/.local/bin/iram-worldclock ;;
+    "📋"*) ~/.local/bin/iram-clipboard-menu ;;
+    "📸"*) ~/.local/bin/iram-capture-menu ;;
+    "⚙️"*) submenu_system ;;
+    "⏻"*) ~/.local/bin/iram-power-menu ;;
 esac

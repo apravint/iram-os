@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# iram:summary=Quake-style drop-down scratchpad console (Super + Grave)
+# iram:tags=scratchpad,terminal,hyprland,console
+set -euo pipefail
+
+SCRATCH_CLASS="iram-scratchpad"
+
+# Check if scratchpad window already exists in clients
+CLIENTS_JSON="$(hyprctl clients -j 2>/dev/null || echo '[]')"
+HAS_CLIENT="$(jq -r --arg c "$SCRATCH_CLASS" '.[] | select(.class == $c) | .address' <<<"$CLIENTS_JSON" 2>/dev/null | head -n 1)"
+
+if [ -z "$HAS_CLIENT" ]; then
+    # Spawn terminal into special:scratchpad
+    hyprctl dispatch -- exec [workspace special:scratchpad] alacritty --class "$SCRATCH_CLASS" --title "IRAM Quake Console" -e bash -c "iram agent interactive || exec bash" >/dev/null 2>&1
+    sleep 0.15
+fi
+
+# Toggle visibility
+hyprctl dispatch togglespecialworkspace scratchpad >/dev/null 2>&1
