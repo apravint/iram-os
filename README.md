@@ -128,17 +128,45 @@ It creates a GPT layout that boots on UEFI and BIOS, then creates your user. It 
 
 Bug reports with `iram doctor` output are the most useful thing you can send.
 
+## Omarchy 4.5 ("Quattro RS") Architectural Parity Matrix
+
+IRAM OS ports and extends the modern ergonomics, workflow patterns, and performance optimizations introduced in **Omarchy 4.0 (Quattro)** and **Omarchy 4.5 (Quattro RS)**, adapted natively for **Ubuntu 26.04 LTS + Hyprland**:
+
+| Omarchy 4.5 Architectural Feature | IRAM OS Implementation | Status & Shortcut |
+| :--- | :--- | :--- |
+| **Traditional Desktop Mode** | Toggle between brutalist sharp tiling and 8px traditional floating desktop with auto-centering | `Super + Shift + D` / `iram-desktop-mode` |
+| **Quake-Style Drop-Down Scratchpad** | Dedicated slide-down AI console & terminal on `special:scratchpad` | `Super + Grave` (`` ` ``) / `iram-scratchpad` |
+| **Window Layout Persistence** | Serialize active client windows, workspaces, and sizes to JSON and restore on demand | `Super + Alt + Home` (Save) / `Super + Home` (Restore) / `iram-layout` |
+| **Per-Monitor Workspaces** | Dynamic workspace partitioning per display monitor `(monitor_id * 10) + N` | `Super + 1..0` / `Super + Shift + 1..0` |
+| **Multi-Agent Switcher** | Hot-swap default system agent between `agy`, `claude`, `gemini`, `codex`, `kimi`, `ollama` | `iram agent select` / `iram-agent-select` |
+| **Crash-to-Agent Diagnostics** | Real-time systemd journal error watcher sending crashes to AI agent in scratchpad | `iram debug-last-crash` / `iram-crash-watcher.service` |
+| **Event-Driven IPC Waybar** | Sub-15ms theme and layout status updates via Hyprland socket & RTMIN signals | Built-in (`pkill -RTMIN+8 waybar`) |
+| **Unified Super Menu** | Fast fuzzy hierarchical launcher for Apps, AI, Themes, Dev Stack, and System | `Super + Space` / `Super + I` / `iram-menu` |
+| **Multi-Terminal & Editor Selectors** | Seamlessly switch between Alacritty, Foot, Ghostty, Kitty and Neovim, VS Code, Cursor, Zed | `iram-terminal-select`, `iram-editor-select` |
+| **TUI Storage & World Clock** | Built-in visual disk analyzer tree and multi-timezone world clock | `iram-disktree`, `iram-worldclock` |
+| **One-Click Dev Stacks** | Instant polyglot setup for Rust, Node, Python (UV), Java 21, `mise`, and creative tools | `iram-dev-install` |
+| **Safer Updates & Inhibit** | Single cached sudo keepalive, pre-update snapshots, and `systemd-inhibit` against sleep/logout | `iram update` |
+
 ## Reference
 
 | Command | Purpose |
 | :--- | :--- |
 | `iram doctor` | Check session variables, portals, services, audio, and agents |
 | `iram snapshot create\|list\|restore` | Config snapshots and rollback |
-| `iram theme [name\|list\|random\|auto]` | Switch themes live |
-| `iram update [--profile P] [--local]` | Snapshot, pull, reinstall with your install profile, migrate, restart what changed. One run at a time, logged to `~/.local/state/iram/update.log` |
+| `iram theme [name\|list\|random\|auto]` | Switch themes live across all desktop components |
+| `iram agent select [agy\|claude\|gemini\|...]` | Switch system AI agent (`agy`, `claude`, `gemini`, `codex`, `kimi`, `ollama`) |
+| `iram debug-last-crash` | Pipe most recent crash dump and logs into your default AI agent |
+| `iram update [--profile P] [--local]` | Snapshot, pull, reinstall, migrate, restart what changed with sleep inhibit and single sudo |
+| `iram-desktop-mode [toggle\|tiling\|traditional]` | Toggle between tiling and floating desktop mode |
+| `iram-layout [save\|restore]` | Save or restore active window positions and workspaces |
+| `iram-terminal-select [alacritty\|foot\|...]` | Set system-wide default terminal emulator |
+| `iram-editor-select [nvim\|code\|cursor\|...]` | Set system-wide default code editor |
+| `iram-disktree [path]` | Interactive TUI disk usage tree visualizer |
+| `iram-worldclock [--cli]` | Multi-timezone world clock (IST, UTC, EST, PST, GMT, JST, AEDT) |
+| `iram-dev-install [stack]` | One-click developer and creative toolchain installer |
 | `iram ai-setup` | Install Ollama and models that fit this machine |
 | `iram mcp-config --inject` | Register the MCP server with your agents |
-| `iram monitor save\|apply\|list\|forget` | Remember the layout for the monitors connected now; it is reapplied whenever that set is plugged in |
+| `iram monitor save\|apply\|list\|forget` | Remember the layout for the monitors connected now; reapplied on connect |
 | `iram monitor rotate [0\|90\|180\|270]` / `mirror [on\|off]` | Rotate the focused screen (remembered) / mirror it onto the others |
 | `iram-network-dns [cloudflare\|quad9\|google\|auto]` | DNS provider for the active network (also in the menu under Network) |
 | `iram-network-qr` | QR code a phone can scan to join your Wi-Fi |
@@ -147,7 +175,15 @@ Bug reports with `iram doctor` output are the most useful thing you can send.
 | :--- | :--- |
 | `Super + C` / `Super + Alt + C` | Context-aware assistant / with region OCR |
 | `Super + Alt + A` | Open your agent in a floating terminal |
-| `Super + Return` / `Super + Space` | Terminal / launcher |
+| `Super + Grave` (`` ` ``) | Quake drop-down scratchpad terminal / AI session |
+| `Super + Return` / `Super + Space` | Terminal / Unified Super Menu launcher |
+| `Super + Shift + D` | Toggle Traditional Desktop Mode vs. Sovereign Tiling |
+| `Super + Alt + Home` / `Super + Home` | Save window layout / Restore saved layout |
+| `Super + 1..0` / `Super + Shift + 1..0` | Per-monitor workspace switch / move window |
+| `Super + Alt + [` / `]` | Fine window resize (-25px / +25px) |
+| `Super + Ctrl + Arrows` | Coarse window resize (-100px / +100px) |
+| `Super + Shift + Arrows` | Move active window across monitors |
+| `Super + [` / `]` | Focus previous / next monitor |
 | `Super + K` | Full keybinding list |
 | `Super + Ctrl + Shift + Space` | Theme switcher |
 | `Super + L` / `Super + Escape` | Lock / power menu |

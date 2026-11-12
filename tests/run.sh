@@ -527,5 +527,27 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     grep -q 'After=graphical-session' "$U"/*.timer && bad "a timer orders after graphical-session.target (cycle risk)" || ok
 fi
 
+# ---- Omarchy 4.5 Parity CLI Features ------------------------------------------
+contains "agent list includes agy" "$("$REPO/bin/iram-agent-select" list)" "agy"
+contains "agent list includes claude" "$("$REPO/bin/iram-agent-select" list)" "claude"
+check "agent select rejects invalid agent" 1 "$REPO/bin/iram-agent-select" "invalid_agent"
+
+contains "terminal list includes alacritty" "$("$REPO/bin/iram-terminal-select" list)" "alacritty"
+contains "terminal list includes ghostty" "$("$REPO/bin/iram-terminal-select" list)" "ghostty"
+check "terminal select rejects invalid terminal" 1 "$REPO/bin/iram-terminal-select" "invalid_term"
+
+contains "editor list includes nvim" "$("$REPO/bin/iram-editor-select" list)" "nvim"
+contains "editor list includes zed" "$("$REPO/bin/iram-editor-select" list)" "zed"
+check "editor select rejects invalid editor" 1 "$REPO/bin/iram-editor-select" "invalid_editor"
+
+contains "dev install list includes rust" "$("$REPO/bin/iram-dev-install" list)" "rust"
+contains "dev install list includes creator" "$("$REPO/bin/iram-dev-install" list)" "creator"
+
+contains "worldclock outputs UTC" "$("$REPO/bin/iram-worldclock" --cli)" "UTC"
+contains "worldclock outputs IST" "$("$REPO/bin/iram-worldclock" --cli)" "IST"
+
+check "workspace-switch runs cleanly without compositor" 0 "$REPO/bin/iram-workspace-switch" 1
+check "user-overrides is last source in hyprland.conf" 0 bash -c 'test "$(grep -E "^source = " "$1" | tail -n 1)" = "source = ~/.config/hypr/user-overrides.conf"' _ "$REPO/config/hypr/hyprland.conf"
+
 echo "passed: $PASS  failed: $FAIL"
 [ "$FAIL" -eq 0 ]
