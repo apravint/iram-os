@@ -1,31 +1,49 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # IRAM OS - Dock Context & Settings Menu
-# Lets users configure the dock position, autohide, and layout
+# Lets users configure the dock position, themes, sizes, autohide, and layout
 # ==============================================================================
 set -euo pipefail
 
-CHOICE="$(cat << 'EOF' | wofi --dmenu --prompt "Dock Settings:" --width 450 --height 320
-1. 󱂬 Cycle Workspace Layout (Super + L)
-2. 󰍶 Restore Minimized Window
-3. 󰀻 Open Launchpad / App Grid
-4. 󰍜 Toggle Dock Auto-Hide
-5. 󰍜 Dock Position: Bottom
-6. 󰍜 Dock Position: Left
-7. 󰍜 Dock Position: Right
-8. 󰍜 Dock Position: Top
-9. 󰈆 Restart Dock
+CHOICE="$(cat << 'EOF' | wofi --dmenu --prompt "Dock Settings:" --width 480 --height 400
+1. 󰔎 Switch Dock Theme (Sharp Edge, Sharp Neon, macOS Glass, Cupertino, etc.)
+2. 󰒓 Change Dock Width (Compact, Standard, Wide, Full)
+3. 󱂬 Cycle Workspace Layout (Super + L)
+4. 󰍶 Restore Minimized Window
+5. 󰀻 Open Launchpad / App Grid
+6. 󰍜 Toggle Dock Auto-Hide
+7. 󰍜 Dock Position: Bottom
+8. 󰍜 Dock Position: Left
+9. 󰍜 Dock Position: Right
+10. 󰍜 Dock Position: Top
+11. 󰈆 Restart Dock
 EOF
 )" || exit 0
 
 case "$CHOICE" in
-    1*) ~/.local/bin/iram-hyprland-workspace-layout-toggle ;;
-    2*) ~/.local/bin/iram-hyprland-window-restore ;;
-    3*) ~/.local/bin/iram-app-grid ;;
-    4*) ~/.local/bin/iram-dock autohide toggle ;;
-    5*) ~/.local/bin/iram-dock position bottom ;;
-    6*) ~/.local/bin/iram-dock position left ;;
-    7*) ~/.local/bin/iram-dock position right ;;
-    8*) ~/.local/bin/iram-dock position top ;;
-    9*) ~/.local/bin/iram-dock restart ;;
+    1*) ~/.local/bin/iram-dock theme ;;
+    2*)
+        SIZE_CHOICE="$(cat << 'EOF' | wofi --dmenu --prompt "Choose Dock Width:" --width 350 --height 220
+1. standard (820px - Recommended)
+2. compact (680px)
+3. wide (960px)
+4. full (Full Screen Edge)
+EOF
+        )" || exit 0
+        case "$SIZE_CHOICE" in
+            1*) ~/.local/bin/iram-dock size standard ;;
+            2*) ~/.local/bin/iram-dock size compact ;;
+            3*) ~/.local/bin/iram-dock size wide ;;
+            4*) ~/.local/bin/iram-dock size full ;;
+        esac
+        ;;
+    3*) ~/.local/bin/iram-hyprland-workspace-layout-toggle ;;
+    4*) ~/.local/bin/iram-hyprland-window-restore ;;
+    5*) ~/.local/bin/iram-app-grid ;;
+    6*) ~/.local/bin/iram-dock autohide toggle ;;
+    7*) ~/.local/bin/iram-dock position bottom ;;
+    8*) ~/.local/bin/iram-dock position left ;;
+    9*) ~/.local/bin/iram-dock position right ;;
+    10*) ~/.local/bin/iram-dock position top ;;
+    11*) ~/.local/bin/iram-dock restart ;;
 esac

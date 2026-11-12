@@ -1,0 +1,144 @@
+/* ==============================================================================
+   IRAM OS Dock Theme: Windows 11 Fluent Mica
+   Translucent acrylic blur with centered squircle taskbar
+   ============================================================================== */
+@import "../../waybar/colors.css";
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+    font-size: 15px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.modules-center {
+    background: rgba(32, 34, 42, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 4px 10px;
+    margin: 0;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+#custom-app-grid {
+    font-size: 20px;
+    color: #60a5fa;
+    min-width: 32px;
+    min-height: 36px;
+    padding: 6px 8px;
+    margin: 2px 2px;
+    border-radius: 8px;
+    background: rgba(96, 165, 250, 0.12);
+    transition: all 0.18s ease;
+}
+
+#custom-app-grid:hover {
+    background: rgba(96, 165, 250, 0.28);
+    color: #ffffff;
+}
+
+#custom-pin-term,
+#custom-pin-browser,
+#custom-pin-files,
+#custom-pin-code,
+#custom-pin-craft,
+#custom-pin-agent {
+    font-size: 19px;
+    min-width: 32px;
+    min-height: 36px;
+    padding: 6px 8px;
+    margin: 2px 2px;
+    border-radius: 8px;
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 0.18s ease;
+}
+
+#custom-pin-term:hover,
+#custom-pin-browser:hover,
+#custom-pin-files:hover,
+#custom-pin-code:hover,
+#custom-pin-craft:hover,
+#custom-pin-agent:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+#custom-separator,
+#custom-separator-left,
+#custom-separator-right {
+    color: rgba(255, 255, 255, 0.18);
+    padding: 0 3px;
+    margin: 4px 1px;
+    font-size: 15px;
+}
+
+#wlr-taskbar button {
+    padding: 4px;
+    margin: 2px 2px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 2px solid transparent;
+    transition: all 0.18s ease;
+}
+
+#wlr-taskbar button label {
+    font-size: 0px;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+}
+
+#wlr-taskbar button:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+#wlr-taskbar button.active {
+    background: rgba(255, 255, 255, 0.10);
+    border-bottom: 3px solid #60a5fa;
+}
+
+#custom-minimized {
+    padding: 4px 8px;
+    margin: 2px 2px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+}
+
+#custom-minimized:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+#custom-minimized.empty {
+    opacity: 0.25;
+    background: transparent;
+    color: #64748b;
+}
+
+#custom-dock-menu {
+    font-size: 16px;
+    min-width: 30px;
+    min-height: 36px;
+    padding: 6px 8px;
+    margin: 2px 2px;
+    border-radius: 8px;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+#custom-dock-menu:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.14);
+}

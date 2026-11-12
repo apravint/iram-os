@@ -39,6 +39,7 @@ show_help() {
     echo -e "  iram commands [--json] [--all]\n"
     
     echo -e "${BOLD}CORE SYSTEM MANAGEMENT:${NC}"
+    echo -e "  ${CYAN}appearance${NC}               Unified Appearance & Rice Tuner GUI (Super+Alt+R)"
     echo -e "  ${CYAN}settings${NC}                 Unified GUI/TUI Control Center (Super+I)"
     echo -e "  ${CYAN}snapshot${NC} [create|list|restore] Atomic desktop config snapshot & 1s rollback"
     echo -e "  ${CYAN}watchdog${NC} [daemon|--once|logs] Autonomous self-healing service & resource watchdog"
@@ -153,6 +154,38 @@ case "$cmd" in
 
     welcome)
         exec "${LOCAL_BIN:-$HOME/.local/bin}/iram-welcome" "$@"
+        ;;
+
+    appearance|rice|tuner)
+        if [ -x "$LOCAL_BIN/iram-appearance" ]; then
+            exec "$LOCAL_BIN/iram-appearance" "$@"
+        else
+            exec "$IRAM_BIN_DIR/iram-appearance" "$@"
+        fi
+        ;;
+
+    font)
+        sub="${1:-list}"
+        shift 2>/dev/null || true
+        case "$sub" in
+            list)
+                fc-list : family | grep -iE "nerd|mono|code|hack|jetbrains|ubuntu|inter" | sort -u
+                ;;
+            current)
+                cat "$CONFIG_DIR/font.name" 2>/dev/null || gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null | tr -d "'"
+                ;;
+            set)
+                font_name="${1:-JetBrainsMono Nerd Font}"
+                size="${2:-11}"
+                gsettings set org.gnome.desktop.interface monospace-font-name "$font_name $size" 2>/dev/null || true
+                gsettings set org.gnome.desktop.interface font-name "$font_name $size" 2>/dev/null || true
+                echo "$font_name" > "$CONFIG_DIR/font.name"
+                echo -e "${GREEN}✓ Monospace & system font set to:${NC} ${BOLD}$font_name ($size pt)${NC}"
+                ;;
+            *)
+                echo "Usage: iram font [list|current|set <name> [size]]"
+                ;;
+        esac
         ;;
 
     layout)

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Appearance & Rice Tuner
+GenericName=Desktop Rice Tuner
+Comment=Unified visual tuner for geometry, rounding, frosted glass, 55 themes, and floating dock
+Exec=iram-appearance
+Icon=preferences-desktop-theme
+Categories=Settings;DesktopSettings;GTK;
+Keywords=appearance;theme;rice;hyprland;blur;geometry;dock;gaps;rounding;
+Terminal=false
+StartupNotify=false

@@ -1,0 +1,1744 @@
+#!/usr/bin/env python3
+"""
+IRAM OS Sovereign Appearance & Rice Tuner GUI
+=============================================
+Unified visual control center inspired by Omarchy 4.5.
+Controls:
+1. Window Geometry & Brutalism (Rounding 0-24px, Borders 0-6px, Gaps In/Out)
+2. Glassmorphism & Visual FX (Kawase blur passes/size, opacities, drop shadows, dimming)
+3. Palette & Wallpaper Studio (55 curated themes, wallpaper cycling, live previews)
+4. Bar & Dock Aesthetics (Waybar island styles, macOS floating dock toggle & positions)
+5. Typography & Cursor (Nerd Font selector, scale, cursor themes & sizes)
+
+Zero-restart architecture: All geometry & decoration sliders immediately dispatch
+'hyprctl keyword' for instant live previews, with atomic persistence to appearance.conf.
+"""
+
+import os
+import sys
+import glob
+import json
+import shutil
+import hashlib
+import random
+import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, GdkPixbuf, Pango, GLib
+import cairo
+
+GLib.set_prgname("iram-appearance")
+GLib.set_application_name("IRAM Rice Tuner")
+
+# Paths & Directories
+HOME = os.path.expanduser('~')
+CONFIG_IRAM = os.path.join(HOME, '.config', 'iram')
+CONFIG_HYPR = os.path.join(HOME, '.config', 'hypr')
+CONFIG_WAYBAR = os.path.join(HOME, '.config', 'waybar')
+LOCAL_BIN = os.path.join(HOME, '.local', 'bin')
+STATE_DIR = os.path.join(HOME, '.local', 'state', 'iram')
+
+APPEARANCE_JSON = os.path.join(CONFIG_IRAM, 'appearance.json')
+APPEARANCE_CONF = os.path.join(CONFIG_HYPR, 'appearance.conf')
+WAYBAR_APPEARANCE_CSS = os.path.join(CONFIG_WAYBAR, 'appearance.css')
+CURRENT_THEME_FILE = os.path.join(STATE_DIR, 'current', 'theme.name')
+BG_STATE_DIR = os.path.join(STATE_DIR, 'theme-backgrounds')
+CACHE_DIR = os.path.join(HOME, '.cache', 'iram', 'theme-thumbnails')
+
+os.makedirs(CONFIG_IRAM, exist_ok=True)
+os.makedirs(CONFIG_HYPR, exist_ok=True)
+os.makedirs(CONFIG_WAYBAR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(BG_STATE_DIR, exist_ok=True)
+
+THEMES_DIRS = [
+    os.path.join(HOME, 'iram-os', 'themes'),
+    os.path.join(CONFIG_IRAM, 'themes'),
+    os.path.join(HOME, '.config', 'omarchy', 'themes'),
+    '/usr/share/iram/themes',
+    '/usr/share/omarchy/themes'
+]
+
+# Sovereign Defaults
+DEFAULT_STATE = {
+    "preset": "Sovereign Brutalist",
+    "geometry": {
+        "rounding": 0,
+        "border_size": 2,
+        "gaps_in": 2,
+        "gaps_out": 4
+    },
+    "glass_fx": {
+        "blur_enabled": True,
+        "blur_passes": 3,
+        "blur_size": 7,
+        "active_opacity": 1.0,
+        "inactive_opacity": 0.94,
+        "shadow_enabled": False,
+        "dim_inactive": True,
+        "dim_strength": 0.10
+    },
+    "bar_dock": {
+        "waybar_style": "sharp",
+        "dock_enabled": False,
+        "dock_position": "bottom",
+        "dock_autohide": False
+    },
+    "typography_cursor": {
+        "font_family": "JetBrainsMono Nerd Font",
+        "font_size": 11,
+        "text_scale": 1.0,
+        "cursor_theme": "catppuccin-mocha-lavender-cursors",
+        "cursor_size": 24
+    }
+}
+
+MODERN_THEME_IDS = [
+    "dracula", "tokyo-night", "tokyo-storm", "catppuccin-mocha", "catppuccin",
+    "nord-frost", "one-dark", "cyberpunk-neon", "cyberpunk-pro-max", "starship",
+    "jade-horse", "kanagawa-wave", "alpora-timeline", "alpora-northern-lights",
+    "alpora-moon-lake", "alpora-rose-sunset", "poimandres", "moonlight",
+    "vesper", "oxocarbon", "aura-dark", "rose-pine-moon", "monokai-pro",
+    "solarized-dark", "material-ocean", "ayu-mirage", "night-owl", "synthwave-84",
+    "ryoku-crimson", "ethereal", "github-dark"
+]
+
+CATEGORY_MAP = {
+    "cyber": [
+        "cyberpunk-neon", "cyberpunk-pro-max", "synthwave-84", "hackerman",
+        "oxocarbon", "starship", "poimandres", "ryoku-crimson", "tokyo-night",
+        "tokyo-storm", "dracula", "retro-82", "alpora-moon-lake", "alpora-northern-lights"
+    ],
+    "earth": [
+        "everforest", "gruvbox", "kanagawa", "kanagawa-wave", "jade-horse",
+        "osaka-jade", "rose-pine", "rose-pine-moon", "ristretto", "miasma",
+        "alpora-alpine", "alpora-forest-mist", "alpora-warm-desert", "alpora-rose-sunset"
+    ],
+    "minimal": [
+        "vesper", "vantablack", "matte-black", "nord", "nord-frost",
+        "solitude", "lumon", "lupine", "last-horizon", "alpora-frost", "ethereal",
+        "github-dark"
+    ],
+    "light": [
+        "catppuccin-latte", "flexoki-light", "white"
+    ]
+}
+
+THREAD_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="AppearanceWorker")
+
+
+def run_cmd(cmd_list, timeout=10):
+    try:
+        res = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout)
+        return res.returncode == 0, res.stdout.strip(), res.stderr.strip()
+    except Exception as e:
+        return False, "", str(e)
+
+
+def hypr_set(keyword, value):
+    try:
+        subprocess.run(['hyprctl', 'keyword', keyword, str(value)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def hypr_get(opt, default=None):
+    try:
+        ok, out, _ = run_cmd(['hyprctl', 'getoption', opt])
+        if ok:
+            for line in out.splitlines():
+                line = line.strip()
+                if line.startswith('int:'):
+                    return int(line.split(':', 1)[1].strip())
+                elif line.startswith('float:'):
+                    return float(line.split(':', 1)[1].strip())
+                elif line.startswith('custom type:'):
+                    vals = line.split(':', 1)[1].strip().split()
+                    return int(vals[0]) if vals else default
+    except Exception:
+        pass
+    return default
+
+
+def hex_to_rgb_float(hex_code):
+    if not hex_code:
+        return 0.5, 0.5, 0.5
+    h = hex_code.lstrip("#")
+    if len(h) in (6, 8):
+        try:
+            return int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
+        except ValueError:
+            pass
+    return 0.5, 0.5, 0.5
+
+
+def read_active_theme_colors():
+    colors = {
+        'background': '#0c0b0c',
+        'dark_background': '#090809',
+        'lighter_background': '#161517',
+        'foreground': '#f0f0f5',
+        'accent': '#7aa2f7',
+        'selection': '#363b54',
+        'border': '#3b4261',
+        'cyan': '#7dcfff',
+        'green': '#73daca',
+        'red': '#f7768e',
+        'yellow': '#e0af68'
+    }
+    p = os.path.join(STATE_DIR, 'current', 'theme', 'colors.toml')
+    if os.path.isfile(p):
+        try:
+            with open(p, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        k, v = line.split('=', 1)
+                        colors[k.strip()] = v.strip().strip('\"\'')
+        except Exception:
+            pass
+    return colors
+
+
+def read_theme_colors(theme_dir):
+    colors = {}
+    p = os.path.join(theme_dir, 'colors.toml')
+    if os.path.isfile(p):
+        try:
+            with open(p, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        k, v = line.split('=', 1)
+                        colors[k.strip()] = v.strip().strip('\"\'')
+        except Exception:
+            pass
+    return colors
+
+
+def get_swatches(colors):
+    bg = colors.get('background', colors.get('dark_background', '#181825'))
+    sel = colors.get('selection', colors.get('lighter_background', '#313244'))
+    acc = colors.get('accent', '#89b4fa')
+    c1 = colors.get('cyan', colors.get('green', colors.get('blue', '#94e2d5')))
+    c2 = colors.get('bright_magenta', colors.get('magenta', colors.get('red', '#f38ba8')))
+    return [bg, sel, acc, c1, c2]
+
+
+def find_theme_preview(theme_path):
+    bg_dir = os.path.join(theme_path, 'backgrounds')
+    if os.path.isdir(bg_dir):
+        for f in sorted(os.listdir(bg_dir)):
+            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                return os.path.join(bg_dir, f)
+    for name in ['preview.png', 'preview.jpg', 'preview.jpeg', 'preview.webp']:
+        p = os.path.join(theme_path, name)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def get_all_themes():
+    themes = {}
+    for base_dir in THEMES_DIRS:
+        if not os.path.isdir(base_dir):
+            continue
+        for entry in sorted(os.listdir(base_dir)):
+            full_path = os.path.join(base_dir, entry)
+            if os.path.isdir(full_path) and entry not in themes:
+                colors = read_theme_colors(full_path)
+                preview = find_theme_preview(full_path)
+                swatches = get_swatches(colors)
+                mode = colors.get('mode', 'dark').lower()
+
+                cats = ["all"]
+                if entry in MODERN_THEME_IDS:
+                    cats.append("modern")
+                if entry in CATEGORY_MAP["cyber"]:
+                    cats.append("cyber")
+                if entry in CATEGORY_MAP["earth"]:
+                    cats.append("earth")
+                if entry in CATEGORY_MAP["minimal"]:
+                    cats.append("minimal")
+                if mode == "light" or entry in CATEGORY_MAP["light"]:
+                    cats.append("light")
+
+                themes[entry] = {
+                    'name': entry,
+                    'path': full_path,
+                    'preview': preview,
+                    'colors': colors,
+                    'swatches': swatches,
+                    'categories': cats,
+                    'mode': mode
+                }
+
+    ordered = []
+    for mod_id in MODERN_THEME_IDS:
+        if mod_id in themes:
+            ordered.append(themes[mod_id])
+    others = [t for t in themes.values() if t['name'] not in MODERN_THEME_IDS]
+    others.sort(key=lambda x: x['name'])
+    ordered.extend(others)
+    return ordered
+
+
+def get_current_theme_name():
+    if os.path.exists(CURRENT_THEME_FILE):
+        try:
+            with open(CURRENT_THEME_FILE, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                if val:
+                    return val.lower().replace(' ', '-')
+        except Exception:
+            pass
+    return "tokyo-night"
+
+
+# ==============================================================================
+# CAIRO MINI DESKTOP WORKSPACE PREVIEW
+# ==============================================================================
+class DesktopPreviewWidget(Gtk.DrawingArea):
+    """Real-time Cairo simulation of Hyprland desktop windows, gaps, and borders."""
+    def __init__(self, tuner):
+        super().__init__()
+        self.tuner = tuner
+        self.set_size_request(320, 220)
+        self.connect("draw", self.on_draw)
+
+    def on_draw(self, widget, cr):
+        w = widget.get_allocated_width()
+        h = widget.get_allocated_height()
+
+        colors = self.tuner.active_colors
+        bg_r, bg_g, bg_b = hex_to_rgb_float(colors.get('dark_background', '#08080a'))
+        card_r, card_g, card_b = hex_to_rgb_float(colors.get('background', '#121217'))
+        acc_r, acc_g, acc_b = hex_to_rgb_float(colors.get('accent', '#7aa2f7'))
+        bdr_r, bdr_g, bdr_b = hex_to_rgb_float(colors.get('border', '#3b4261'))
+
+        # Desktop background
+        cr.set_source_rgb(bg_r, bg_g, bg_b)
+        cr.rectangle(0, 0, w, h)
+        cr.fill()
+
+        # Subtle desktop grid pattern
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.03)
+        cr.set_line_width(1.0)
+        for gx in range(0, w, 20):
+            cr.move_to(gx, 0)
+            cr.line_to(gx, h)
+        for gy in range(0, h, 20):
+            cr.move_to(0, gy)
+            cr.line_to(w, gy)
+        cr.stroke()
+
+        # Dynamic values from tuner
+        rounding = float(self.tuner.val_rounding)
+        border_size = float(self.tuner.val_border_size)
+        gaps_in = float(self.tuner.val_gaps_in)
+        gaps_out = float(self.tuner.val_gaps_out)
+
+        # Scale down gaps for preview canvas proportionally
+        scale = 0.85
+        p_gaps_out = max(6.0, gaps_out * scale)
+        p_gaps_in = max(4.0, gaps_in * scale)
+        p_border = max(1.0, border_size)
+        p_radius = min(rounding * scale, 18.0)
+
+        # Draw 2 tiled windows side-by-side
+        avail_w = w - (2 * p_gaps_out) - p_gaps_in
+        win_w = avail_w / 2.0
+        win_h = h - (2 * p_gaps_out)
+
+        # Left Window (Focused Terminal)
+        self.draw_sim_window(cr, p_gaps_out, p_gaps_out, win_w, win_h,
+                             p_radius, p_border, is_active=True,
+                             acc_rgb=(acc_r, acc_g, acc_b),
+                             card_rgb=(card_r, card_g, card_b),
+                             title="terminal ~ /home/apravint")
+
+        # Right Window (Unfocused Editor)
+        self.draw_sim_window(cr, p_gaps_out + win_w + p_gaps_in, p_gaps_out, win_w, win_h,
+                             p_radius, p_border, is_active=False,
+                             acc_rgb=(bdr_r, bdr_g, bdr_b),
+                             card_rgb=(card_r, card_g, card_b),
+                             title="editor • Sovereign.rs")
+
+        # Outer border around preview frame
+        cr.set_source_rgba(acc_r, acc_g, acc_b, 0.25)
+        cr.set_line_width(1.0)
+        cr.rectangle(0, 0, w, h)
+        cr.stroke()
+        return False
+
+    def draw_sim_window(self, cr, x, y, width, height, radius, border, is_active, acc_rgb, card_rgb, title):
+        if width <= 0 or height <= 0:
+            return
+
+        cr.save()
+        # Window path with rounded corners
+        degrees = 3.14159265 / 180.0
+        cr.new_sub_path()
+        cr.arc(x + width - radius, y + radius, radius, -90 * degrees, 0 * degrees)
+        cr.arc(x + width - radius, y + height - radius, radius, 0 * degrees, 90 * degrees)
+        cr.arc(x + radius, y + height - radius, radius, 90 * degrees, 180 * degrees)
+        cr.arc(x + radius, y + radius, radius, 180 * degrees, 270 * degrees)
+        cr.close_path()
+
+        # Window body fill
+        opacity = float(self.tuner.val_active_opacity if is_active else self.tuner.val_inactive_opacity)
+        r, g, b = card_rgb
+        cr.set_source_rgba(r, g, b, opacity)
+        cr.fill_preserve()
+
+        # Window Border
+        if border > 0:
+            cr.set_line_width(border)
+            if is_active:
+                cr.set_source_rgb(acc_rgb[0], acc_rgb[1], acc_rgb[2])
+            else:
+                cr.set_source_rgba(acc_rgb[0], acc_rgb[1], acc_rgb[2], 0.6)
+            cr.stroke()
+        else:
+            cr.new_path()
+
+        # Mock Titlebar line
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.08)
+        cr.rectangle(x + 2, y + 2, width - 4, 18)
+        cr.fill()
+
+        # Dots
+        dot_r = 3.0
+        dot_y = y + 11
+        for i, c in enumerate([(0.97, 0.46, 0.56), (0.88, 0.69, 0.41), (0.45, 0.85, 0.79)]):
+            cr.set_source_rgb(*c)
+            cr.arc(x + 10 + (i * 10), dot_y, dot_r, 0, 2 * 3.14159265)
+            cr.fill()
+
+        # Mock code lines
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.25 if is_active else 0.12)
+        cr.rectangle(x + 12, y + 32, width * 0.65, 4)
+        cr.fill()
+        cr.rectangle(x + 12, y + 44, width * 0.45, 4)
+        cr.fill()
+        cr.rectangle(x + 12, y + 56, width * 0.75, 4)
+        cr.fill()
+        cr.rectangle(x + 12, y + 68, width * 0.35, 4)
+        cr.fill()
+
+        cr.restore()
+
+
+# ==============================================================================
+# COLOR SWATCH DRAWING COMPONENT
+# ==============================================================================
+class ColorSwatches(Gtk.DrawingArea):
+    """5 circular color pills with crisp rim borders."""
+    def __init__(self, hex_colors):
+        super().__init__()
+        self.hex_colors = hex_colors[:5] if hex_colors else []
+        self.set_size_request(88, 16)
+        self.connect("draw", self.on_draw)
+
+    def on_draw(self, widget, cr):
+        radius = 5.5
+        gap = 4.5
+        x = radius + 2.0
+        y = widget.get_allocated_height() / 2.0
+
+        for hex_code in self.hex_colors:
+            r, g, b = hex_to_rgb_float(hex_code)
+            cr.set_source_rgba(0.0, 0.0, 0.0, 0.4)
+            cr.arc(x, y + 1.0, radius, 0, 2 * 3.14159265)
+            cr.fill()
+
+            cr.set_source_rgb(r, g, b)
+            cr.arc(x, y, radius, 0, 2 * 3.14159265)
+            cr.fill_preserve()
+
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.3)
+            cr.set_line_width(1.0)
+            cr.stroke()
+            x += radius * 2 + gap
+        return False
+
+
+# ==============================================================================
+# MAIN RICE TUNER APPLICATION WINDOW
+# ==============================================================================
+class IramAppearanceWindow(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="IRAM OS Rice Tuner")
+        self.set_default_size(1040, 720)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_role("iram-appearance")
+
+        # Load active colors & existing state
+        self.active_colors = read_active_theme_colors()
+        self.current_theme = get_current_theme_name()
+        self.all_themes = get_all_themes()
+        self.thumbnail_cache = {}
+
+        self.load_state_from_system()
+        self.apply_dynamic_css()
+
+        # Build Main UI
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.add(main_box)
+
+        # Header Bar
+        header = self.build_header_bar()
+        main_box.pack_start(header, False, False, 0)
+
+        # Stack & StackSwitcher
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        self.stack.set_transition_duration(180)
+
+        # Tabs
+        self.tab_geometry = self.build_geometry_tab()
+        self.tab_glass = self.build_glass_tab()
+        self.tab_palettes = self.build_palettes_tab()
+        self.tab_bar_dock = self.build_bar_dock_tab()
+        self.tab_typography = self.build_typography_tab()
+
+        self.stack.add_titled(self.tab_geometry, "geometry", "🪟 Geometry & Gaps")
+        self.stack.add_titled(self.tab_glass, "glass", "✨ Glass & FX")
+        self.stack.add_titled(self.tab_palettes, "palettes", "🎨 55 Palettes")
+        self.stack.add_titled(self.tab_bar_dock, "bar_dock", "📊 Bar & Dock")
+        self.stack.add_titled(self.tab_typography, "typography", "🔤 Typography & Cursor")
+
+        # Navigation Bar (StackSwitcher)
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        nav_box.set_margin_top(8)
+        nav_box.set_margin_bottom(8)
+        nav_box.set_margin_start(20)
+        nav_box.set_margin_end(20)
+
+        switcher = Gtk.StackSwitcher()
+        switcher.set_stack(self.stack)
+        nav_box.pack_start(switcher, True, True, 0)
+
+        main_box.pack_start(nav_box, False, False, 0)
+        main_box.pack_start(self.stack, True, True, 0)
+
+        # Status & Feedback Bar
+        status_bar = self.build_status_bar()
+        main_box.pack_end(status_bar, False, False, 0)
+
+        self.connect("destroy", Gtk.main_quit)
+        self.connect("key-press-event", self.on_key_press)
+
+    def load_state_from_system(self):
+        # Query Hyprland runtime or defaults
+        self.val_rounding = hypr_get('decoration:rounding', DEFAULT_STATE['geometry']['rounding'])
+        self.val_border_size = hypr_get('general:border_size', DEFAULT_STATE['geometry']['border_size'])
+        self.val_gaps_in = hypr_get('general:gaps_in', DEFAULT_STATE['geometry']['gaps_in'])
+        self.val_gaps_out = hypr_get('general:gaps_out', DEFAULT_STATE['geometry']['gaps_out'])
+
+        self.val_blur_enabled = bool(hypr_get('decoration:blur:enabled', 1))
+        self.val_blur_passes = hypr_get('decoration:blur:passes', DEFAULT_STATE['glass_fx']['blur_passes'])
+        self.val_blur_size = hypr_get('decoration:blur:size', DEFAULT_STATE['glass_fx']['blur_size'])
+        self.val_active_opacity = hypr_get('decoration:active_opacity', DEFAULT_STATE['glass_fx']['active_opacity'])
+        self.val_inactive_opacity = hypr_get('decoration:inactive_opacity', DEFAULT_STATE['glass_fx']['inactive_opacity'])
+        self.val_shadow_enabled = bool(hypr_get('decoration:shadow:enabled', 0))
+        self.val_dim_inactive = bool(hypr_get('decoration:dim_inactive', 1))
+        self.val_dim_strength = hypr_get('decoration:dim_strength', DEFAULT_STATE['glass_fx']['dim_strength'])
+
+        # Load persisted JSON if available
+        self.saved_json = DEFAULT_STATE.copy()
+        if os.path.isfile(APPEARANCE_JSON):
+            try:
+                with open(APPEARANCE_JSON, 'r', encoding='utf-8') as f:
+                    self.saved_json = json.load(f)
+            except Exception:
+                pass
+
+        self.waybar_style = self.saved_json.get('bar_dock', {}).get('waybar_style', 'sharp')
+
+    def apply_dynamic_css(self):
+        c = self.active_colors
+        bg = c.get('dark_background', '#0a0a0f')
+        card = c.get('background', '#12121a')
+        card_light = c.get('lighter_background', '#1c1c28')
+        fg = c.get('foreground', '#f0f0f5')
+        accent = c.get('accent', '#7aa2f7')
+        border = c.get('border', '#303650')
+
+        css_data = f"""
+        * {{
+            font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }}
+        window {{
+            background-color: {bg};
+            color: {fg};
+        }}
+        .header-panel {{
+            background-color: {card};
+            border-bottom: 1px solid {border};
+            padding: 12px 20px;
+        }}
+        .title-label {{
+            font-size: 17px;
+            font-weight: 800;
+            color: {accent};
+        }}
+        .subtitle-label {{
+            font-size: 11px;
+            color: alpha({fg}, 0.6);
+        }}
+        .nav-switcher button {{
+            background-color: {card};
+            color: {fg};
+            border: 1px solid {border};
+            border-radius: 6px;
+            padding: 6px 14px;
+            margin: 2px;
+            font-weight: 600;
+        }}
+        .nav-switcher button:checked {{
+            background-color: {accent};
+            color: #0c0b0c;
+            border-color: {accent};
+        }}
+        .card-box {{
+            background-color: {card};
+            border: 1px solid {border};
+            border-radius: 8px;
+            padding: 16px;
+        }}
+        .card-box:hover {{
+            border-color: {accent};
+        }}
+        .section-header {{
+            font-size: 14px;
+            font-weight: 700;
+            color: {accent};
+            margin-bottom: 8px;
+        }}
+        .btn-action {{
+            background-color: {card_light};
+            color: {fg};
+            border: 1px solid {border};
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-weight: 600;
+        }}
+        .btn-action:hover {{
+            background-color: {border};
+            color: #ffffff;
+        }}
+        .btn-save {{
+            background-color: {accent};
+            color: #0c0b0c;
+            border: 1px solid {accent};
+            border-radius: 6px;
+            padding: 7px 18px;
+            font-weight: 800;
+        }}
+        .btn-save:hover {{
+            background-color: alpha({accent}, 0.85);
+        }}
+        .status-panel {{
+            background-color: {card};
+            border-top: 1px solid {border};
+            padding: 8px 18px;
+            font-size: 11px;
+        }}
+        .theme-card {{
+            background-color: {card};
+            border: 1px solid {border};
+            border-radius: 8px;
+            padding: 8px;
+        }}
+        .theme-card-active {{
+            border: 2px solid {accent};
+            background-color: {card_light};
+        }}
+        scale highlight {{
+            background-color: {accent};
+        }}
+        scale trough {{
+            background-color: {border};
+        }}
+        """
+
+        provider = Gtk.CssProvider()
+        provider.load_from_data(css_data.encode('utf-8'))
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+    # --------------------------------------------------------------------------
+    # HEADER BAR
+    # --------------------------------------------------------------------------
+    def build_header_bar(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        box.get_style_context().add_class("header-panel")
+
+        # Titles
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        lbl_title = Gtk.Label(label="IRAM OS • Unified Appearance & Rice Tuner")
+        lbl_title.set_xalign(0)
+        lbl_title.get_style_context().add_class("title-label")
+
+        lbl_sub = Gtk.Label(label="Live Zero-Restart Customization (Hyprland • Waybar • Palettes • Docks)")
+        lbl_sub.set_xalign(0)
+        lbl_sub.get_style_context().add_class("subtitle-label")
+
+        vbox.pack_start(lbl_title, False, False, 0)
+        vbox.pack_start(lbl_sub, False, False, 0)
+        box.pack_start(vbox, True, True, 0)
+
+        # Quick Actions
+        btn_rand = Gtk.Button(label="🎲 Random Palette")
+        btn_rand.get_style_context().add_class("btn-action")
+        btn_rand.connect("clicked", self.on_random_theme_clicked)
+
+        btn_bg = Gtk.Button(label="🖼️ Next Wallpaper")
+        btn_bg.get_style_context().add_class("btn-action")
+        btn_bg.connect("clicked", self.on_next_wallpaper_clicked)
+
+        btn_reset = Gtk.Button(label="↺ Reset Sovereign")
+        btn_reset.get_style_context().add_class("btn-action")
+        btn_reset.connect("clicked", self.on_reset_defaults_clicked)
+
+        btn_save = Gtk.Button(label="💾 Save Rice")
+        btn_save.get_style_context().add_class("btn-save")
+        btn_save.connect("clicked", self.on_save_rice_clicked)
+
+        box.pack_end(btn_save, False, False, 0)
+        box.pack_end(btn_reset, False, False, 0)
+        box.pack_end(btn_bg, False, False, 0)
+        box.pack_end(btn_rand, False, False, 0)
+
+        return box
+
+    # --------------------------------------------------------------------------
+    # TAB 1: 🪟 GEOMETRY & GAPS
+    # --------------------------------------------------------------------------
+    def build_geometry_tab(self):
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content.set_margin_top(12)
+        content.set_margin_bottom(16)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+
+        # Preset Cards Bar
+        preset_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        preset_frame.get_style_context().add_class("card-box")
+
+        p_lbl = Gtk.Label(label="📐 Sovereign Rice Presets")
+        p_lbl.set_xalign(0)
+        p_lbl.get_style_context().add_class("section-header")
+        preset_frame.pack_start(p_lbl, False, False, 0)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        presets = [
+            ("📐 Sovereign Brutalist\n(0px Round • 2px Border • 2/4 Gaps)", 0, 2, 2, 4),
+            ("🧼 Clean Minimal\n(6px Round • 2px Border • 4/8 Gaps)", 6, 2, 4, 8),
+            ("🍎 Curved Modern\n(12px Round • 2px Border • 6/12 Gaps)", 12, 2, 6, 12),
+            ("🫧 Bubble Glass\n(20px Round • 3px Border • 8/16 Gaps)", 20, 3, 8, 16)
+        ]
+        for title, r, b, gi, go in presets:
+            btn = Gtk.Button(label=title)
+            btn.get_style_context().add_class("btn-action")
+            btn.connect("clicked", self.make_preset_handler(r, b, gi, go))
+            btn_box.pack_start(btn, True, True, 0)
+        preset_frame.pack_start(btn_box, False, False, 0)
+        content.pack_start(preset_frame, False, False, 0)
+
+        # 2-Column Fine-Tuning & Live Canvas
+        split_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+
+        # Sliders Column
+        sliders_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        sliders_box.get_style_context().add_class("card-box")
+
+        s_lbl = Gtk.Label(label="🎛️ Real-Time Geometry Controls")
+        s_lbl.set_xalign(0)
+        s_lbl.get_style_context().add_class("section-header")
+        sliders_box.pack_start(s_lbl, False, False, 0)
+
+        # Rounding Slider
+        self.scale_rounding = self.create_slider(
+            "Corner Rounding", 0, 24, 1, self.val_rounding,
+            lambda s: self.on_rounding_changed(int(s.get_value())), "px"
+        )
+        sliders_box.pack_start(self.scale_rounding, False, False, 0)
+
+        # Border Width Slider
+        self.scale_border = self.create_slider(
+            "Border Width", 0, 6, 1, self.val_border_size,
+            lambda s: self.on_border_changed(int(s.get_value())), "px"
+        )
+        sliders_box.pack_start(self.scale_border, False, False, 0)
+
+        # Gaps In Slider
+        self.scale_gaps_in = self.create_slider(
+            "Inner Window Gaps (Between Windows)", 0, 20, 1, self.val_gaps_in,
+            lambda s: self.on_gaps_in_changed(int(s.get_value())), "px"
+        )
+        sliders_box.pack_start(self.scale_gaps_in, False, False, 0)
+
+        # Gaps Out Slider
+        self.scale_gaps_out = self.create_slider(
+            "Outer Window Gaps (Screen Edges)", 0, 30, 1, self.val_gaps_out,
+            lambda s: self.on_gaps_out_changed(int(s.get_value())), "px"
+        )
+        sliders_box.pack_start(self.scale_gaps_out, False, False, 0)
+
+        split_box.pack_start(sliders_box, True, True, 0)
+
+        # Cairo Desktop Live Preview Column
+        preview_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        preview_frame.get_style_context().add_class("card-box")
+        prev_lbl = Gtk.Label(label="🖥️ Simulated Desktop Workspace")
+        prev_lbl.set_xalign(0)
+        prev_lbl.get_style_context().add_class("section-header")
+        preview_frame.pack_start(prev_lbl, False, False, 0)
+
+        self.desktop_preview = DesktopPreviewWidget(self)
+        preview_frame.pack_start(self.desktop_preview, True, True, 0)
+
+        split_box.pack_start(preview_frame, True, True, 0)
+        content.pack_start(split_box, True, True, 0)
+
+        scroller.add(content)
+        return scroller
+
+    def make_preset_handler(self, r, b, gi, go):
+        def handler(btn):
+            self.scale_rounding.slider.set_value(r)
+            self.scale_border.slider.set_value(b)
+            self.scale_gaps_in.slider.set_value(gi)
+            self.scale_gaps_out.slider.set_value(go)
+            self.set_status(f"Applied preset: Rounding={r}px, Border={b}px, Gaps={gi}/{go}px")
+        return handler
+
+    def create_slider(self, label_text, min_val, max_val, step, cur_val, cb, unit=""):
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+
+        lbl = Gtk.Label(label=label_text)
+        lbl.set_xalign(0)
+
+        val_lbl = Gtk.Label(label=f"{cur_val} {unit}".strip())
+        val_lbl.set_xalign(1)
+        val_lbl.get_style_context().add_class("subtitle-label")
+
+        hbox.pack_start(lbl, True, True, 0)
+        hbox.pack_end(val_lbl, False, False, 0)
+        vbox.pack_start(hbox, False, False, 0)
+
+        slider = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, min_val, max_val, step)
+        slider.set_value(cur_val)
+        slider.set_draw_value(False)
+
+        def on_change(s):
+            val = s.get_value()
+            if isinstance(min_val, int) and isinstance(step, int):
+                val = int(val)
+                val_lbl.set_text(f"{val} {unit}".strip())
+            else:
+                val_lbl.set_text(f"{val:.2f} {unit}".strip())
+            cb(s)
+
+        slider.connect("value-changed", on_change)
+        vbox.pack_start(slider, False, False, 0)
+
+        vbox.slider = slider
+        vbox.val_lbl = val_lbl
+        return vbox
+
+    def on_rounding_changed(self, val):
+        self.val_rounding = val
+        hypr_set('decoration:rounding', val)
+        self.desktop_preview.queue_draw()
+        self.set_status(f"Live Rounding: {val}px")
+
+    def on_border_changed(self, val):
+        self.val_border_size = val
+        hypr_set('general:border_size', val)
+        self.desktop_preview.queue_draw()
+        self.set_status(f"Live Border Width: {val}px")
+
+    def on_gaps_in_changed(self, val):
+        self.val_gaps_in = val
+        hypr_set('general:gaps_in', val)
+        self.desktop_preview.queue_draw()
+        self.set_status(f"Live Inner Gaps: {val}px")
+
+    def on_gaps_out_changed(self, val):
+        self.val_gaps_out = val
+        hypr_set('general:gaps_out', val)
+        self.desktop_preview.queue_draw()
+        self.set_status(f"Live Outer Gaps: {val}px")
+
+    # --------------------------------------------------------------------------
+    # TAB 2: ✨ GLASS & VISUAL FX
+    # --------------------------------------------------------------------------
+    def build_glass_tab(self):
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content.set_margin_top(12)
+        content.set_margin_bottom(16)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+
+        # Presets
+        preset_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        preset_frame.get_style_context().add_class("card-box")
+
+        p_lbl = Gtk.Label(label="✨ Visual FX & Frosted Glass Presets")
+        p_lbl.set_xalign(0)
+        p_lbl.get_style_context().add_class("section-header")
+        preset_frame.pack_start(p_lbl, False, False, 0)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        fx_presets = [
+            ("⚡ Battery / Opaque\n(Blur OFF • Shadow OFF • 1.0 Opacity)", False, 1, 1, 1.0, 1.0, False, False),
+            ("💎 Frosted Glass (Recommended)\n(Kawase Blur Passes:3 Size:7 • 0.94 Inactive)", True, 3, 7, 1.0, 0.94, False, True),
+            ("🌌 Cyber Glow & Depth\n(Kawase Blur Passes:4 Size:10 • Shadow ON)", True, 4, 10, 0.96, 0.88, True, True)
+        ]
+        for title, b_en, b_p, b_s, act_o, inact_o, sh_en, dim_en in fx_presets:
+            btn = Gtk.Button(label=title)
+            btn.get_style_context().add_class("btn-action")
+            btn.connect("clicked", self.make_fx_preset_handler(b_en, b_p, b_s, act_o, inact_o, sh_en, dim_en))
+            btn_box.pack_start(btn, True, True, 0)
+
+        preset_frame.pack_start(btn_box, False, False, 0)
+        content.pack_start(preset_frame, False, False, 0)
+
+        # Controls Grid
+        grid_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+
+        # Blur column
+        blur_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        blur_box.get_style_context().add_class("card-box")
+
+        b_lbl = Gtk.Label(label="❄️ Kawase Acrylic Blur")
+        b_lbl.set_xalign(0)
+        b_lbl.get_style_context().add_class("section-header")
+        blur_box.pack_start(b_lbl, False, False, 0)
+
+        # Blur Toggle
+        b_switch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        b_switch_lbl = Gtk.Label(label="Enable Frosted Glass Blur")
+        b_switch_lbl.set_xalign(0)
+        self.switch_blur = Gtk.Switch()
+        self.switch_blur.set_active(self.val_blur_enabled)
+        self.switch_blur.connect("state-set", self.on_blur_toggle)
+        b_switch_box.pack_start(b_switch_lbl, True, True, 0)
+        b_switch_box.pack_end(self.switch_blur, False, False, 0)
+        blur_box.pack_start(b_switch_box, False, False, 0)
+
+        self.scale_blur_passes = self.create_slider(
+            "Blur Passes (Kawase Iterations)", 1, 5, 1, self.val_blur_passes,
+            lambda s: self.on_blur_passes_changed(int(s.get_value()))
+        )
+        blur_box.pack_start(self.scale_blur_passes, False, False, 0)
+
+        self.scale_blur_size = self.create_slider(
+            "Blur Radius / Size", 1, 15, 1, self.val_blur_size,
+            lambda s: self.on_blur_size_changed(int(s.get_value())), "px"
+        )
+        blur_box.pack_start(self.scale_blur_size, False, False, 0)
+
+        grid_box.pack_start(blur_box, True, True, 0)
+
+        # Opacity & Shadows column
+        opac_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        opac_box.get_style_context().add_class("card-box")
+
+        o_lbl = Gtk.Label(label="🔮 Opacity, Shadows & Dimming")
+        o_lbl.set_xalign(0)
+        o_lbl.get_style_context().add_class("section-header")
+        opac_box.pack_start(o_lbl, False, False, 0)
+
+        self.scale_active_opacity = self.create_slider(
+            "Active Window Opacity", 0.70, 1.00, 0.02, self.val_active_opacity,
+            lambda s: self.on_active_opacity_changed(s.get_value())
+        )
+        opac_box.pack_start(self.scale_active_opacity, False, False, 0)
+
+        self.scale_inactive_opacity = self.create_slider(
+            "Inactive Window Opacity", 0.50, 1.00, 0.02, self.val_inactive_opacity,
+            lambda s: self.on_inactive_opacity_changed(s.get_value())
+        )
+        opac_box.pack_start(self.scale_inactive_opacity, False, False, 0)
+
+        # Shadows Toggle
+        sh_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        sh_lbl = Gtk.Label(label="Window Drop Shadows")
+        sh_lbl.set_xalign(0)
+        self.switch_shadow = Gtk.Switch()
+        self.switch_shadow.set_active(self.val_shadow_enabled)
+        self.switch_shadow.connect("state-set", self.on_shadow_toggle)
+        sh_box.pack_start(sh_lbl, True, True, 0)
+        sh_box.pack_end(self.switch_shadow, False, False, 0)
+        opac_box.pack_start(sh_box, False, False, 0)
+
+        # Dim Inactive Toggle
+        dim_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        dim_lbl = Gtk.Label(label="Dim Inactive Windows")
+        dim_lbl.set_xalign(0)
+        self.switch_dim = Gtk.Switch()
+        self.switch_dim.set_active(self.val_dim_inactive)
+        self.switch_dim.connect("state-set", self.on_dim_toggle)
+        dim_box.pack_start(dim_lbl, True, True, 0)
+        dim_box.pack_end(self.switch_dim, False, False, 0)
+        opac_box.pack_start(dim_box, False, False, 0)
+
+        grid_box.pack_start(opac_box, True, True, 0)
+        content.pack_start(grid_box, True, True, 0)
+
+        scroller.add(content)
+        return scroller
+
+    def make_fx_preset_handler(self, b_en, b_p, b_s, act_o, inact_o, sh_en, dim_en):
+        def handler(btn):
+            self.switch_blur.set_active(b_en)
+            self.scale_blur_passes.slider.set_value(b_p)
+            self.scale_blur_size.slider.set_value(b_s)
+            self.scale_active_opacity.slider.set_value(act_o)
+            self.scale_inactive_opacity.slider.set_value(inact_o)
+            self.switch_shadow.set_active(sh_en)
+            self.switch_dim.set_active(dim_en)
+            self.set_status(f"Applied Visual FX preset (Blur={b_en}, Opacity={act_o}/{inact_o}, Shadow={sh_en})")
+        return handler
+
+    def on_blur_toggle(self, sw, state):
+        self.val_blur_enabled = state
+        hypr_set('decoration:blur:enabled', 'true' if state else 'false')
+        self.set_status(f"Blur {'enabled' if state else 'disabled'}")
+        return True
+
+    def on_blur_passes_changed(self, val):
+        self.val_blur_passes = val
+        hypr_set('decoration:blur:passes', val)
+        self.set_status(f"Blur passes: {val}")
+
+    def on_blur_size_changed(self, val):
+        self.val_blur_size = val
+        hypr_set('decoration:blur:size', val)
+        self.set_status(f"Blur size: {val}px")
+
+    def on_active_opacity_changed(self, val):
+        self.val_active_opacity = val
+        hypr_set('decoration:active_opacity', f"{val:.2f}")
+        self.desktop_preview.queue_draw()
+        self.set_status(f"Active Opacity: {val:.2f}")
+
+    def on_inactive_opacity_changed(self, val):
+        self.val_inactive_opacity = val
+        hypr_set('decoration:inactive_opacity', f"{val:.2f}")
+        self.desktop_preview.queue_draw()
+        self.set_status(f"Inactive Opacity: {val:.2f}")
+
+    def on_shadow_toggle(self, sw, state):
+        self.val_shadow_enabled = state
+        hypr_set('decoration:shadow:enabled', 'true' if state else 'false')
+        self.set_status(f"Shadows {'enabled' if state else 'disabled'}")
+        return True
+
+    def on_dim_toggle(self, sw, state):
+        self.val_dim_inactive = state
+        hypr_set('decoration:dim_inactive', 'true' if state else 'false')
+        self.set_status(f"Dim inactive {'enabled' if state else 'disabled'}")
+        return True
+
+    # --------------------------------------------------------------------------
+    # TAB 3: 🎨 55 PALETTES & THEMES
+    # --------------------------------------------------------------------------
+    def build_palettes_tab(self):
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_top(10)
+        vbox.set_margin_bottom(12)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+
+        # Filter & Search Bar
+        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+
+        self.theme_search_entry = Gtk.SearchEntry()
+        self.theme_search_entry.set_placeholder_text("Search 55 Curated Sovereign Palettes (e.g. Dracula, Tokyo, Cyberpunk)...")
+        self.theme_search_entry.connect("search-changed", self.on_theme_search_changed)
+        search_box.pack_start(self.theme_search_entry, True, True, 0)
+
+        # Category Chips
+        cats = [("all", "All (55)"), ("cyber", "Cyber"), ("earth", "Earth"), ("minimal", "Minimal"), ("light", "Light")]
+        self.cat_buttons = {}
+        for cat_id, cat_lbl in cats:
+            btn = Gtk.RadioButton.new_with_label_from_widget(
+                self.cat_buttons.get("all"), cat_lbl
+            ) if "all" in self.cat_buttons else Gtk.RadioButton.new_with_label(None, cat_lbl)
+            btn.set_mode(False)
+            btn.get_style_context().add_class("btn-action")
+            btn.connect("toggled", self.make_category_handler(cat_id))
+            self.cat_buttons[cat_id] = btn
+            search_box.pack_start(btn, False, False, 0)
+
+        vbox.pack_start(search_box, False, False, 0)
+
+        # FlowBox of theme cards inside ScrolledWindow
+        self.theme_scroller = Gtk.ScrolledWindow()
+        self.theme_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        self.flowbox = Gtk.FlowBox()
+        self.flowbox.set_valign(Gtk.Align.START)
+        self.flowbox.set_max_children_per_line(3)
+        self.flowbox.set_min_children_per_line(2)
+        self.flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.flowbox.set_row_spacing(10)
+        self.flowbox.set_column_spacing(10)
+
+        self.theme_cards = []
+        for t in self.all_themes:
+            card = self.create_theme_card(t)
+            self.theme_cards.append((t, card))
+            self.flowbox.add(card)
+
+        self.theme_scroller.add(self.flowbox)
+        vbox.pack_start(self.theme_scroller, True, True, 0)
+        return vbox
+
+    def create_theme_card(self, t):
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        card.get_style_context().add_class("theme-card")
+        is_cur = (t['name'].lower() == self.current_theme.lower())
+        if is_cur:
+            card.get_style_context().add_class("theme-card-active")
+
+        # Top row: title & swatches
+        top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        lbl_name = Gtk.Label(label=t['name'].replace('-', ' ').title())
+        lbl_name.set_xalign(0)
+        lbl_name.set_ellipsize(Pango.EllipsizeMode.END)
+        top_row.pack_start(lbl_name, True, True, 0)
+
+        if is_cur:
+            badge = Gtk.Label(label="ACTIVE")
+            badge.get_style_context().add_class("btn-save")
+            top_row.pack_end(badge, False, False, 0)
+
+        card.pack_start(top_row, False, False, 0)
+
+        # Color Swatches
+        swatch_widget = ColorSwatches(t['swatches'])
+        card.pack_start(swatch_widget, False, False, 0)
+
+        # Preview Image or Skeleton
+        img = Gtk.Image()
+        img.set_size_request(280, 110)
+        card.pack_start(img, False, False, 0)
+
+        # Async Thumbnail loader
+        def load_img():
+            prev = t.get('preview')
+            if prev and os.path.isfile(prev):
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(prev, 280, 110, True)
+                    GLib.idle_add(img.set_from_pixbuf, pb)
+                except Exception:
+                    pass
+        THREAD_POOL.submit(load_img)
+
+        # Apply Button
+        btn_apply = Gtk.Button(label="Apply Palette")
+        btn_apply.get_style_context().add_class("btn-action")
+        btn_apply.connect("clicked", lambda b, tn=t['name']: self.on_apply_theme_clicked(tn))
+        card.pack_start(btn_apply, False, False, 0)
+
+        card.show_all()
+        return card
+
+    def make_category_handler(self, cat_id):
+        def handler(btn):
+            if btn.get_active():
+                self.active_category = cat_id
+                self.filter_themes()
+        return handler
+
+    def on_theme_search_changed(self, entry):
+        self.filter_themes()
+
+    def filter_themes(self):
+        query = self.theme_search_entry.get_text().strip().lower()
+        cat = getattr(self, 'active_category', 'all')
+
+        for t, card in self.theme_cards:
+            matches_cat = (cat == 'all' or cat in t.get('categories', []))
+            matches_q = (not query or query in t['name'].lower())
+            card.set_visible(matches_cat and matches_q)
+
+    def on_apply_theme_clicked(self, theme_name):
+        self.set_status(f"Switching theme to '{theme_name}'...")
+        def worker():
+            ok, out, err = run_cmd(['iram', 'theme', 'set', theme_name])
+            GLib.idle_add(self.finish_apply_theme, theme_name, ok)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def finish_apply_theme(self, theme_name, ok):
+        if ok:
+            self.current_theme = theme_name
+            self.active_colors = read_active_theme_colors()
+            self.apply_dynamic_css()
+            self.desktop_preview.queue_draw()
+            # Refresh card badges
+            for t, card in self.theme_cards:
+                is_cur = (t['name'].lower() == theme_name.lower())
+                ctx = card.get_style_context()
+                if is_cur:
+                    ctx.add_class("theme-card-active")
+                else:
+                    ctx.remove_class("theme-card-active")
+            self.set_status(f"✓ Theme successfully switched to: {theme_name.title()}")
+        else:
+            self.set_status(f"✗ Failed to switch theme to {theme_name}")
+
+    def on_random_theme_clicked(self, btn):
+        self.set_status("Picking random sovereign palette...")
+        def worker():
+            ok, out, _ = run_cmd(['iram', 'theme', 'random'])
+            cur = get_current_theme_name()
+            GLib.idle_add(self.finish_apply_theme, cur, ok)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_next_wallpaper_clicked(self, btn):
+        self.set_status("Cycling wallpaper background...")
+        def worker():
+            run_cmd(['iram', 'theme', 'bg', 'next'])
+            GLib.idle_add(self.set_status, "✓ Wallpaper background cycled successfully")
+        threading.Thread(target=worker, daemon=True).start()
+
+    # --------------------------------------------------------------------------
+    # TAB 4: 📊 BAR & DOCK
+    # --------------------------------------------------------------------------
+    def build_bar_dock_tab(self):
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content.set_margin_top(12)
+        content.set_margin_bottom(16)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+
+        # Waybar Island Aesthetics
+        waybar_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        waybar_frame.get_style_context().add_class("card-box")
+
+        w_lbl = Gtk.Label(label="📊 Top Bar (Waybar) Island Aesthetics")
+        w_lbl.set_xalign(0)
+        w_lbl.get_style_context().add_class("section-header")
+        waybar_frame.pack_start(w_lbl, False, False, 0)
+
+        wb_desc = Gtk.Label(label="Select Waybar corner geometry and floating island style. Updates instantly via SIGUSR2.")
+        wb_desc.set_xalign(0)
+        wb_desc.get_style_context().add_class("subtitle-label")
+        waybar_frame.pack_start(wb_desc, False, False, 0)
+
+        # Style Options
+        wb_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        wb_styles = [
+            ("📐 Sovereign Sharp (0px)", "sharp", 0),
+            ("🧼 Rounded Island (8px)", "rounded", 8),
+            ("🫧 Pill Island (16px)", "pill", 16),
+            ("📏 Flush Edge-to-Edge", "flush", 0)
+        ]
+        for title, key, rad in wb_styles:
+            btn = Gtk.Button(label=title)
+            btn.get_style_context().add_class("btn-action")
+            btn.connect("clicked", self.make_waybar_style_handler(key, rad))
+            wb_btn_box.pack_start(btn, True, True, 0)
+
+        waybar_frame.pack_start(wb_btn_box, False, False, 0)
+        content.pack_start(waybar_frame, False, False, 0)
+
+        # macOS-like Floating Dock Frame
+        dock_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        dock_frame.get_style_context().add_class("card-box")
+
+        d_lbl = Gtk.Label(label="🍎 macOS-Style Floating Dock (iram-dock)")
+        d_lbl.set_xalign(0)
+        d_lbl.get_style_context().add_class("section-header")
+        dock_frame.pack_start(d_lbl, False, False, 0)
+
+        # Check dock status
+        ok, d_out, _ = run_cmd(['iram-dock', 'status'])
+        is_dock_running = "running" in d_out.lower()
+
+        # Dock Toggle
+        d_switch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        d_switch_lbl = Gtk.Label(label="Dock Service Active (Appears on Floating Workspaces or Persistent)")
+        d_switch_lbl.set_xalign(0)
+        self.switch_dock = Gtk.Switch()
+        self.switch_dock.set_active(is_dock_running)
+        self.switch_dock.connect("state-set", self.on_dock_toggle)
+        d_switch_box.pack_start(d_switch_lbl, True, True, 0)
+        d_switch_box.pack_end(self.switch_dock, False, False, 0)
+        dock_frame.pack_start(d_switch_box, False, False, 0)
+
+        # Dock Position
+        d_pos_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        d_pos_lbl = Gtk.Label(label="Screen Edge Position:")
+        d_pos_lbl.set_xalign(0)
+        d_pos_box.pack_start(d_pos_lbl, False, False, 0)
+
+        for pos in ["bottom", "top", "left", "right"]:
+            btn_pos = Gtk.Button(label=pos.capitalize())
+            btn_pos.get_style_context().add_class("btn-action")
+            btn_pos.connect("clicked", lambda b, p=pos: self.on_dock_position_clicked(p))
+            d_pos_box.pack_start(btn_pos, True, True, 0)
+        dock_frame.pack_start(d_pos_box, False, False, 0)
+
+        # Dock Autohide
+        d_auto_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        d_auto_lbl = Gtk.Label(label="Auto-Hide Dock When Windows Overlap")
+        d_auto_lbl.set_xalign(0)
+        self.switch_dock_auto = Gtk.Switch()
+        self.switch_dock_auto.set_active(False)
+        self.switch_dock_auto.connect("state-set", self.on_dock_autohide_toggle)
+        d_auto_box.pack_start(d_auto_lbl, True, True, 0)
+        d_auto_box.pack_end(self.switch_dock_auto, False, False, 0)
+        dock_frame.pack_start(d_auto_box, False, False, 0)
+
+        content.pack_start(dock_frame, False, False, 0)
+
+        scroller.add(content)
+        return scroller
+
+    def make_waybar_style_handler(self, key, rad):
+        def handler(btn):
+            self.waybar_style = key
+            css_rules = ""
+            if key == "flush":
+                css_rules = """
+                /* Flush Edge-to-Edge Waybar */
+                window#waybar {
+                    background: @bar_bg;
+                }
+                .modules-left,
+                .modules-center,
+                .modules-right {
+                    background: transparent;
+                    border: none;
+                    border-radius: 0px;
+                }
+                """
+            else:
+                css_rules = f"""
+                /* Floating Islands with {rad}px radius */
+                window#waybar {{
+                    background: transparent;
+                }}
+                .modules-left,
+                .modules-center,
+                .modules-right {{
+                    background: @bar_bg;
+                    border: 1px solid @border;
+                    border-radius: {rad}px;
+                }}
+                """
+            try:
+                with open(WAYBAR_APPEARANCE_CSS, 'w', encoding='utf-8') as f:
+                    f.write(css_rules)
+                subprocess.run(['killall', '-SIGUSR2', 'waybar'], check=False)
+                self.set_status(f"✓ Waybar style updated: {key.capitalize()} ({rad}px radius)")
+            except Exception as e:
+                self.set_status(f"✗ Failed to update Waybar style: {e}")
+        return handler
+
+    def on_dock_toggle(self, sw, state):
+        cmd = 'start' if state else 'stop'
+        def worker():
+            run_cmd(['iram-dock', cmd])
+            GLib.idle_add(self.set_status, f"IRAM Dock {cmd}ed successfully")
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def on_dock_position_clicked(self, pos):
+        def worker():
+            run_cmd(['iram-dock', 'position', pos])
+            GLib.idle_add(self.set_status, f"IRAM Dock moved to {pos}")
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_dock_autohide_toggle(self, sw, state):
+        cmd = 'on' if state else 'off'
+        def worker():
+            run_cmd(['iram-dock', 'autohide', cmd])
+            GLib.idle_add(self.set_status, f"IRAM Dock autohide {cmd}")
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    # --------------------------------------------------------------------------
+    # TAB 5: 🔤 TYPOGRAPHY & CURSOR
+    # --------------------------------------------------------------------------
+    def build_typography_tab(self):
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content.set_margin_top(12)
+        content.set_margin_bottom(16)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+
+        # Fonts Box
+        font_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        font_box.get_style_context().add_class("card-box")
+
+        f_lbl = Gtk.Label(label="🔤 Desktop & Coding Typography")
+        f_lbl.set_xalign(0)
+        f_lbl.get_style_context().add_class("section-header")
+        font_box.pack_start(f_lbl, False, False, 0)
+
+        # Discover fonts
+        fonts = self.discover_fonts()
+        f_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        f_row_lbl = Gtk.Label(label="Primary Monospace Font:")
+        f_row_lbl.set_xalign(0)
+        f_row.pack_start(f_row_lbl, False, False, 0)
+
+        self.font_combo = Gtk.ComboBoxText()
+        for font_name in fonts:
+            self.font_combo.append_text(font_name)
+        self.font_combo.set_active(0)
+        # Select active if present
+        cur_font = self.get_active_font()
+        for idx, fn in enumerate(fonts):
+            if fn.lower() in cur_font.lower():
+                self.font_combo.set_active(idx)
+                break
+        f_row.pack_start(self.font_combo, True, True, 0)
+        font_box.pack_start(f_row, False, False, 0)
+
+        # Font size slider
+        self.scale_font_size = self.create_slider(
+            "Font Size", 9, 16, 1, 11,
+            lambda s: self.on_font_preview_update(), "pt"
+        )
+        font_box.pack_start(self.scale_font_size, False, False, 0)
+
+        # Live Font Preview Area
+        prev_lbl = Gtk.Label(label="Typography Preview:")
+        prev_lbl.set_xalign(0)
+        prev_lbl.get_style_context().add_class("subtitle-label")
+        font_box.pack_start(prev_lbl, False, False, 0)
+
+        self.font_preview_entry = Gtk.TextView()
+        self.font_preview_entry.set_size_request(-1, 80)
+        self.font_preview_entry.get_buffer().set_text(
+            "// IRAM OS Sovereign Rice Tuner\nfn main() -> Result<(), Box<dyn Error>> {\n    println!(\"Sharp Brutalism meets Frosted Glass\");\n}"
+        )
+        font_box.pack_start(self.font_preview_entry, False, False, 0)
+
+        btn_apply_font = Gtk.Button(label="Apply Font to System & Terminals")
+        btn_apply_font.get_style_context().add_class("btn-action")
+        btn_apply_font.connect("clicked", self.on_apply_font_clicked)
+        font_box.pack_start(btn_apply_font, False, False, 0)
+
+        content.pack_start(font_box, False, False, 0)
+
+        # Cursor Box
+        cursor_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        cursor_box.get_style_context().add_class("card-box")
+
+        c_lbl = Gtk.Label(label="🖱️ Cursor Theme & Size")
+        c_lbl.set_xalign(0)
+        c_lbl.get_style_context().add_class("section-header")
+        cursor_box.pack_start(c_lbl, False, False, 0)
+
+        # Discover cursor themes
+        cursors = self.discover_cursors()
+        c_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        c_row_lbl = Gtk.Label(label="Cursor Theme:")
+        c_row_lbl.set_xalign(0)
+        c_row.pack_start(c_row_lbl, False, False, 0)
+
+        self.cursor_combo = Gtk.ComboBoxText()
+        for cname in cursors:
+            self.cursor_combo.append_text(cname)
+        self.cursor_combo.set_active(0)
+        cur_cursor = self.get_active_cursor()
+        for idx, cn in enumerate(cursors):
+            if cn.lower() == cur_cursor.lower():
+                self.cursor_combo.set_active(idx)
+                break
+        c_row.pack_start(self.cursor_combo, True, True, 0)
+        cursor_box.pack_start(c_row, False, False, 0)
+
+        # Cursor Size Buttons
+        cs_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        cs_lbl = Gtk.Label(label="Cursor Size:")
+        cs_lbl.set_xalign(0)
+        cs_box.pack_start(cs_lbl, False, False, 0)
+        self.cur_cursor_size = 24
+        for sz in [16, 24, 32, 48]:
+            btn_sz = Gtk.Button(label=f"{sz}px")
+            btn_sz.get_style_context().add_class("btn-action")
+            btn_sz.connect("clicked", lambda b, s=sz: self.on_cursor_size_clicked(s))
+            cs_box.pack_start(btn_sz, True, True, 0)
+        cursor_box.pack_start(cs_box, False, False, 0)
+
+        btn_apply_cursor = Gtk.Button(label="Apply Cursor Theme (Hyprland + GTK + XWayland)")
+        btn_apply_cursor.get_style_context().add_class("btn-action")
+        btn_apply_cursor.connect("clicked", self.on_apply_cursor_clicked)
+        cursor_box.pack_start(btn_apply_cursor, False, False, 0)
+
+        content.pack_start(cursor_box, False, False, 0)
+
+        scroller.add(content)
+        return scroller
+
+    def discover_fonts(self):
+        fonts = ["JetBrains Mono", "Cascadia Code", "Fira Code", "Hack", "IBM Plex Mono", "Segoe UI"]
+        try:
+            ok, out, _ = run_cmd(['fc-list', ':', 'family'])
+            if ok:
+                for line in out.splitlines():
+                    fn = line.split(',')[0].strip()
+                    if any(k in fn.lower() for k in ['nerd', 'mono', 'code', 'hack', 'jetbrains', 'ubuntu']):
+                        if fn not in fonts:
+                            fonts.append(fn)
+        except Exception:
+            pass
+        return sorted(list(set(fonts)))
+
+    def get_active_font(self):
+        try:
+            ok, out, _ = run_cmd(['gsettings', 'get', 'org.gnome.desktop.interface', 'monospace-font-name'])
+            if ok:
+                return out.strip("'\"")
+        except Exception:
+            pass
+        return "JetBrainsMono Nerd Font"
+
+    def discover_cursors(self):
+        cursors = []
+        for d in ['/usr/share/icons', os.path.expanduser('~/.icons'), os.path.expanduser('~/.local/share/icons')]:
+            if os.path.isdir(d):
+                for entry in os.listdir(d):
+                    full = os.path.join(d, entry)
+                    if os.path.isdir(os.path.join(full, 'cursors')) or os.path.isdir(os.path.join(full, 'hyprcursors')):
+                        if entry not in ['default', 'hicolor'] and entry not in cursors:
+                            cursors.append(entry)
+        return sorted(cursors) or ["catppuccin-mocha-lavender-cursors", "Adwaita"]
+
+    def get_active_cursor(self):
+        try:
+            ok, out, _ = run_cmd(['gsettings', 'get', 'org.gnome.desktop.interface', 'cursor-theme'])
+            if ok:
+                return out.strip("'\"")
+        except Exception:
+            pass
+        return "catppuccin-mocha-lavender-cursors"
+
+    def on_font_preview_update(self):
+        pass
+
+    def on_apply_font_clicked(self, btn):
+        font_name = self.font_combo.get_active_text() or "JetBrainsMono Nerd Font"
+        size = int(self.scale_font_size.slider.get_value())
+        self.set_status(f"Applying font: {font_name} ({size}pt)...")
+
+        def worker():
+            run_cmd(['gsettings', 'set', 'org.gnome.desktop.interface', 'monospace-font-name', f"{font_name} {size}"])
+            run_cmd(['gsettings', 'set', 'org.gnome.desktop.interface', 'font-name', f"{font_name} {size}"])
+            # Save font state
+            with open(os.path.join(CONFIG_IRAM, 'font.name'), 'w') as f:
+                f.write(font_name)
+            GLib.idle_add(self.set_status, f"✓ Font set to {font_name} ({size}pt)")
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_cursor_size_clicked(self, sz):
+        self.cur_cursor_size = sz
+        self.set_status(f"Cursor size set to {sz}px (Click Apply to activate)")
+
+    def on_apply_cursor_clicked(self, btn):
+        cname = self.cursor_combo.get_active_text() or "catppuccin-mocha-lavender-cursors"
+        sz = self.cur_cursor_size
+        self.set_status(f"Applying cursor: {cname} ({sz}px)...")
+
+        def worker():
+            run_cmd([os.path.join(LOCAL_BIN, 'iram-cursor-switch'), cname])
+            GLib.idle_add(self.set_status, f"✓ Cursor theme set to {cname} ({sz}px)")
+        threading.Thread(target=worker, daemon=True).start()
+
+    # --------------------------------------------------------------------------
+    # STATUS & FEEDBACK BAR
+    # --------------------------------------------------------------------------
+    def build_status_bar(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.get_style_context().add_class("status-panel")
+
+        self.lbl_status = Gtk.Label(label="🟢 Live Engine Active • All slider adjustments apply instantaneously without session restart")
+        self.lbl_status.set_xalign(0)
+        box.pack_start(self.lbl_status, True, True, 0)
+
+        lbl_hint = Gtk.Label(label="IRAM OS • Press Super+Alt+R or iram appearance")
+        lbl_hint.set_xalign(1)
+        lbl_hint.get_style_context().add_class("subtitle-label")
+        box.pack_end(lbl_hint, False, False, 0)
+
+        return box
+
+    def set_status(self, text):
+        self.lbl_status.set_text(text)
+
+    # --------------------------------------------------------------------------
+    # PERSISTENCE & ACTIONS
+    # --------------------------------------------------------------------------
+    def on_save_rice_clicked(self, btn):
+        self.set_status("Saving rice configuration to appearance.conf...")
+
+        # 1. Write ~/.config/hypr/appearance.conf
+        conf_content = f"""# ==============================================================================
+# IRAM OS - Unified Appearance & Rice Tuner Overrides
+# Dynamically managed by iram-appearance (iram appearance)
+# ==============================================================================
+
+general {{
+    border_size = {self.val_border_size}
+    gaps_in = {self.val_gaps_in}
+    gaps_out = {self.val_gaps_out}
+}}
+
+decoration {{
+    rounding = {self.val_rounding}
+    active_opacity = {self.val_active_opacity:.2f}
+    inactive_opacity = {self.val_inactive_opacity:.2f}
+    dim_inactive = {'true' if self.val_dim_inactive else 'false'}
+    dim_strength = {self.val_dim_strength:.2f}
+
+    blur {{
+        enabled = {'true' if self.val_blur_enabled else 'false'}
+        size = {self.val_blur_size}
+        passes = {self.val_blur_passes}
+    }}
+
+    shadow {{
+        enabled = {'true' if self.val_shadow_enabled else 'false'}
+    }}
+}}
+"""
+        try:
+            with open(APPEARANCE_CONF, 'w', encoding='utf-8') as f:
+                f.write(conf_content)
+            # Also keep iram-os repo template in sync if exists
+            repo_conf = os.path.join(HOME, 'iram-os', 'config', 'hypr', 'appearance.conf')
+            if os.path.isdir(os.path.dirname(repo_conf)):
+                with open(repo_conf, 'w', encoding='utf-8') as f:
+                    f.write(conf_content)
+        except Exception as e:
+            self.set_status(f"✗ Error saving appearance.conf: {e}")
+            return
+
+        # 2. Write ~/.config/iram/appearance.json
+        state_data = {
+            "geometry": {
+                "rounding": self.val_rounding,
+                "border_size": self.val_border_size,
+                "gaps_in": self.val_gaps_in,
+                "gaps_out": self.val_gaps_out
+            },
+            "glass_fx": {
+                "blur_enabled": self.val_blur_enabled,
+                "blur_passes": self.val_blur_passes,
+                "blur_size": self.val_blur_size,
+                "active_opacity": self.val_active_opacity,
+                "inactive_opacity": self.val_inactive_opacity,
+                "shadow_enabled": self.val_shadow_enabled,
+                "dim_inactive": self.val_dim_inactive,
+                "dim_strength": self.val_dim_strength
+            },
+            "bar_dock": {
+                "waybar_style": self.waybar_style
+            }
+        }
+        try:
+            with open(APPEARANCE_JSON, 'w', encoding='utf-8') as f:
+                json.dump(state_data, f, indent=2)
+        except Exception:
+            pass
+
+        # 3. Reload Hyprland
+        subprocess.run(['hyprctl', 'reload'], check=False)
+
+        # 4. Notify
+        run_cmd(['notify-send', '-a', 'IRAM OS', 'Rice Tuner Locked',
+                 f'Saved profile: {self.val_rounding}px rounding, {self.val_border_size}px borders, {self.val_gaps_in}/{self.val_gaps_out}px gaps'])
+        self.set_status("✓ Rice settings permanently saved and locked to appearance.conf!")
+
+    def on_reset_defaults_clicked(self, btn):
+        self.set_status("Restoring Sovereign 0px Brutalist defaults...")
+        self.scale_rounding.slider.set_value(DEFAULT_STATE['geometry']['rounding'])
+        self.scale_border.slider.set_value(DEFAULT_STATE['geometry']['border_size'])
+        self.scale_gaps_in.slider.set_value(DEFAULT_STATE['geometry']['gaps_in'])
+        self.scale_gaps_out.slider.set_value(DEFAULT_STATE['geometry']['gaps_out'])
+        self.switch_blur.set_active(DEFAULT_STATE['glass_fx']['blur_enabled'])
+        self.scale_blur_passes.slider.set_value(DEFAULT_STATE['glass_fx']['blur_passes'])
+        self.scale_blur_size.slider.set_value(DEFAULT_STATE['glass_fx']['blur_size'])
+        self.scale_active_opacity.slider.set_value(DEFAULT_STATE['glass_fx']['active_opacity'])
+        self.scale_inactive_opacity.slider.set_value(DEFAULT_STATE['glass_fx']['inactive_opacity'])
+        self.switch_shadow.set_active(DEFAULT_STATE['glass_fx']['shadow_enabled'])
+        self.switch_dim.set_active(DEFAULT_STATE['glass_fx']['dim_inactive'])
+        self.on_save_rice_clicked(None)
+        self.set_status("✓ Restored Sovereign Brutalist standard defaults")
+
+    def on_key_press(self, widget, event):
+        if event.keyval == Gdk.KEY_Escape:
+            self.destroy()
+            return True
+        return False
+
+
+def check_single_instance_toggle():
+    if not os.environ.get('HYPRLAND_INSTANCE_SIGNATURE'):
+        return False
+    try:
+        ok, clients_json, _ = run_cmd(['hyprctl', 'clients', '-j'])
+        if ok and clients_json:
+            clients = json.loads(clients_json)
+            for c in clients:
+                if c.get('class') == 'iram-appearance':
+                    addr = c.get('address')
+                    ok_act, act_json, _ = run_cmd(['hyprctl', 'activewindow', '-j'])
+                    if ok_act and act_json:
+                        act = json.loads(act_json)
+                        if act.get('class') == 'iram-appearance':
+                            run_cmd(['hyprctl', 'dispatch', 'closewindow', f"address:{addr}"])
+                            return True
+                    run_cmd(['hyprctl', 'dispatch', 'movetoworkspace', f"current,address:{addr}"])
+                    run_cmd(['hyprctl', 'dispatch', 'focuswindow', f"address:{addr}"])
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def main():
+    if check_single_instance_toggle():
+        return
+    win = IramAppearanceWindow()
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == '__main__':
+    main()

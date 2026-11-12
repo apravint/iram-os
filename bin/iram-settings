@@ -51,20 +51,22 @@ notify() {
 
 submenu_themes() {
     local choice
-    choice=$(menu_select "🎨 Theme Studio" \
-        "1. Open Theme Selector (Wofi Grid)" \
+    choice=$(menu_select "🎨 Appearance & Theme Studio" \
+        "1. Open Appearance & Rice Tuner GUI (Super+Alt+R)" \
         "2. Open Theme Switcher GUI" \
-        "3. Toggle Animations (Fast / Smooth)" \
-        "4. Cycle Wallpaper Background" \
-        "5. Force Sync & Symlink All 22 Themes" \
+        "3. Open Theme Selector (Wofi Grid)" \
+        "4. Toggle Animations (Fast / Smooth)" \
+        "5. Cycle Wallpaper Background" \
+        "6. Force Sync & Symlink All 55 Themes" \
         "⬅ Back")
 
     case "${choice}" in
-        1*) ~/.local/bin/iram-theme-selector || iram-theme-switch ;;
+        1*) ~/.local/bin/iram-appearance 2>/dev/null || iram appearance ;;
         2*) ~/.local/bin/iram-theme-switcher-gui 2>/dev/null || ~/.local/bin/iram-theme-switch ;;
-        3*) ~/.local/bin/iram-toggle-animations ;;
-        4*) ~/.local/bin/iram theme bg next 2>/dev/null || ~/.local/bin/iram-wallpaper-next 2>/dev/null || true ;;
-        5*) ~/.local/bin/iram-theme-sync-all && notify "Theme Studio" "All 22 themes re-synchronized successfully." ;;
+        3*) ~/.local/bin/iram-theme-selector || iram-theme-switch ;;
+        4*) ~/.local/bin/iram-toggle-animations ;;
+        5*) ~/.local/bin/iram theme bg next 2>/dev/null || ~/.local/bin/iram-wallpaper-next 2>/dev/null || true ;;
+        6*) ~/.local/bin/iram-theme-sync-all && notify "Theme Studio" "All 55 themes re-synchronized successfully." ;;
         *) return ;;
     esac
 }

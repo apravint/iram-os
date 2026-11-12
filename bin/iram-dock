@@ -5,7 +5,7 @@
 # Inspired by Omarchy 4.5
 # ==============================================================================
 # iram:summary=Control and configure the macOS-style dock shown on floating workspaces
-# iram:args=[start|stop|restart|toggle|status|autohide|position]
+# iram:args=[start|stop|restart|toggle|status|position|autohide|theme|size|persistent]
 set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/iram"
@@ -45,14 +45,22 @@ is_running() {
 }
 
 cmd_start() {
+    local auto="${1:-}"
+    if [ "$auto" = "--auto" ]; then
+        touch "$STATE_DIR/dock_auto_floated"
+    else
+        rm -f "$STATE_DIR/dock_auto_floated"
+        touch "$STATE_DIR/dock_persistent"
+    fi
+
     if is_running; then
         echo "IRAM Dock is already running"
         return 0
     fi
     pkill -f "waybar.*dock/config.jsonc" 2>/dev/null || true
     sleep 0.1
-    # Layer rule for frosted glass blur on dock
 
+    # Layer rule for frosted glass blur on dock
     hyprctl keyword layerrule "blur 1, match:namespace iram-dock" >/dev/null 2>&1 || true
     hyprctl keyword layerrule "ignore_alpha 0.1, match:namespace iram-dock" >/dev/null 2>&1 || true
 
@@ -74,7 +82,7 @@ cmd_start() {
 
 cmd_stop() {
     pkill -f "waybar.*dock/config.jsonc" 2>/dev/null || true
-    rm -f "$PID_FILE"
+    rm -f "$PID_FILE" "$STATE_DIR/dock_auto_floated"
     echo "✓ IRAM OS Dock stopped"
 }
 
@@ -87,6 +95,7 @@ cmd_restart() {
 cmd_toggle() {
     if is_running; then
         cmd_stop
+        rm -f "$STATE_DIR/dock_persistent"
     else
         cmd_start
     fi
@@ -98,7 +107,15 @@ cmd_status() {
         if [ -f "$CONFIG_FILE" ]; then
             pos="$(jq -r '.position // "bottom"' "$CONFIG_FILE" 2>/dev/null || echo "bottom")"
         fi
-        echo "IRAM Dock: running (position: $pos)"
+        local theme="default"
+        if [ -f "$STATE_DIR/dock_theme" ]; then
+            theme="$(cat "$STATE_DIR/dock_theme")"
+        fi
+        local persist="dynamic"
+        if [ -f "$STATE_DIR/dock_persistent" ]; then
+            persist="persistent"
+        fi
+        echo "IRAM Dock: running (position: $pos, theme: $theme, mode: $persist)"
     else
         echo "IRAM Dock: stopped"
     fi
@@ -114,9 +131,23 @@ cmd_position() {
         echo "Error: position must be bottom, top, left, or right" >&2
         exit 1
     fi
+
     local tmp="$(mktemp)"
-    jq --arg p "$pos" '.position = $p' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
-    echo "Dock position set to $pos"
+    if [ "$pos" = "left" ] || [ "$pos" = "right" ]; then
+        local ml=0 mr=0
+        if [ "$pos" = "left" ]; then ml=14; else mr=14; fi
+        jq --arg p "$pos" --argjson ml "$ml" --argjson mr "$mr" \
+           '.position = $p | .width = 68 | .height = 820 | .["margin-top"] = 0 | .["margin-bottom"] = 0 | .["margin-left"] = $ml | .["margin-right"] = $mr' \
+           "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    else
+        local mt=0 mb=0
+        if [ "$pos" = "top" ]; then mt=14; else mb=14; fi
+        jq --arg p "$pos" --argjson mt "$mt" --argjson mb "$mb" \
+           '.position = $p | .width = 820 | .height = 68 | .["margin-top"] = $mt | .["margin-bottom"] = $mb | .["margin-left"] = 0 | .["margin-right"] = 0' \
+           "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    fi
+
+    echo "✓ Dock position set to: $pos"
     if is_running; then
         cmd_restart
     fi
@@ -124,30 +155,125 @@ cmd_position() {
 
 cmd_autohide() {
     local val="${1:-toggle}"
-    local cur="false"
-    if grep -q '"ipc": true' "$CONFIG_FILE" 2>/dev/null; then
-        cur="true"
-    fi
-    local new_val="off"
+    local cur
+    cur="$(jq -r '.exclusive // true' "$CONFIG_FILE" 2>/dev/null || echo "true")"
+    local new_exclusive=true
     if [ "$val" = "toggle" ]; then
-        if [ "$cur" = "true" ]; then new_val="off"; else new_val="on"; fi
+        if [ "$cur" = "true" ]; then new_exclusive=false; else new_exclusive=true; fi
+    elif [ "$val" = "on" ] || [ "$val" = "true" ]; then
+        new_exclusive=false
     else
-        new_val="$val"
+        new_exclusive=true
     fi
 
-    if [ "$new_val" = "on" ]; then
-        echo "Dock auto-hide turned on"
+    local tmp="$(mktemp)"
+    jq --argjson ex "$new_exclusive" '.exclusive = $ex' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    if [ "$new_exclusive" = "false" ]; then
+        echo "✓ Dock overlay mode ON (windows can occupy full screen underneath dock)"
     else
-        echo "Dock auto-hide turned off"
+        echo "✓ Dock reserved mode ON (dock claims exclusive screen edge space)"
+    fi
+    if is_running; then cmd_restart; fi
+}
+
+cmd_theme() {
+    local theme="${1:-}"
+    local themes_dir="$DOCK_CONFIG_DIR/themes"
+    if [ -z "$theme" ]; then
+        if command -v wofi >/dev/null 2>&1; then
+            local chosen
+            chosen="$(ls -1 "$themes_dir" 2>/dev/null | sed 's/\.css$//' | wofi --dmenu --prompt "Choose Dock Theme:" --width 400 --height 260 || true)"
+            if [ -n "$chosen" ]; then
+                cmd_theme "$chosen"
+            fi
+        else
+            echo "Available dock themes:"
+            ls -1 "$themes_dir" 2>/dev/null | sed 's/\.css$//'
+        fi
+        return 0
+    fi
+
+    theme="${theme%.css}"
+    if [ ! -f "$themes_dir/$theme.css" ]; then
+        echo "Error: Unknown dock theme '$theme'. Available:" >&2
+        ls -1 "$themes_dir" | sed 's/\.css$//' >&2
+        return 1
+    fi
+
+    cp "$themes_dir/$theme.css" "$STYLE_FILE"
+    echo "$theme" > "$STATE_DIR/dock_theme"
+    echo "✓ Dock theme set to: $theme"
+    if is_running; then
+        cmd_restart
+    fi
+}
+
+cmd_size() {
+    local size="${1:-}"
+    if [ -z "$size" ]; then
+        echo "Current dock width: $(jq -r '.width // "full"' "$CONFIG_FILE" 2>/dev/null)"
+        return 0
+    fi
+    local w=820
+    local h=68
+    case "$size" in
+        compact|small)    w=680; h=58 ;;
+        standard|medium) w=820; h=68 ;;
+        wide|large)       w=960; h=74 ;;
+        full)             w=0;   h=68 ;;
+        *)
+            if [[ "$size" =~ ^[0-9]+$ ]]; then
+                w="$size"; h=68
+            else
+                echo "Usage: iram-dock size [compact|standard|wide|full|<pixels>]" >&2
+                return 1
+            fi
+            ;;
+    esac
+    local tmp="$(mktemp)"
+    if [ "$w" -eq 0 ]; then
+        jq 'del(.width)' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    else
+        jq --argjson w "$w" --argjson h "$h" '.width = $w | .height = $h' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    fi
+    echo "✓ Dock size set to: $size (width: $w, height: $h)"
+    if is_running; then cmd_restart; fi
+}
+
+cmd_persistent() {
+    local val="${1:-toggle}"
+    if [ "$val" = "toggle" ]; then
+        if [ -f "$STATE_DIR/dock_persistent" ]; then
+            rm -f "$STATE_DIR/dock_persistent"
+            echo "✓ Dock persistence: OFF (dock auto-parks when leaving floating mode)"
+        else
+            touch "$STATE_DIR/dock_persistent"
+            echo "✓ Dock persistence: ON (dock remains permanently active across all workspaces)"
+        fi
+    elif [ "$val" = "on" ] || [ "$val" = "true" ]; then
+        touch "$STATE_DIR/dock_persistent"
+        echo "✓ Dock persistence: ON"
+    else
+        rm -f "$STATE_DIR/dock_persistent"
+        echo "✓ Dock persistence: OFF"
     fi
 }
 
 cmd_auto_hide_check() {
+    # If dock is set to persistent, never hide it
+    if [ -f "$STATE_DIR/dock_persistent" ]; then
+        return 0
+    fi
+    # If dock was not auto-started by floating mode, don't stop it
+    if [ ! -f "$STATE_DIR/dock_auto_floated" ]; then
+        return 0
+    fi
     # If active workspace is not floating, stop the dock
     local cur_mode
     cur_mode="$(iram-hyprland-workspace-layout-current 2>/dev/null || echo "dwindle")"
     if [ "$cur_mode" != "floating" ]; then
         cmd_stop
+        rm -f "$STATE_DIR/dock_auto_floated"
     fi
 }
 
@@ -155,16 +281,19 @@ ACTION="${1:-status}"
 shift || true
 
 case "$ACTION" in
-    start)              cmd_start ;;
+    start)              cmd_start "$@" ;;
     stop)               cmd_stop ;;
     restart)            cmd_restart ;;
     toggle)             cmd_toggle ;;
     status)             cmd_status ;;
     position)           cmd_position "$@" ;;
     autohide)           cmd_autohide "$@" ;;
+    theme)              cmd_theme "$@" ;;
+    size)               cmd_size "$@" ;;
+    persistent)         cmd_persistent "$@" ;;
     auto-hide-check)    cmd_auto_hide_check ;;
     *)
-        echo "Usage: iram-dock [start|stop|restart|toggle|status|position|autohide]" >&2
+        echo "Usage: iram-dock [start|stop|restart|toggle|status|position|autohide|theme|size|persistent]" >&2
         exit 1
         ;;
 esac

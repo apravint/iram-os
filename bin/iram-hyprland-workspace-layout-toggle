@@ -117,7 +117,7 @@ case "$NEW_MODE" in
 
         # 4. Launch or ensure Dock is visible
         if command -v iram-dock >/dev/null 2>&1; then
-            iram-dock start >/dev/null 2>&1 || true
+            iram-dock start --auto >/dev/null 2>&1 || true
         fi
 
         # 5. Notify user

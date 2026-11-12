@@ -1,0 +1,146 @@
+/* ==============================================================================
+   IRAM OS Dock Theme: Cupertino Dark
+   Understated minimalist matte obsidian with crisp platinum accents
+   ============================================================================== */
+@import "../../waybar/colors.css";
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+    font-size: 15px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.modules-center {
+    background: rgba(18, 18, 22, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.20);
+    border-radius: 20px;
+    padding: 4px 10px;
+    margin: 0;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+}
+
+#custom-app-grid {
+    font-size: 20px;
+    color: #e2e8f0;
+    min-width: 32px;
+    min-height: 36px;
+    padding: 6px 8px;
+    margin: 2px 3px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    transition: all 0.2s ease;
+}
+
+#custom-app-grid:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+#custom-pin-term,
+#custom-pin-browser,
+#custom-pin-files,
+#custom-pin-code,
+#custom-pin-craft,
+#custom-pin-agent {
+    font-size: 19px;
+    min-width: 32px;
+    min-height: 36px;
+    padding: 6px 8px;
+    margin: 2px 3px;
+    border-radius: 12px;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 0.2s ease;
+}
+
+#custom-pin-term:hover,
+#custom-pin-browser:hover,
+#custom-pin-files:hover,
+#custom-pin-code:hover,
+#custom-pin-craft:hover,
+#custom-pin-agent:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+#custom-separator,
+#custom-separator-left,
+#custom-separator-right {
+    color: rgba(255, 255, 255, 0.14);
+    padding: 0 3px;
+    margin: 4px 1px;
+    font-size: 15px;
+}
+
+#wlr-taskbar button {
+    padding: 4px;
+    margin: 2px 3px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 12px;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+#wlr-taskbar button label {
+    font-size: 0px;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+}
+
+#wlr-taskbar button:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+#wlr-taskbar button.active {
+    background: rgba(255, 255, 255, 0.10);
+    border-bottom: 3px solid #ffffff;
+}
+
+#custom-minimized {
+    padding: 4px 8px;
+    margin: 2px 3px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+}
+
+#custom-minimized:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+#custom-minimized.empty {
+    opacity: 0.25;
+    background: transparent;
+    color: #64748b;
+}
+
+#custom-dock-menu {
+    font-size: 16px;
+    min-width: 30px;
+    min-height: 36px;
+    padding: 6px 8px;
+    margin: 2px 2px;
+    border-radius: 12px;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+#custom-dock-menu:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.14);
+}

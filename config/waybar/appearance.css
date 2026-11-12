@@ -1,0 +1,7 @@
+/* IRAM OS - Dynamic Waybar Appearance Customization */
+/* Managed dynamically by iram-appearance */
+.modules-left,
+.modules-center,
+.modules-right {
+    border-radius: 0px;
+}

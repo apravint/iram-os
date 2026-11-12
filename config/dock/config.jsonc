@@ -1,106 +1,116 @@
 {
-    "name": "iram-dock",
-    "layer": "top",
-    "position": "bottom",
-    "height": 62,
-    "margin-bottom": 12,
-    "margin-left": 0,
-    "margin-right": 0,
-    "spacing": 4,
-
-    "modules-left": [
-        "custom/app-grid"
+  "name": "iram-dock",
+  "layer": "top",
+  "position": "bottom",
+  "height": 68,
+  "width": 820,
+  "margin-bottom": 14,
+  "margin-left": 0,
+  "margin-right": 0,
+  "spacing": 4,
+  "modules-center": [
+    "custom/app-grid",
+    "custom/separator-left",
+    "custom/pin-term",
+    "custom/pin-browser",
+    "custom/pin-files",
+    "custom/pin-code",
+    "custom/pin-craft",
+    "custom/pin-agent",
+    "custom/separator",
+    "wlr/taskbar",
+    "custom/separator-right",
+    "custom/minimized",
+    "custom/dock-menu"
+  ],
+  "custom/app-grid": {
+    "format": "󰀻",
+    "tooltip": "Launchpad / App Grid (All Applications)",
+    "on-click": "~/.local/bin/iram-app-grid"
+  },
+  "custom/separator-left": {
+    "format": "│",
+    "tooltip": false
+  },
+  "custom/pin-term": {
+    "format": "",
+    "tooltip": "Terminal (Super+Return)",
+    "on-click": "~/.local/bin/iram-terminal"
+  },
+  "custom/pin-browser": {
+    "format": "󰈹",
+    "tooltip": "Web Browser (Super+B)",
+    "on-click": "~/.local/bin/iram-launch-browser"
+  },
+  "custom/pin-files": {
+    "format": "󰉋",
+    "tooltip": "File Manager (Super+E)",
+    "on-click": "~/.local/bin/iram-launch-filemanager"
+  },
+  "custom/pin-code": {
+    "format": "󰨞",
+    "tooltip": "Editor / Neovim",
+    "on-click": "alacritty -e nvim"
+  },
+  "custom/pin-craft": {
+    "format": "󰽉",
+    "tooltip": "Storytold Craft Creative Suite",
+    "on-click": "~/.local/bin/artcraft-launcher"
+  },
+  "custom/pin-agent": {
+    "format": "󰚩",
+    "tooltip": "IRAM AI Copilot & Nexus (Super+A)",
+    "on-click": "~/.local/bin/iram-hub"
+  },
+  "custom/separator": {
+    "format": "│",
+    "tooltip": false
+  },
+  "wlr/taskbar": {
+    "format": "{icon}",
+    "icon-size": 34,
+    "icon-theme": [
+      "Papirus",
+      "Papirus-Dark",
+      "WhiteSur-dark",
+      "Tela-circle-dark",
+      "Yaru-purple",
+      "Adwaita",
+      "hicolor"
     ],
-    "modules-center": [
-        "custom/pin-term",
-        "custom/pin-browser",
-        "custom/pin-files",
-        "custom/pin-craft",
-        "custom/pin-code",
-        "custom/pin-agent",
-        "custom/separator",
-        "wlr/taskbar"
-    ],
-    "modules-right": [
-        "custom/minimized",
-        "custom/dock-menu"
-    ],
-
-    "custom/app-grid": {
-        "format": "󰀻",
-        "tooltip": "Launchpad / App Grid (All Applications)",
-        "on-click": "~/.local/bin/iram-app-grid"
+    "tooltip-format": "{title}",
+    "on-click": "minimize-raise",
+    "on-click-middle": "fullscreen",
+    "on-click-right": "close",
+    "app_ids-mapping": {
+      "Google-chrome": "google-chrome",
+      "google-chrome-stable": "google-chrome",
+      "org.kde.konsole": "konsole"
     },
-
-    "custom/pin-term": {
-        "format": "",
-        "tooltip": "Terminal (Super+Return)",
-        "on-click": "~/.local/bin/iram-terminal"
-    },
-
-    "custom/pin-browser": {
-        "format": "󰈹",
-        "tooltip": "Web Browser (Super+B)",
-        "on-click": "~/.local/bin/iram-launch-browser"
-    },
-
-    "custom/pin-files": {
-        "format": "󰉋",
-        "tooltip": "File Manager (Super+E)",
-        "on-click": "~/.local/bin/iram-launch-filemanager"
-    },
-
-    "custom/pin-craft": {
-        "format": "󰽉",
-        "tooltip": "Storytold Craft Creative Suite",
-        "on-click": "~/.local/bin/artcraft-launcher"
-    },
-
-    "custom/pin-code": {
-        "format": "󰨞",
-        "tooltip": "Editor / Neovim",
-        "on-click": "alacritty -e nvim"
-    },
-
-    "custom/pin-agent": {
-        "format": "󰚩",
-        "tooltip": "IRAM AI Copilot & Nexus (Super+A)",
-        "on-click": "~/.local/bin/iram-hub"
-    },
-
-    "custom/separator": {
-        "format": "│",
-        "tooltip": false
-    },
-
-    "wlr/taskbar": {
-        "format": "{icon}",
-        "icon-size": 36,
-        "icon-theme": "Adwaita",
-        "tooltip-format": "{title}",
-        "on-click": "activate",
-        "on-click-middle": "fullscreen",
-        "on-click-right": "close",
-        "ignore-list": [
-            "iram-agent-console",
-            "waybar",
-            "iram-dock"
-        ]
-    },
-
-    "custom/minimized": {
-        "format": "{}",
-        "return-type": "json",
-        "interval": 2,
-        "exec": "~/.local/bin/iram-dock-minimized-status",
-        "on-click": "~/.local/bin/iram-hyprland-window-restore --last",
-        "on-click-right": "~/.local/bin/iram-hyprland-window-restore"
-    },
-
-    "custom/dock-menu": {
-        "format": "󰍜",
-        "tooltip": "Dock Settings & Layout Switcher",
-        "on-click": "~/.local/bin/iram-dock-menu",
-        "on-click-right": "~/.local/bin/iram-hyprland-workspace-layout-toggle"
-    }
+    "ignore-list": [
+      "iram-agent-console",
+      "waybar",
+      "iram-dock"
+    ]
+  },
+  "custom/separator-right": {
+    "format": "│",
+    "tooltip": false
+  },
+  "custom/minimized": {
+    "format": "{}",
+    "return-type": "json",
+    "interval": 2,
+    "signal": 8,
+    "exec": "~/.local/bin/iram-dock-minimized-status",
+    "on-click": "~/.local/bin/iram-hyprland-window-restore --last",
+    "on-click-right": "~/.local/bin/iram-hyprland-window-restore"
+  },
+  "custom/dock-menu": {
+    "format": "󰍜",
+    "tooltip": "Dock Settings & Theme Switcher",
+    "on-click": "~/.local/bin/iram-dock-menu",
+    "on-click-right": "~/.local/bin/iram-hyprland-workspace-layout-toggle"
+  },
+  "exclusive": false
 }

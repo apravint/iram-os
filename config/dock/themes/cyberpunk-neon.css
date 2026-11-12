@@ -1,0 +1,216 @@
+/* ==============================================================================
+   IRAM OS Dock Theme: Cyberpunk Neon
+   Obsidian dark container with electric cyan & neon violet glow aura
+   ============================================================================== */
+@import "../../waybar/colors.css";
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+    font-size: 15px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.modules-center {
+    background: rgba(9, 11, 16, 0.92);
+    border: 1px solid rgba(0, 242, 254, 0.45);
+    border-top: 1px solid rgba(79, 172, 254, 0.75);
+    border-radius: 18px;
+    padding: 5px 12px;
+    margin: 0;
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.30),
+                0 16px 36px rgba(0, 0, 0, 0.7),
+                inset 0 1px 2px rgba(0, 242, 254, 0.35);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#custom-app-grid {
+    font-size: 22px;
+    color: #00f2fe;
+    min-width: 32px;
+    min-height: 38px;
+    padding: 6px 8px;
+    margin: 2px 3px;
+    border-radius: 10px;
+    background: rgba(0, 242, 254, 0.15);
+    border: 1px solid rgba(0, 242, 254, 0.4);
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.25);
+    transition: all 0.2s ease;
+}
+
+#custom-app-grid:hover {
+    background: rgba(0, 242, 254, 0.4);
+    color: #ffffff;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.7);
+}
+
+#custom-pin-term,
+#custom-pin-browser,
+#custom-pin-files,
+#custom-pin-code,
+#custom-pin-craft,
+#custom-pin-agent {
+    font-size: 20px;
+    min-width: 32px;
+    min-height: 38px;
+    padding: 6px 8px;
+    margin: 2px 3px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.2s ease;
+}
+
+#custom-pin-term {
+    color: #00ff88;
+    background: rgba(0, 255, 136, 0.12);
+    border-color: rgba(0, 255, 136, 0.3);
+}
+#custom-pin-term:hover {
+    background: rgba(0, 255, 136, 0.35);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(0, 255, 136, 0.6);
+}
+
+#custom-pin-browser {
+    color: #00e5ff;
+    background: rgba(0, 229, 255, 0.12);
+    border-color: rgba(0, 229, 255, 0.3);
+}
+#custom-pin-browser:hover {
+    background: rgba(0, 229, 255, 0.35);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.6);
+}
+
+#custom-pin-files {
+    color: #ffd600;
+    background: rgba(255, 214, 0, 0.12);
+    border-color: rgba(255, 214, 0, 0.3);
+}
+#custom-pin-files:hover {
+    background: rgba(255, 214, 0, 0.35);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(255, 214, 0, 0.6);
+}
+
+#custom-pin-code {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.3);
+}
+#custom-pin-code:hover {
+    background: rgba(56, 189, 248, 0.35);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.6);
+}
+
+#custom-pin-craft {
+    color: #ff007f;
+    background: rgba(255, 0, 127, 0.12);
+    border-color: rgba(255, 0, 127, 0.3);
+}
+#custom-pin-craft:hover {
+    background: rgba(255, 0, 127, 0.35);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(255, 0, 127, 0.6);
+}
+
+#custom-pin-agent {
+    color: #bf55ec;
+    background: rgba(191, 85, 236, 0.15);
+    border-color: rgba(191, 85, 236, 0.4);
+}
+#custom-pin-agent:hover {
+    background: rgba(191, 85, 236, 0.4);
+    color: #ffffff;
+    box-shadow: 0 0 22px rgba(191, 85, 236, 0.7);
+}
+
+#custom-separator,
+#custom-separator-left,
+#custom-separator-right {
+    color: rgba(0, 242, 254, 0.35);
+    padding: 0 3px;
+    margin: 4px 1px;
+    font-size: 15px;
+}
+
+#wlr-taskbar button {
+    padding: 4px;
+    margin: 2px 3px;
+    min-width: 36px;
+    min-height: 38px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+#wlr-taskbar button label {
+    font-size: 0px;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+}
+
+#wlr-taskbar button:hover {
+    background: rgba(0, 242, 254, 0.15);
+    border-color: rgba(0, 242, 254, 0.45);
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.4);
+}
+
+#wlr-taskbar button.active {
+    background: rgba(0, 242, 254, 0.22);
+    border-color: rgba(0, 242, 254, 0.6);
+    border-bottom: 3px solid #00f2fe;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.55);
+}
+
+#custom-minimized {
+    padding: 5px 9px;
+    margin: 2px 3px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(255, 214, 0, 0.18);
+    border: 1px solid rgba(255, 214, 0, 0.4);
+    color: #ffd600;
+}
+
+#custom-minimized:hover {
+    background: rgba(255, 214, 0, 0.35);
+    box-shadow: 0 0 14px rgba(255, 214, 0, 0.5);
+}
+
+#custom-minimized.empty {
+    opacity: 0.30;
+    background: transparent;
+    border-color: transparent;
+    color: #64748b;
+}
+
+#custom-dock-menu {
+    font-size: 17px;
+    min-width: 30px;
+    min-height: 38px;
+    padding: 6px 8px;
+    margin: 2px 2px;
+    border-radius: 10px;
+    color: #00f2fe;
+    background: rgba(0, 242, 254, 0.08);
+    border: 1px solid rgba(0, 242, 254, 0.25);
+}
+
+#custom-dock-menu:hover {
+    background: rgba(0, 242, 254, 0.3);
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.5);
+}
